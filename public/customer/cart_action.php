@@ -1,43 +1,45 @@
 <?php
 session_start();
+require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
-// 初始化购物车
-if (!isset($_SESSION['cart'])) {
-    $_SESSION['cart'] = [];
-}
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    $stockId = $_POST['stock_id'] ?? null;
 
-$action = $_POST['action'] ?? '';
-$stockId = (int)($_POST['stock_id'] ?? 0);
-
-if ($action === 'add' && $stockId > 0) {
-    // 检查是否已经在购物车中
-    if (in_array($stockId, $_SESSION['cart'])) {
-        flash('This exact item is already in your cart.', 'info');
-    } else {
-        // 将 StockID 加入购物车数组
-        $_SESSION['cart'][] = $stockId;
-        flash('Item added to cart!', 'success');
+    if (!isset($_SESSION['cart'])) {
+        $_SESSION['cart'] = [];
     }
-} 
 
-elseif ($action === 'remove' && $stockId > 0) {
-    // 从数组中移除
-    $key = array_search($stockId, $_SESSION['cart']);
-    if ($key !== false) {
-        unset($_SESSION['cart'][$key]);
-        // 重建索引
-        $_SESSION['cart'] = array_values($_SESSION['cart']);
-        flash('Item removed from cart.', 'info');
+    if ($action === 'add' && $stockId) {
+        // 简单检查该物品是否已在购物车
+        if (!in_array($stockId, $_SESSION['cart'])) {
+            // 检查数据库中状态是否仍为 Available (防止重复添加已售出的)
+            $stmt = $pdo->prepare("SELECT Status FROM StockItem WHERE StockItemID = ?");
+            $stmt->execute([$stockId]);
+            $status = $stmt->fetchColumn();
+
+            if ($status === 'Available') {
+                $_SESSION['cart'][] = $stockId;
+                flash('Item added to cart.', 'success');
+            } else {
+                flash('Item is no longer available.', 'danger');
+            }
+        } else {
+            flash('Item is already in your cart.', 'warning');
+        }
+    } 
+    
+    elseif ($action === 'remove' && $stockId) {
+        $key = array_search($stockId, $_SESSION['cart']);
+        if ($key !== false) {
+            unset($_SESSION['cart'][$key]);
+            flash('Item removed from cart.', 'info');
+        }
     }
-} 
 
-elseif ($action === 'clear') {
-    $_SESSION['cart'] = [];
-    flash('Cart cleared.', 'info');
+    // 重定向回来源页面
+    $referer = $_SERVER['HTTP_REFERER'] ?? 'cart.php';
+    header("Location: $referer");
+    exit();
 }
-
-// 返回来源页面
-$referer = $_SERVER['HTTP_REFERER'] ?? '/customer/catalog.php';
-header("Location: $referer");
-exit();

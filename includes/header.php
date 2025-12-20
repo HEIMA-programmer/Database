@@ -17,11 +17,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/assets/css/style.css">
 </head>
-<body class="bg-dark text-light d-flex flex-column min-vh-100">
+<body class="d-flex flex-column min-vh-100">
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-black border-bottom border-secondary">
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
   <div class="container">
-    <a class="navbar-brand text-warning fw-bold" href="/">
+    <a class="navbar-brand" href="/">
         <i class="fa-solid fa-record-vinyl me-2"></i>Retro Echo
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
@@ -36,13 +36,16 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <a class="nav-link <?= $current_page == 'catalog.php' ? 'active' : '' ?>" href="/customer/catalog.php">Catalog</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'orders.php' ? 'active' : '' ?>" href="/customer/orders.php">My Orders</a>
+                <a class="nav-link <?= $current_page == 'orders.php' ? 'active' : '' ?>" href="/customer/orders.php">Orders</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'profile.php' ? 'active' : '' ?>" href="/customer/profile.php">Membership</a>
             </li>
         <?php endif; ?>
 
         <?php if (hasRole('Staff')): ?>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'pos.php' ? 'active' : '' ?>" href="/staff/pos.php">POS System</a>
+                <a class="nav-link <?= $current_page == 'pos.php' ? 'active' : '' ?>" href="/staff/pos.php">POS</a>
             </li>
             <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'buyback.php' ? 'active' : '' ?>" href="/staff/buyback.php">Buyback</a>
@@ -60,13 +63,16 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <a class="nav-link <?= $current_page == 'dashboard.php' ? 'active' : '' ?>" href="/manager/dashboard.php">Dashboard</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'transfer.php' ? 'active' : '' ?>" href="/manager/transfer.php">Stock Transfers</a>
+                <a class="nav-link <?= $current_page == 'transfer.php' ? 'active' : '' ?>" href="/manager/transfer.php">Transfers</a>
             </li>
         <?php endif; ?>
 
         <?php if (hasRole('Admin')): ?>
             <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'products.php' ? 'active' : '' ?>" href="/admin/products.php">Products</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'procurement.php' ? 'active' : '' ?>" href="/admin/procurement.php">Procurement</a>
             </li>
             <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'users.php' ? 'active' : '' ?>" href="/admin/users.php">Users</a>
@@ -79,13 +85,13 @@ $current_page = basename($_SERVER['PHP_SELF']);
             
             <?php if (hasRole('Customer')): ?>
                 <li class="nav-item me-3">
-                    <a class="nav-link position-relative" href="/customer/cart.php">
-                        <i class="fa-solid fa-cart-shopping fa-lg"></i>
+                    <a class="nav-link position-relative btn btn-sm btn-outline-warning border-0 px-3" href="/customer/cart.php">
+                        <i class="fa-solid fa-cart-shopping"></i>
                         <?php $cartCount = getCartCount(); ?>
                         <?php if($cartCount > 0): ?>
                             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
                                 <?= $cartCount ?>
-                                <span class="visually-hidden">items in cart</span>
+                                <span class="visually-hidden">items</span>
                             </span>
                         <?php endif; ?>
                     </a>
@@ -93,17 +99,22 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <?php endif; ?>
 
             <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle text-warning" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                    <?= h($_SESSION['username']) ?> <small class="text-secondary">(<?= h($_SESSION['role']) ?>)</small>
+                <a class="nav-link dropdown-toggle text-warning fw-bold" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                    <i class="fa-regular fa-circle-user me-1"></i><?= h($_SESSION['username']) ?>
                 </a>
-                <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
-                    <li><a class="dropdown-item" href="/logout.php">Logout</a></li>
+                <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end border-warning">
+                    <li><span class="dropdown-header text-muted">Role: <?= h($_SESSION['role']) ?></span></li>
+                    <li><hr class="dropdown-divider border-secondary"></li>
+                    <?php if (hasRole('Customer')): ?>
+                        <li><a class="dropdown-item" href="/customer/profile.php">My Profile</a></li>
+                    <?php endif; ?>
+                    <li><a class="dropdown-item text-danger" href="/logout.php">Logout</a></li>
                 </ul>
             </li>
 
         <?php else: ?>
             <li class="nav-item">
-                <a class="btn btn-outline-warning btn-sm" href="/login.php">Login</a>
+                <a class="btn btn-warning btn-sm fw-bold px-4" href="/login.php">Login</a>
             </li>
         <?php endif; ?>
       </ul>
@@ -111,5 +122,5 @@ $current_page = basename($_SERVER['PHP_SELF']);
   </div>
 </nav>
 
-<div class="container mt-4 flex-grow-1">
+<div class="container mt-5 flex-grow-1">
     <?php displayFlash(); ?>

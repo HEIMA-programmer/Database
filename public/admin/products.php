@@ -4,25 +4,31 @@ require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Admin');
 require_once __DIR__ . '/../../includes/header.php';
 
-// 处理添加新专辑
+// 处理添加新专辑 (INSERT 操作不需要视图，直接写入 Base Table)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_release'])) {
-    $sql = "INSERT INTO ReleaseAlbum (Title, ArtistName, LabelName, ReleaseYear, Genre, Format, Description) 
-            VALUES (:title, :artist, :label, :year, :genre, 'Vinyl', :desc)";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':title' => $_POST['title'],
-        ':artist' => $_POST['artist'],
-        ':label' => $_POST['label'],
-        ':year' => $_POST['year'],
-        ':genre' => $_POST['genre'],
-        ':desc' => $_POST['desc']
-    ]);
-    flash("New release added to catalog.", 'success');
-    header("Location: products.php");
-    exit();
+    try {
+        $sql = "INSERT INTO ReleaseAlbum (Title, ArtistName, LabelName, ReleaseYear, Genre, Format, Description) 
+                VALUES (:title, :artist, :label, :year, :genre, 'Vinyl', :desc)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':title' => $_POST['title'],
+            ':artist' => $_POST['artist'],
+            ':label' => $_POST['label'],
+            ':year' => $_POST['year'],
+            ':genre' => $_POST['genre'],
+            ':desc' => $_POST['desc']
+        ]);
+        flash("New release added to catalog.", 'success');
+        header("Location: products.php");
+        exit();
+    } catch (PDOException $e) {
+        flash("Error adding release: " . $e->getMessage(), 'danger');
+    }
 }
 
-$releases = $pdo->query("SELECT * FROM ReleaseAlbum ORDER BY ReleaseID DESC")->fetchAll();
+// [Phase 2 Fix] 使用视图查询
+// 视图: vw_admin_release_list
+$releases = $pdo->query("SELECT * FROM vw_admin_release_list ORDER BY ReleaseID DESC")->fetchAll();
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">

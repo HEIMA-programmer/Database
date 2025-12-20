@@ -22,17 +22,14 @@ $orderType  = $_POST['order_type'] ?? 'Online';
 $totals     = $_SESSION['checkout_totals'] ?? null;
 
 if (!$totals) {
-    // 如果 Session 过期，重回购物车重新计算
     header("Location: cart.php");
     exit();
 }
 
 try {
-    // 3. 开始事务 (ACID)
     $pdo->beginTransaction();
 
-    // A. 再次检查库存可用性 (防止并发购买)
-    // 锁定这些行进行读取 (FOR UPDATE)
+    // A. 再次检查库存可用性 (FOR UPDATE 锁)
     $placeholders = implode(',', array_fill(0, count($cartIds), '?'));
     $chkSql = "SELECT StockItemID FROM StockItem WHERE StockItemID IN ($placeholders) AND Status = 'Available' FOR UPDATE";
     $stmt = $pdo->prepare($chkSql);
@@ -40,12 +37,11 @@ try {
     $availableItems = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
     if (count($availableItems) != count($cartIds)) {
-        throw new Exception("Some items in your cart are no longer available.");
+        throw new Exception("One or more items in your cart are no longer available.");
     }
 
-    // B. 创建订单头 (CustomerOrder)
-    // 假设 FulfilledByShopID 为 3 (Online Warehouse) 对于在线订单
-    // 实际逻辑可能需要根据库存位置拆单，这里简化处理：默认由 Online Warehouse 履约
+    // B. 创建订单头
+    // 默认由 Online Warehouse (ID=3) 履约，实际逻辑可扩展
     $warehouseId = 3; 
     
     $insOrder = "INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, TotalAmount, OrderType, OrderStatus) 
@@ -59,38 +55,64 @@ try {
     ]);
     $orderId = $pdo->lastInsertId();
 
-    // C. 创建订单行 (OrderLine) 并扣减库存
+    // C. 创建订单行 & 扣减库存
     $insLine = "INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale) VALUES (:oid, :sid, :price)";
     $updStock = "UPDATE StockItem SET Status = 'Sold' WHERE StockItemID = :sid";
-
     $stmtLine = $pdo->prepare($insLine);
     $stmtStock = $pdo->prepare($updStock);
 
-    // 获取当前单价用于记录
+    // 获取当前单价
     $priceSql = "SELECT StockItemID, UnitPrice FROM StockItem WHERE StockItemID IN ($placeholders)";
     $stmtPrice = $pdo->prepare($priceSql);
     $stmtPrice->execute($cartIds);
-    $prices = $stmtPrice->fetchAll(PDO::FETCH_KEY_PAIR); // [ID => Price]
+    $prices = $stmtPrice->fetchAll(PDO::FETCH_KEY_PAIR);
 
     foreach ($cartIds as $sid) {
         $price = $prices[$sid];
-        
-        // 插入行
-        $stmtLine->execute([
-            ':oid'   => $orderId,
-            ':sid'   => $sid,
-            ':price' => $price
-        ]);
-
-        // 更新库存
+        $stmtLine->execute([':oid' => $orderId, ':sid' => $sid, ':price' => $price]);
         $stmtStock->execute([':sid' => $sid]);
     }
 
-    // D. 增加用户积分 (1 point per RMB) [cite: 52]
+    // D. 积分与会员升级逻辑 (Membership Upgrade Logic)
     $pointsEarned = floor($totals['total']);
+    
+    // D1. 增加积分
     $updPoints = "UPDATE Customer SET Points = Points + :pts WHERE CustomerID = :cid";
-    $stmtPoints = $pdo->prepare($updPoints);
-    $stmtPoints->execute([':pts' => $pointsEarned, ':cid' => $customerId]);
+    $stmt = $pdo->prepare($updPoints);
+    $stmt->execute([':pts' => $pointsEarned, ':cid' => $customerId]);
+
+    // D2. 检查升级资格
+    // 获取最新积分
+    $stmt = $pdo->prepare("SELECT Points, TierID FROM Customer WHERE CustomerID = ?");
+    $stmt->execute([$customerId]);
+    $custData = $stmt->fetch();
+    $currentPoints = $custData['Points'];
+    $currentTier = $custData['TierID'];
+
+    // 查询所有等级规则
+    $tiers = $pdo->query("SELECT * FROM MembershipTier ORDER BY MinPoints DESC")->fetchAll();
+    
+    $newTierId = $currentTier;
+    $newTierName = '';
+
+    foreach ($tiers as $tier) {
+        if ($currentPoints >= $tier['MinPoints']) {
+            $newTierId = $tier['TierID'];
+            $newTierName = $tier['TierName'];
+            break; // 找到满足条件的最高等级
+        }
+    }
+
+    $upgradeMsg = "";
+    if ($newTierId != $currentTier) {
+        // 执行升级
+        $updTier = $pdo->prepare("UPDATE Customer SET TierID = ? WHERE CustomerID = ?");
+        $updTier->execute([$newTierId, $customerId]);
+        
+        // 更新 Session
+        $_SESSION['tier_id'] = $newTierId;
+        $upgradeMsg = " <strong>Congratulations! You've been upgraded to $newTierName Status!</strong>";
+    }
 
     // 4. 提交事务
     $pdo->commit();
@@ -99,12 +121,14 @@ try {
     $_SESSION['cart'] = [];
     unset($_SESSION['checkout_totals']);
 
-    flash("Order #$orderId placed successfully! You earned $pointsEarned points.", 'success');
+    flash("Order #$orderId placed successfully! You earned $pointsEarned points." . $upgradeMsg, 'success');
     header("Location: orders.php");
     exit();
 
 } catch (Exception $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     error_log("Checkout Error: " . $e->getMessage());
     flash("Checkout failed: " . $e->getMessage(), 'danger');
     header("Location: cart.php");

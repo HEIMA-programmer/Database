@@ -1,0 +1,189 @@
+/* Retro Echo Records - Main Stylesheet */
+/* Theme: Dark & Gold */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;600&display=swap');
+
+:root {
+    --bs-body-bg: #121212;
+    --bs-body-color: #e0e0e0;
+    --primary-gold: #d4af37;
+    --primary-gold-hover: #b59020;
+    --secondary-dark: #1e1e1e;
+    --accent-red: #cf6679;
+    --accent-green: #03dac6;
+    --border-color: #333;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+
+h1, h2, h3, h4, h5, h6, .navbar-brand {
+    font-family: 'Playfair Display', serif;
+    color: #fff;
+}
+
+/* --- Navbar --- */
+.navbar {
+    background-color: #000 !important;
+    border-bottom: 1px solid var(--primary-gold);
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+
+.navbar-brand {
+    font-size: 1.5rem;
+    color: var(--primary-gold) !important;
+    letter-spacing: 1px;
+}
+
+.nav-link {
+    color: #aaa !important;
+    font-weight: 500;
+    transition: color 0.3s;
+}
+
+.nav-link:hover, .nav-link.active {
+    color: #fff !important;
+}
+
+/* --- Buttons --- */
+.btn-warning, .btn-primary {
+    background-color: var(--primary-gold);
+    border-color: var(--primary-gold);
+    color: #000;
+    font-weight: 600;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.5rem 1.2rem;
+}
+
+.btn-warning:hover, .btn-primary:hover {
+    background-color: var(--primary-gold-hover);
+    border-color: var(--primary-gold-hover);
+    color: #000;
+}
+
+.btn-outline-warning {
+    color: var(--primary-gold);
+    border-color: var(--primary-gold);
+    border-radius: 2px;
+}
+
+.btn-outline-warning:hover {
+    background-color: var(--primary-gold);
+    color: #000;
+}
+
+/* --- Cards --- */
+.card {
+    background-color: var(--secondary-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 12px rgba(0,0,0,0.5);
+}
+
+.card-header {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600;
+}
+
+.card-footer {
+    border-top: 1px solid var(--border-color);
+    background-color: transparent;
+}
+
+/* --- Forms & Tables --- */
+.form-control, .form-select {
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+    color: #fff;
+    border-radius: 2px;
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: #2a2a2a;
+    border-color: var(--primary-gold);
+    color: #fff;
+    box-shadow: 0 0 0 0.25rem rgba(212, 175, 55, 0.25);
+}
+
+.table {
+    color: #ccc;
+    border-color: var(--border-color);
+}
+
+.table thead th {
+    color: var(--primary-gold);
+    border-bottom-width: 2px;
+    font-family: 'Playfair Display', serif;
+    letter-spacing: 0.5px;
+}
+
+.table-hover tbody tr:hover td {
+    color: #fff;
+    background-color: rgba(212, 175, 55, 0.1);
+}
+
+/* --- Utilities --- */
+.text-warning {
+    color: var(--primary-gold) !important;
+}
+
+.bg-black {
+    background-color: #000 !important;
+}
+
+.border-warning {
+    border-color: var(--primary-gold) !important;
+}
+
+/* Vinyl Record Effect for Placeholders */
+.vinyl-placeholder {
+    width: 100%;
+    aspect-ratio: 1/1;
+    background: radial-gradient(circle, #111 15%, #333 16%, #111 17%, #333 18%, #111 25%, #222 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    margin: 10px auto;
+    width: 80%;
+}
+
+.vinyl-center {
+    width: 30%;
+    height: 30%;
+    background-color: var(--primary-gold);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000;
+    font-weight: bold;
+    font-size: 0.8rem;
+    text-align: center;
+    border: 2px solid #fff;
+}
+
+/* Dashboard Stats Card */
+.stats-card {
+    border-left: 4px solid var(--primary-gold);
+}
+
+.badge {
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}

@@ -1,13 +1,13 @@
 <?php
-// config/db_connect.php
-
+// 本地开发环境配置
 date_default_timezone_set('Asia/Shanghai');
 
-$host     = getenv('DB_HOST') ?: '127.0.0.1';
-$dbname   = getenv('DB_NAME') ?: 'retro_echo';
-$username = getenv('DB_USER') ?: 'root';
-$password = getenv('DB_PASS') ?: ''; 
-$port     = getenv('DB_PORT') ?: '3306';
+// XAMPP 默认设置
+$host     = '127.0.0.1'; // 或 'localhost'
+$dbname   = 'retro_echo';
+$username = 'root';      // XAMPP 默认用户名
+$password = '';          // XAMPP 默认密码为空 (注意这里留空字符串)
+$port     = '3306';
 $charset  = 'utf8mb4';
 
 $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=$charset";

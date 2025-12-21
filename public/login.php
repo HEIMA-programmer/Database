@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     flash('Welcome to Retro Echo Records!', 'success');
-                    $redirect = $_SESSION['redirect_url'] ?? '/customer/catalog.php';
+                    $redirect = $_SESSION['redirect_url'] ?? (BASE_URL . '/customer/catalog.php');
                     unset($_SESSION['redirect_url']);
                     header("Location: " . $redirect);
                     exit();

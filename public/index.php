@@ -4,11 +4,12 @@ session_start();
 // 路由逻辑
 if (isset($_SESSION['role'])) {
     switch ($_SESSION['role']) {
-        case 'Customer': header("Location: /customer/catalog.php"); break;
-        case 'Staff':    header("Location: /staff/pos.php"); break;
-        case 'Manager':  header("Location: /manager/dashboard.php"); break;
-        case 'Admin':    header("Location: /admin/products.php"); break;
-        default:         header("Location: /logout.php"); break;
+        // [修复] 添加 BASE_URL 以确保路径正确
+        case 'Customer': header("Location: " . BASE_URL . "/customer/catalog.php"); break;
+        case 'Staff':    header("Location: " . BASE_URL . "/staff/pos.php"); break;
+        case 'Manager':  header("Location: " . BASE_URL . "/manager/dashboard.php"); break;
+        case 'Admin':    header("Location: " . BASE_URL . "/admin/products.php"); break;
+        default:         header("Location: " . BASE_URL . "/logout.php"); break;
     }
     exit();
 }

@@ -24,9 +24,6 @@ function formatDate($dateString) {
 
 /**
  * 设置或获取 Flash 消息 (一次性提示)
- * 用法: 
- * 设置: flash('Login successful!', 'success');
- * 读取: $msg = flash();
  */
 function flash($message = null, $type = 'success') {
     if ($message) {
@@ -69,9 +66,39 @@ function hasRole($role) {
  */
 function getCartCount() {
     if (isset($_SESSION['cart'])) {
-        return array_sum($_SESSION['cart']);
+        return count($_SESSION['cart']);
     }
     return 0;
+}
+
+/**
+ * [架构重构] 动态获取特定类型的店铺ID
+ * 用于替代硬编码 (例如: getShopIdByType($pdo, 'Warehouse') 替代 3)
+ */
+function getShopIdByType($pdo, $type) {
+    static $cache = []; // 简单的静态缓存，避免一次请求多次查询数据库
+    
+    if (isset($cache[$type])) {
+        return $cache[$type];
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT ShopID FROM Shop WHERE Type = ? LIMIT 1");
+        $stmt->execute([$type]);
+        $id = $stmt->fetchColumn();
+        
+        if ($id) {
+            $cache[$type] = $id;
+            return $id;
+        }
+        
+        // 如果找不到，记录日志并返回默认值 (通常是1或抛出异常，视业务严谨度而定)
+        error_log("Warning: No shop found for type '$type'. Using default ID 1.");
+        return 1; 
+    } catch (Exception $e) {
+        error_log("DB Error in getShopIdByType: " . $e->getMessage());
+        return 1;
+    }
 }
 
 /**

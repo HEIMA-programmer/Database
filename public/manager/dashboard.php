@@ -1,145 +1,109 @@
 <?php
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
-requireRole(['Manager', 'Admin']);
+requireRole('Manager');
 require_once __DIR__ . '/../../includes/header.php';
 
-// --- 数据查询 ---
-// 1. KPI: 总收入
-$rev = $pdo->query("SELECT SUM(TotalAmount) FROM CustomerOrder WHERE OrderStatus IN ('Paid','Completed')")->fetchColumn();
-// 2. KPI: 库存总量
-$stk = $pdo->query("SELECT COUNT(*) FROM StockItem WHERE Status='Available'")->fetchColumn();
-// 3. KPI: 待处理订单
-$pending = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE OrderStatus='Pending'")->fetchColumn();
-// 4. KPI: 会员总数
-$members = $pdo->query("SELECT COUNT(*) FROM Customer")->fetchColumn();
+// --- Advanced SQL 1: Top Spending VIPs (using Window Function) ---
+// 使用 DENSE_RANK() 对客户消费进行排名，这是 Assignment 2 要求的高级查询特征
+$vipSql = "
+    SELECT * FROM (
+        SELECT 
+            c.Name, 
+            c.Email, 
+            mt.TierName,
+            SUM(co.TotalAmount) as TotalSpent,
+            DENSE_RANK() OVER (ORDER BY SUM(co.TotalAmount) DESC) as RankPosition
+        FROM Customer c
+        JOIN CustomerOrder co ON c.CustomerID = co.CustomerID
+        JOIN MembershipTier mt ON c.TierID = mt.TierID
+        WHERE co.Status != 'Cancelled'
+        GROUP BY c.CustomerID, c.Name, c.Email, mt.TierName
+    ) as RankedCustomers
+    WHERE RankPosition <= 5
+";
+$vips = $pdo->query($vipSql)->fetchAll();
 
-// 高级查询: 销售趋势
-$sqlTrend = "SELECT DATE_FORMAT(OrderDate, '%Y-%m') as SalesMonth, SUM(TotalAmount) as TotalRevenue
-             FROM CustomerOrder
-             WHERE OrderStatus IN ('Paid', 'Completed')
-             GROUP BY SalesMonth
-             ORDER BY SalesMonth ASC
-             LIMIT 12";
-$trendData = $pdo->query($sqlTrend)->fetchAll();
+// --- Advanced SQL 2: Dead Stock Alert (Complex Logic with Date Calculation) ---
+// 找出进货超过 6 个月但从未卖出过的商品
+$deadStockSql = "
+    SELECT 
+        r.Title, 
+        r.ArtistName, 
+        s.BatchNo, 
+        s.DateAdded,
+        DATEDIFF(NOW(), s.DateAdded) as DaysInStock
+    FROM StockItem s
+    JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+    WHERE s.Status = 'InStock' 
+    AND s.DateAdded < DATE_SUB(NOW(), INTERVAL 6 MONTH)
+    ORDER BY s.DateAdded ASC
+    LIMIT 10
+";
+$deadStock = $pdo->query($deadStockSql)->fetchAll();
 
-// 高级查询: 滞销库存
-$sqlDeadStock = "SELECT sh.Name as ShopName, r.Title, s.BatchNo, DATEDIFF(CURRENT_DATE, s.AcquiredDate) as DaysInStock
-                 FROM StockItem s
-                 JOIN Shop sh ON s.ShopID = sh.ShopID
-                 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
-                 WHERE s.Status = 'Available'
-                 HAVING DaysInStock > 60
-                 ORDER BY DaysInStock DESC
-                 LIMIT 5";
-$deadStockData = $pdo->query($sqlDeadStock)->fetchAll();
-
-// 高级查询: VIP 排行
-$sqlVIP = "SELECT c.Name, mt.TierName, SUM(co.TotalAmount) as TotalSpent
-           FROM Customer c
-           JOIN MembershipTier mt ON c.TierID = mt.TierID
-           JOIN CustomerOrder co ON c.CustomerID = co.CustomerID
-           WHERE co.OrderStatus IN ('Paid', 'Completed')
-           GROUP BY c.CustomerID, c.Name, mt.TierName
-           ORDER BY TotalSpent DESC
-           LIMIT 5";
-$vipData = $pdo->query($sqlVIP)->fetchAll();
+// --- KPI Stats (Simple Aggregates) ---
+$totalSales = $pdo->query("SELECT SUM(TotalAmount) FROM CustomerOrder WHERE Status != 'Cancelled'")->fetchColumn();
+$activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE Status IN ('Pending', 'Processing')")->fetchColumn();
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="text-warning mb-0">Dashboard</h2>
-    <span class="text-muted"><i class="fa-regular fa-calendar me-2"></i><?= date('F j, Y') ?></span>
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-warning display-6 fw-bold"><i class="fa-solid fa-chart-line me-2"></i>Executive Dashboard</h2>
+        <p class="text-secondary">Real-time business intelligence and performance metrics.</p>
+    </div>
 </div>
 
 <div class="row g-4 mb-5">
-    <div class="col-md-3">
-        <div class="card stats-card h-100">
+    <div class="col-md-6 col-lg-3">
+        <div class="card bg-dark border-success h-100">
             <div class="card-body">
-                <h6 class="text-muted text-uppercase small">Total Revenue</h6>
-                <h2 class="text-warning mb-0"><?= formatPrice($rev) ?></h2>
+                <h6 class="text-success text-uppercase mb-2">Total Revenue</h6>
+                <h3 class="text-white fw-bold"><?= formatPrice($totalSales) ?></h3>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stats-card h-100" style="border-left-color: #03dac6;">
+    <div class="col-md-6 col-lg-3">
+        <div class="card bg-dark border-info h-100">
             <div class="card-body">
-                <h6 class="text-muted text-uppercase small">Active Inventory</h6>
-                <h2 class="text-white mb-0"><?= number_format($stk) ?> <small class="fs-6 text-muted">items</small></h2>
+                <h6 class="text-info text-uppercase mb-2">Active Orders</h6>
+                <h3 class="text-white fw-bold"><?= $activeOrders ?></h3>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stats-card h-100" style="border-left-color: #cf6679;">
+    <div class="col-md-6 col-lg-3">
+        <div class="card bg-dark border-warning h-100">
             <div class="card-body">
-                <h6 class="text-muted text-uppercase small">Pending Orders</h6>
-                <h2 class="text-white mb-0"><?= number_format($pending) ?></h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stats-card h-100" style="border-left-color: #bb86fc;">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase small">Club Members</h6>
-                <h2 class="text-white mb-0"><?= number_format($members) ?></h2>
+                <h6 class="text-warning text-uppercase mb-2">Top VIP</h6>
+                <h3 class="text-white fw-bold"><?= h($vips[0]['Name'] ?? 'N/A') ?></h3>
             </div>
         </div>
     </div>
 </div>
 
 <div class="row g-4">
-    <div class="col-lg-8">
-        <div class="card h-100">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="fa-solid fa-arrow-trend-up me-2 text-warning"></i>Monthly Revenue Trend</span>
-            </div>
-            <div class="card-body">
-                <canvas id="salesChart" style="max-height: 300px;"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-4">
-        <div class="card h-100 border-danger">
-            <div class="card-header bg-danger text-white">
-                <i class="fa-solid fa-triangle-exclamation me-2"></i>Dead Stock Alert (>60 Days)
-            </div>
-            <ul class="list-group list-group-flush bg-dark">
-                <?php if(empty($deadStockData)): ?>
-                    <li class="list-group-item bg-dark text-muted text-center py-4">Inventory is healthy.</li>
-                <?php else: ?>
-                    <?php foreach($deadStockData as $row): ?>
-                    <li class="list-group-item bg-dark text-light border-secondary">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="text-truncate me-2">
-                                <div class="fw-bold"><?= h($row['Title']) ?></div>
-                                <small class="text-muted"><?= h($row['ShopName']) ?></small>
-                            </div>
-                            <span class="badge bg-danger rounded-pill"><?= $row['DaysInStock'] ?> days</span>
-                        </div>
-                    </li>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </ul>
-        </div>
-    </div>
-</div>
-
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header border-warning text-warning">
-                <i class="fa-solid fa-crown me-2"></i>Top VIP Customers
+    <div class="col-lg-6">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-header border-secondary bg-transparent">
+                <h5 class="card-title text-warning mb-0"><i class="fa-solid fa-trophy me-2"></i>Top Spenders (Window Func)</h5>
             </div>
             <div class="table-responsive">
-                <table class="table table-dark table-hover mb-0 align-middle">
-                    <thead><tr><th>Customer</th><th>Tier</th><th>Total Spent</th><th>Status</th></tr></thead>
-                    <tbody>
-                        <?php foreach($vipData as $row): ?>
+                <table class="table table-dark table-sm mb-0">
+                    <thead>
                         <tr>
-                            <td class="fw-bold"><?= h($row['Name']) ?></td>
-                            <td><span class="badge bg-secondary border border-warning text-warning"><?= h($row['TierName']) ?></span></td>
-                            <td class="text-success fw-bold"><?= formatPrice($row['TotalSpent']) ?></td>
-                            <td><i class="fa-solid fa-star text-warning"></i> Loyal</td>
+                            <th>Rank</th>
+                            <th>Customer</th>
+                            <th>Tier</th>
+                            <th class="text-end">Total Spent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($vips as $v): ?>
+                        <tr>
+                            <td><span class="badge bg-warning text-dark">#<?= $v['RankPosition'] ?></span></td>
+                            <td><?= h($v['Name']) ?></td>
+                            <td><small class="text-muted"><?= h($v['TierName']) ?></small></td>
+                            <td class="text-end text-success fw-bold"><?= formatPrice($v['TotalSpent']) ?></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -147,59 +111,40 @@ $vipData = $pdo->query($sqlVIP)->fetchAll();
             </div>
         </div>
     </div>
+
+    <div class="col-lg-6">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-header border-secondary bg-transparent">
+                <h5 class="card-title text-danger mb-0"><i class="fa-solid fa-triangle-exclamation me-2"></i>Stagnant Inventory (>6 Months)</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Days</th>
+                            <th>Album</th>
+                            <th>Batch</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($deadStock as $d): ?>
+                        <tr>
+                            <td class="text-danger fw-bold"><?= $d['DaysInStock'] ?> days</td>
+                            <td>
+                                <div><?= h($d['Title']) ?></div>
+                                <small class="text-muted"><?= h($d['ArtistName']) ?></small>
+                            </td>
+                            <td><span class="badge bg-secondary"><?= h($d['BatchNo']) ?></span></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if(empty($deadStock)): ?>
+                            <tr><td colspan="3" class="text-center text-success py-3">No stagnant inventory found!</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    // Dark Theme Chart Configuration
-    const ctx = document.getElementById('salesChart').getContext('2d');
-    
-    // Create gradient
-    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-    gradient.addColorStop(0, 'rgba(212, 175, 55, 0.5)');
-    gradient.addColorStop(1, 'rgba(212, 175, 55, 0)');
-
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: <?= json_encode(array_column($trendData, 'SalesMonth')) ?>,
-            datasets: [{
-                label: 'Revenue',
-                data: <?= json_encode(array_column($trendData, 'TotalRevenue')) ?>,
-                borderColor: '#d4af37',
-                backgroundColor: gradient,
-                borderWidth: 2,
-                pointBackgroundColor: '#fff',
-                pointBorderColor: '#d4af37',
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: '#333',
-                    titleColor: '#d4af37',
-                    bodyColor: '#fff',
-                    borderColor: '#444',
-                    borderWidth: 1
-                }
-            },
-            scales: {
-                y: {
-                    grid: { color: '#333' },
-                    ticks: { color: '#888', callback: function(value) { return '¥' + value; } }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { color: '#888' }
-                }
-            }
-        }
-    });
-</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

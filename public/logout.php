@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../config/db_connect.php';
 session_start();
 
 // 清除所有 Session 变量

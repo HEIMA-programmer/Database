@@ -1,5 +1,20 @@
 <?php
-define('BASE_URL', '/retro_echo/public');
+$scriptPath = dirname($_SERVER['SCRIPT_NAME']); // 获取当前执行脚本的目录
+$scriptPath = str_replace('\\', '/', $scriptPath); // 兼容 Windows 反斜杠
+
+// 自动定位到 /public 目录
+if (strpos($scriptPath, '/public') !== false) {
+    // 截取到 /public 结束
+    $baseUrl = substr($scriptPath, 0, strpos($scriptPath, '/public') + 7);
+} else {
+    // 如果还没进入 public 目录（备用）
+    $baseUrl = $scriptPath . '/public';
+}
+
+// 移除末尾的斜杠（如果有多余的话）
+$baseUrl = rtrim($baseUrl, '/');
+
+define('BASE_URL', $baseUrl);
 // 本地开发环境配置
 date_default_timezone_set('Asia/Shanghai');
 

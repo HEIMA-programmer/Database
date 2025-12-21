@@ -17,5 +17,5 @@ if (ini_get("session.use_cookies")) {
 session_destroy();
 
 // 重定向回首页或登录页
-header("Location: /login.php");
+header("Location: " . BASE_URL . "/login.php");
 exit();

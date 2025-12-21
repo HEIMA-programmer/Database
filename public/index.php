@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../config/db_connect.php';
 session_start();
 // 路由逻辑
 if (isset($_SESSION['role'])) {
@@ -29,7 +30,7 @@ require_once __DIR__ . '/../includes/header.php';
     </p>
 
     <div class="d-flex gap-3">
-        <a href="/login.php" class="btn btn-warning btn-lg px-5 py-3 rounded-pill shadow-lg">
+        <a href="<?= BASE_URL ?>/login.php" class="btn btn-warning btn-lg px-5 py-3 rounded-pill shadow-lg">
             Start Your Collection
         </a>
     </div>

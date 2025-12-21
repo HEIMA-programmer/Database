@@ -1,4 +1,5 @@
 <?php
+define('BASE_URL', '/retro_echo/public');
 // 本地开发环境配置
 date_default_timezone_set('Asia/Shanghai');
 

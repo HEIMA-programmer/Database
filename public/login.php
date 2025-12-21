@@ -5,7 +5,7 @@ require_once __DIR__ . '/../includes/functions.php';
 session_start();
 
 if (isset($_SESSION['user_id'])) {
-    header("Location: /index.php");
+    header("Location: " . BASE_URL . "/index.php");
     exit();
 }
 

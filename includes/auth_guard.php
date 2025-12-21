@@ -14,7 +14,7 @@ function requireLogin() {
         $_SESSION['redirect_url'] = $_SERVER['REQUEST_URI'];
         
         flash('Please login to access this page.', 'warning');
-        header("Location: /login.php");
+        header("Location: " . BASE_URL . "/login.php");
         exit();
     }
 }
@@ -39,7 +39,7 @@ function requireRole($allowedRoles) {
         
         // 显示错误页面或跳转
         flash('Access Denied: You do not have permission to view this area.', 'danger');
-        header("Location: /index.php"); // 跳转回首页
+        header("Location: " . BASE_URL . "/index.php"); // 跳转回首页
         exit();
     }
 }

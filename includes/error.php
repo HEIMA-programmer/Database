@@ -39,7 +39,7 @@ if (!headers_sent()) {
             <br>
         <?php endif; ?>
 
-        <a href="/" class="btn btn-outline-warning px-5 py-2 rounded-pill">
+        <a href="<?= BASE_URL ?>/" class="btn btn-outline-warning px-5 py-2 rounded-pill">
             <i class="fa-solid fa-rotate-right me-2"></i>Retry Connection
         </a>
         

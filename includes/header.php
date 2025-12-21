@@ -15,13 +15,13 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <title>Retro Echo Records</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css">
 </head>
 <body class="d-flex flex-column min-vh-100">
 
 <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
   <div class="container">
-    <a class="navbar-brand" href="/">
+    <a class="navbar-brand" href="<?= BASE_URL ?>/">
         <i class="fa-solid fa-record-vinyl me-2"></i>Retro Echo
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
@@ -33,49 +33,49 @@ $current_page = basename($_SERVER['PHP_SELF']);
         
         <?php if (hasRole('Customer')): ?>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'catalog.php' ? 'active' : '' ?>" href="/customer/catalog.php">Catalog</a>
+                <a class="nav-link <?= $current_page == 'catalog.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/customer/catalog.php">Catalog</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'orders.php' ? 'active' : '' ?>" href="/customer/orders.php">Orders</a>
+                <a class="nav-link <?= $current_page == 'orders.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/customer/orders.php">Orders</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'profile.php' ? 'active' : '' ?>" href="/customer/profile.php">Membership</a>
+                <a class="nav-link <?= $current_page == 'profile.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/customer/profile.php">Membership</a>
             </li>
         <?php endif; ?>
 
         <?php if (hasRole('Staff')): ?>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'pos.php' ? 'active' : '' ?>" href="/staff/pos.php">POS</a>
+                <a class="nav-link <?= $current_page == 'pos.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pos.php">POS</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'buyback.php' ? 'active' : '' ?>" href="/staff/buyback.php">Buyback</a>
+                <a class="nav-link <?= $current_page == 'buyback.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/buyback.php">Buyback</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="/staff/inventory.php">Inventory</a>
+                <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/inventory.php">Inventory</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'pickup.php' ? 'active' : '' ?>" href="/staff/pickup.php">Pickups</a>
+                <a class="nav-link <?= $current_page == 'pickup.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pickup.php">Pickups</a>
             </li>
         <?php endif; ?>
 
         <?php if (hasRole('Manager')): ?>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'dashboard.php' ? 'active' : '' ?>" href="/manager/dashboard.php">Dashboard</a>
+                <a class="nav-link <?= $current_page == 'dashboard.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/dashboard.php">Dashboard</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'transfer.php' ? 'active' : '' ?>" href="/manager/transfer.php">Transfers</a>
+                <a class="nav-link <?= $current_page == 'transfer.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/transfer.php">Transfers</a>
             </li>
         <?php endif; ?>
 
         <?php if (hasRole('Admin')): ?>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'products.php' ? 'active' : '' ?>" href="/admin/products.php">Products</a>
+                <a class="nav-link <?= $current_page == 'products.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/products.php">Products</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'procurement.php' ? 'active' : '' ?>" href="/admin/procurement.php">Procurement</a>
+                <a class="nav-link <?= $current_page == 'procurement.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/procurement.php">Procurement</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'users.php' ? 'active' : '' ?>" href="/admin/users.php">Users</a>
+                <a class="nav-link <?= $current_page == 'users.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/users.php">Users</a>
             </li>
         <?php endif; ?>
       </ul>
@@ -85,7 +85,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
             
             <?php if (hasRole('Customer')): ?>
                 <li class="nav-item me-3">
-                    <a class="nav-link position-relative btn btn-sm btn-outline-warning border-0 px-3" href="/customer/cart.php">
+                    <a class="nav-link position-relative btn btn-sm btn-outline-warning border-0 px-3" href="<?= BASE_URL ?>/customer/cart.php">
                         <i class="fa-solid fa-cart-shopping"></i>
                         <?php $cartCount = getCartCount(); ?>
                         <?php if($cartCount > 0): ?>
@@ -106,15 +106,15 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <li><span class="dropdown-header text-muted">Role: <?= h($_SESSION['role']) ?></span></li>
                     <li><hr class="dropdown-divider border-secondary"></li>
                     <?php if (hasRole('Customer')): ?>
-                        <li><a class="dropdown-item" href="/customer/profile.php">My Profile</a></li>
+                        <li><a class="dropdown-item" href="<?= BASE_URL ?>/customer/profile.php">My Profile</a></li>
                     <?php endif; ?>
-                    <li><a class="dropdown-item text-danger" href="/logout.php">Logout</a></li>
+                    <li><a class="dropdown-item text-danger" href="<?= BASE_URL ?>/logout.php">Logout</a></li>
                 </ul>
             </li>
 
         <?php else: ?>
             <li class="nav-item">
-                <a class="btn btn-warning btn-sm fw-bold px-4" href="/login.php">Login</a>
+                <a class="btn btn-warning btn-sm fw-bold px-4" href="<?= BASE_URL ?>/login.php">Login</a>
             </li>
         <?php endif; ?>
       </ul>

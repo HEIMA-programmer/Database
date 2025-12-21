@@ -6,7 +6,7 @@ session_start();
 
 // 如果已登录，直接跳转
 if (isset($_SESSION['user_id'])) {
-    header("Location: /index.php");
+    header("Location: " . BASE_URL . "/index.php");
     exit();
 }
 
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 flash("Welcome to Retro Echo, $name! Start your collection today.", 'success');
-                header("Location: /customer/catalog.php");
+                header("Location: " . BASE_URL . "/customer/catalog.php");
                 exit();
             }
         } catch (PDOException $e) {

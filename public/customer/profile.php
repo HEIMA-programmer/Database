@@ -123,7 +123,7 @@ if ($nextTarget > 0) {
                                 <i class="fa-solid fa-chevron-right small"></i>
                             </div>
                         </a>
-                        <a href="/logout.php" class="list-group-item list-group-item-action bg-dark text-danger border-secondary">
+                        <a href="<?= BASE_URL ?>/logout.php" class="list-group-item list-group-item-action bg-dark text-danger border-secondary">
                             <div class="d-flex w-100 justify-content-between align-items-center">
                                 <span><i class="fa-solid fa-right-from-bracket me-2"></i>Sign Out</span>
                             </div>

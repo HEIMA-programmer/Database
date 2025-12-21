@@ -9,29 +9,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $pdo->beginTransaction();
 
-        // 1. 插入库存 (StockItem)
-        $sql = "INSERT INTO StockItem (ReleaseID, ShopID, BatchNo, AcquiredDate, ConditionGrade, UnitPrice, Status) 
-                VALUES (:rid, :shop, :batch, CURDATE(), :cond, :price, 'Available')";
+        $releaseId = $_POST['release_id'];
+        $condition = $_POST['condition'];
+        $buyPrice = $_POST['buy_price'];
+        $resalePrice = $_POST['resale_price'];
+        $shopId = $_SESSION['shop_id'] ?? 1;
+        $empId = $_SESSION['user_id'];
+
+        // 1. 创建回购单 (Purchase Order - Type: Buyback)
+        // 这确保了财务上的支出有据可查
+        $poSql = "INSERT INTO PurchaseOrder (SupplierID, CreatedByEmployeeID, OrderDate, Status, SourceType) 
+                  VALUES (NULL, ?, NOW(), 'Received', 'Buyback')";
+        $stmtPo = $pdo->prepare($poSql);
+        $stmtPo->execute([$empId]);
+        $poId = $pdo->lastInsertId();
+
+        // 2. 记录 PO Line (作为单据明细)
+        $lineSql = "INSERT INTO PurchaseOrderLine (PO_ID, ReleaseID, Quantity, UnitCost) VALUES (?, ?, 1, ?)";
+        $stmtLine = $pdo->prepare($lineSql);
+        $stmtLine->execute([$poId, $releaseId, $buyPrice]);
+
+        // 3. 插入物理库存 (StockItem) 并关联 PO
+        $stockSql = "INSERT INTO StockItem (ReleaseID, ShopID, SourcePO_ID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) 
+                     VALUES (?, ?, ?, ?, ?, 'Available', ?, NOW())";
         
-        $shopId = $_SESSION['shop_id'] ?? 1; // 默认为当前店员所在店铺
-        $stmt = $pdo->prepare($sql);
+        $batchNo = 'BUYBACK-' . date('Ymd') . '-' . $poId;
         
-        $stmt->execute([
-            ':rid' => $_POST['release_id'],
-            ':shop' => $shopId,
-            ':batch' => 'BUYBACK-' . date('Ymd'), // 批次号标记为回购
-            ':cond' => $_POST['condition'],
-            ':price' => $_POST['resale_price'] // 设置预期的转售价
+        $stmtStock = $pdo->prepare($stockSql);
+        $stmtStock->execute([
+            $releaseId,
+            $shopId,
+            $poId, // Traceability: 关联到回购单
+            $batchNo,
+            $condition,
+            $resalePrice
         ]);
 
-        // 2. (可选) 记录支出交易日志 - Assignment 简单版可省略，但建议用 Flash 提示
-        $buyPrice = $_POST['buy_price'];
-        
         $pdo->commit();
-        flash("Item bought back successfully. Paid customer: ¥$buyPrice. Added to inventory.", 'success');
+        flash("Buyback processed successfully. PO #$poId created. Item added to inventory.", 'success');
+        
     } catch (Exception $e) {
-        $pdo->rollBack();
-        flash("Error: " . $e->getMessage(), 'danger');
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log($e->getMessage());
+        flash("Error processing buyback: " . $e->getMessage(), 'danger');
     }
     header("Location: buyback.php");
     exit();
@@ -65,18 +85,18 @@ $releases = $pdo->query("SELECT ReleaseID, Title, ArtistName FROM ReleaseAlbum O
                         <div class="col-md-6">
                             <label class="form-label">Condition</label>
                             <select name="condition" class="form-select" required>
+                                <option value="VG+">Very Good Plus (Standard)</option>
                                 <option value="Mint">Mint (Perfect)</option>
                                 <option value="NM">Near Mint</option>
-                                <option value="VG+">Very Good Plus</option>
                                 <option value="VG">Very Good</option>
                                 <option value="G">Good</option>
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Offer Price (Cost)</label>
+                            <label class="form-label">Payout Amount (Cost)</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-secondary border-secondary text-light">¥</span>
-                                <input type="number" name="buy_price" class="form-control" placeholder="Paid to customer" required>
+                                <input type="number" name="buy_price" class="form-control" placeholder="Paid to customer" step="1" required>
                             </div>
                         </div>
                     </div>
@@ -85,12 +105,12 @@ $releases = $pdo->query("SELECT ReleaseID, Title, ArtistName FROM ReleaseAlbum O
                         <label class="form-label text-info">Target Resale Price</label>
                         <div class="input-group">
                             <span class="input-group-text bg-secondary border-secondary text-light">¥</span>
-                            <input type="number" name="resale_price" class="form-control" placeholder="Price on sticker" required>
+                            <input type="number" name="resale_price" class="form-control" placeholder="Price on sticker" step="1" required>
                         </div>
                     </div>
 
                     <button type="submit" class="btn btn-warning w-100 fw-bold py-2">
-                        <i class="fa-solid fa-check me-2"></i>Complete Buyback & Add to Stock
+                        <i class="fa-solid fa-check me-2"></i>Authorize Payout & Print Label
                     </button>
                 </form>
             </div>

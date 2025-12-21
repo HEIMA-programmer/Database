@@ -13,40 +13,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $toShopId = $_POST['to_shop_id'];
     $empId = $_SESSION['user_id'];
 
-    // 获取当前库存信息，验证所有权
-    $stmt = $pdo->prepare("SELECT ShopID FROM StockItem WHERE StockItemID = ? AND Status = 'Available'");
-    $stmt->execute([$stockId]);
-    $currentItem = $stmt->fetch();
-
-    if ($currentItem && $currentItem['ShopID'] != $toShopId) {
-        try {
-            $pdo->beginTransaction();
-
-            // 1. 记录调拨日志
-            $logSql = "INSERT INTO InventoryTransfer (StockItemID, FromShopID, ToShopID, AuthorizedByEmployeeID) 
-                       VALUES (:sid, :from, :to, :emp)";
-            $stmt = $pdo->prepare($logSql);
-            $stmt->execute([
-                ':sid' => $stockId,
-                ':from' => $currentItem['ShopID'],
-                ':to' => $toShopId,
-                ':emp' => $empId
-            ]);
-
-            // 2. 更新物品物理位置
-            $updSql = "UPDATE StockItem SET ShopID = :to WHERE StockItemID = :sid";
-            $stmt = $pdo->prepare($updSql);
-            $stmt->execute([':to' => $toShopId, ':sid' => $stockId]);
-
-            $pdo->commit();
-            flash("Stock Item #$stockId transferred successfully.", 'success');
-
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            flash("Transfer failed: " . $e->getMessage(), 'danger');
+    // 简单验证目标店铺是否存在
+    $targetShopValid = false;
+    foreach ($shops as $s) {
+        if ($s['ShopID'] == $toShopId) {
+            $targetShopValid = true;
+            break;
         }
+    }
+
+    if (!$targetShopValid) {
+        flash("Invalid destination shop.", 'danger');
     } else {
-        flash("Invalid Item ID or Item already at destination.", 'danger');
+        // 获取当前库存信息，验证所有权
+        $stmt = $pdo->prepare("SELECT ShopID FROM StockItem WHERE StockItemID = ? AND Status = 'Available'");
+        $stmt->execute([$stockId]);
+        $currentItem = $stmt->fetch();
+
+        if ($currentItem && $currentItem['ShopID'] != $toShopId) {
+            try {
+                $pdo->beginTransaction();
+
+                // 1. 记录调拨日志
+                $logSql = "INSERT INTO InventoryTransfer (StockItemID, FromShopID, ToShopID, AuthorizedByEmployeeID) 
+                           VALUES (:sid, :from, :to, :emp)";
+                $stmt = $pdo->prepare($logSql);
+                $stmt->execute([
+                    ':sid' => $stockId,
+                    ':from' => $currentItem['ShopID'],
+                    ':to' => $toShopId,
+                    ':emp' => $empId
+                ]);
+
+                // 2. 更新物品物理位置
+                $updSql = "UPDATE StockItem SET ShopID = :to WHERE StockItemID = :sid";
+                $stmt = $pdo->prepare($updSql);
+                $stmt->execute([':to' => $toShopId, ':sid' => $stockId]);
+
+                $pdo->commit();
+                flash("Stock Item #$stockId transferred successfully.", 'success');
+
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                flash("Transfer failed: " . $e->getMessage(), 'danger');
+            }
+        } else {
+            flash("Invalid Item ID or Item already at destination.", 'danger');
+        }
     }
 }
 ?>

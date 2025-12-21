@@ -4,8 +4,13 @@ require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Admin');
 require_once __DIR__ . '/../../includes/header.php';
 
-// [Fix: Hardcoding] 动态获取仓库ID
+// [Fix: Robustness] 动态获取仓库ID并检查有效性
 $warehouseId = getShopIdByType($pdo, 'Warehouse');
+if (!$warehouseId) {
+    echo "<div class='alert alert-danger'>Critical Configuration Error: 'Warehouse' shop type not found in database. Procurement functions disabled.</div>";
+    // 停止渲染后续逻辑，或者禁用按钮
+    $warehouseId = 0; // Prevent crash, logic will handle 0
+}
 
 // --- Action 1: Create New Purchase Order ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_po'])) {
@@ -13,12 +18,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_po'])) {
         $pdo->beginTransaction();
         
         $supplierId = $_POST['supplier_id'];
+        $empId = $_SESSION['user_id']; // 记录是谁创建的
+
         // 创建 PO 头
-        $stmt = $pdo->prepare("INSERT INTO PurchaseOrder (SupplierID, OrderDate, Status, SourceType) VALUES (?, CURDATE(), 'Pending', 'Supplier')");
-        $stmt->execute([$supplierId]);
+        $stmt = $pdo->prepare("INSERT INTO PurchaseOrder (SupplierID, CreatedByEmployeeID, OrderDate, Status, SourceType) VALUES (?, ?, CURDATE(), 'Pending', 'Supplier')");
+        $stmt->execute([$supplierId, $empId]);
         $poId = $pdo->lastInsertId();
         
-        // 创建 PO Lines (支持多选简化为单选演示，实际可扩展)
+        // 创建 PO Lines
         $releaseId = $_POST['release_id'];
         $qty = $_POST['quantity'];
         $cost = $_POST['unit_cost'];
@@ -29,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_po'])) {
         $pdo->commit();
         flash("Purchase Order #$poId created.", 'success');
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) $pdo->rollBack();
         flash("Error creating PO: " . $e->getMessage(), 'danger');
     }
     header("Location: procurement.php");
@@ -37,10 +44,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_po'])) {
 }
 
 // --- Action 2: Receive PO (The "Put-away" Flow) ---
-// 这直接解决了 Assignment 1 反馈中 "Purchase orders will not convert into traceable stock items" 的问题
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_po'])) {
     $poId = $_POST['po_id'];
     
+    if (!$warehouseId) {
+        flash("Cannot receive items: Warehouse ID not configured.", 'danger');
+        header("Location: procurement.php");
+        exit();
+    }
+
     try {
         $pdo->beginTransaction();
         
@@ -53,28 +65,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_po'])) {
         
         // 2. 遍历每一行，将数量转化为具体的 StockItems
         foreach ($poLines as $line) {
-            $batchNo = "BATCH-" . date('ymd') . "-" . $poId; // 生成批次号
+            $batchNo = "BATCH-" . date('ymd') . "-" . $poId;
             
             // 循环 Quantity 次，插入 StockItem
             for ($i = 0; $i < $line['Quantity']; $i++) {
-                $insertStock = "INSERT INTO StockItem (ReleaseID, LocationID, Status, BatchNo, SourcePO_ID, DateAdded) 
-                                VALUES (?, ?, 'InStock', ?, ?, NOW())";
+                $insertStock = "INSERT INTO StockItem (ReleaseID, ShopID, Status, BatchNo, SourcePO_ID, AcquiredDate, UnitPrice) 
+                                VALUES (?, ?, 'Available', ?, ?, NOW(), ?)"; 
+                                // 注意: Status 'InStock' -> 'Available' 保持一致性
+                                // 修正: UnitPrice 暂时用 UnitCost 代替，或需要额外的定价逻辑。这里假设进货价作为初始参考价
+                                // 实际业务中通常会有 Markup (加价)，为了简化，我们这里设为 Cost * 1.5
+                $resalePrice = $line['UnitCost'] * 1.5;
+
                 $pdo->prepare($insertStock)->execute([
                     $line['ReleaseID'],
-                    $warehouseId, // 使用动态获取的 ID
+                    $warehouseId,
                     $batchNo,
-                    $poId
+                    $poId,
+                    $resalePrice
                 ]);
             }
         }
         
-        // 3. 更新 PO 状态为 Completed
-        $pdo->prepare("UPDATE PurchaseOrder SET Status = 'Completed' WHERE PO_ID = ?")->execute([$poId]);
+        // 3. 更新 PO 状态为 Received
+        $pdo->prepare("UPDATE PurchaseOrder SET Status = 'Received' WHERE PO_ID = ?")->execute([$poId]);
         
         $pdo->commit();
         flash("PO #$poId received. Items added to Warehouse inventory.", 'success');
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) $pdo->rollBack();
         flash("Error receiving PO: " . $e->getMessage(), 'danger');
     }
     header("Location: procurement.php");
@@ -96,7 +114,7 @@ $pendingPOs = $pdo->query("SELECT po.*, s.Name as SupplierName,
 <div class="row mb-4">
     <div class="col-12 d-flex justify-content-between align-items-center">
         <h2 class="text-warning"><i class="fa-solid fa-boxes-packing me-2"></i>Procurement & Receiving</h2>
-        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#newPOModal">
+        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#newPOModal" <?= !$warehouseId ? 'disabled' : '' ?>>
             <i class="fa-solid fa-plus me-2"></i>New Purchase Order
         </button>
     </div>
@@ -132,7 +150,7 @@ $pendingPOs = $pdo->query("SELECT po.*, s.Name as SupplierName,
                         <form method="POST" onsubmit="return confirm('Confirm receipt of goods? This will generate Stock Items.');">
                             <input type="hidden" name="receive_po" value="1">
                             <input type="hidden" name="po_id" value="<?= $po['PO_ID'] ?>">
-                            <button type="submit" class="btn btn-sm btn-success">
+                            <button type="submit" class="btn btn-sm btn-success" <?= !$warehouseId ? 'disabled' : '' ?>>
                                 <i class="fa-solid fa-check-to-slot me-1"></i> Receive Goods
                             </button>
                         </form>

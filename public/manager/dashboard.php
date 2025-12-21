@@ -5,7 +5,7 @@ requireRole('Manager');
 require_once __DIR__ . '/../../includes/header.php';
 
 // --- Advanced SQL 1: Top Spending VIPs (using Window Function) ---
-// 使用 DENSE_RANK() 对客户消费进行排名，这是 Assignment 2 要求的高级查询特征
+// 使用 DENSE_RANK() 对客户消费进行排名
 $vipSql = "
     SELECT * FROM (
         SELECT 
@@ -24,7 +24,10 @@ $vipSql = "
 ";
 $vips = $pdo->query($vipSql)->fetchAll();
 
-// --- Advanced SQL 2: Dead Stock Alert (Complex Logic with Date Calculation) ---
+// [Robustness Fix] 获取第一名 VIP 用于卡片展示，如果为空则提供默认值
+$topVipName = !empty($vips) ? $vips[0]['Name'] : 'No Data';
+
+// --- Advanced SQL 2: Dead Stock Alert ---
 // 找出进货超过 6 个月但从未卖出过的商品
 $deadStockSql = "
     SELECT 
@@ -42,8 +45,8 @@ $deadStockSql = "
 ";
 $deadStock = $pdo->query($deadStockSql)->fetchAll();
 
-// --- KPI Stats (Simple Aggregates) ---
-$totalSales = $pdo->query("SELECT SUM(TotalAmount) FROM CustomerOrder WHERE Status != 'Cancelled'")->fetchColumn();
+// --- KPI Stats ---
+$totalSales = $pdo->query("SELECT SUM(TotalAmount) FROM CustomerOrder WHERE Status != 'Cancelled'")->fetchColumn() ?: 0.00;
 $activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE Status IN ('Pending', 'Processing')")->fetchColumn();
 ?>
 
@@ -75,7 +78,7 @@ $activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE Status IN 
         <div class="card bg-dark border-warning h-100">
             <div class="card-body">
                 <h6 class="text-warning text-uppercase mb-2">Top VIP</h6>
-                <h3 class="text-white fw-bold"><?= h($vips[0]['Name'] ?? 'N/A') ?></h3>
+                <h3 class="text-white fw-bold"><?= h($topVipName) ?></h3>
             </div>
         </div>
     </div>
@@ -106,6 +109,9 @@ $activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE Status IN 
                             <td class="text-end text-success fw-bold"><?= formatPrice($v['TotalSpent']) ?></td>
                         </tr>
                         <?php endforeach; ?>
+                        <?php if(empty($vips)): ?>
+                            <tr><td colspan="4" class="text-center text-muted py-3">No sales data available yet.</td></tr>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -138,7 +144,7 @@ $activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE Status IN 
                         </tr>
                         <?php endforeach; ?>
                         <?php if(empty($deadStock)): ?>
-                            <tr><td colspan="3" class="text-center text-success py-3">No stagnant inventory found!</td></tr>
+                            <tr><td colspan="3" class="text-center text-success py-3">No stagnant inventory found! Excellent work.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>

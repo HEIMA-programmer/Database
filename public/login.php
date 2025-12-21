@@ -129,6 +129,11 @@ require_once __DIR__ . '/../includes/header.php';
                     </button>
                 </form>
             </div>
+            
+            <div class="card-footer bg-dark border-0 text-center py-3">
+                <span class="text-secondary small">Don't have an account?</span>
+                <a href="register.php" class="text-warning fw-bold ms-1 text-decoration-none small">Register Now</a>
+            </div>
         </div>
 
         <div class="text-center mt-4">

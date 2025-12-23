@@ -21,9 +21,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             if ($loginType === 'employee') {
-                $sql = "SELECT e.EmployeeID, e.Name, e.PasswordHash, e.ShopID, ur.RoleName, s.Name as ShopName
+                // UserRole table removed; Role is now ENUM in Employee table
+                $sql = "SELECT e.EmployeeID, e.Name, e.PasswordHash, e.ShopID, e.Role, s.Name as ShopName
                         FROM Employee e
-                        JOIN UserRole ur ON e.RoleID = ur.RoleID
                         JOIN Shop s ON e.ShopID = s.ShopID
                         WHERE e.Username = :username";
                 $stmt = $pdo->prepare($sql);
@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     session_regenerate_id(true);
                     $_SESSION['user_id']   = $user['EmployeeID'];
                     $_SESSION['username']  = $user['Name'];
-                    $_SESSION['role']      = $user['RoleName'];
+                    $_SESSION['role']      = $user['Role'];
                     $_SESSION['shop_id']   = $user['ShopID'];
                     $_SESSION['shop_name'] = $user['ShopName'];
                     

@@ -15,12 +15,10 @@ DELETE FROM Customer;
 DELETE FROM Employee;
 DELETE FROM Supplier;
 DELETE FROM MembershipTier;
-DELETE FROM UserRole;
 DELETE FROM Shop;
 
 -- 重置自增ID
 ALTER TABLE Shop AUTO_INCREMENT = 1;
-ALTER TABLE UserRole AUTO_INCREMENT = 1;
 ALTER TABLE MembershipTier AUTO_INCREMENT = 1;
 ALTER TABLE Employee AUTO_INCREMENT = 1;
 ALTER TABLE Customer AUTO_INCREMENT = 1;
@@ -39,8 +37,7 @@ INSERT INTO Shop (Name, Address, Type) VALUES
 ('Shanghai Branch', '456 Groove Ave, Shanghai', 'Retail'),
 ('Online Warehouse', 'No. 8 Logistics Park, Changsha', 'Warehouse');
 
-INSERT INTO UserRole (RoleName) VALUES
-('Admin'), ('Manager'), ('Staff'), ('Customer');
+-- UserRole table removed; Role is now ENUM in Employee table
 
 INSERT INTO MembershipTier (TierName, MinPoints, DiscountRate) VALUES
 ('Standard', 0, 0.00),
@@ -49,14 +46,15 @@ INSERT INTO MembershipTier (TierName, MinPoints, DiscountRate) VALUES
 
 -- ==========================================
 -- 2. 员工账号 (密码: password123)
+-- Role is now ENUM directly in Employee table
 -- ==========================================
-INSERT INTO Employee (ShopID, RoleID, Name, Username, PasswordHash, HireDate) VALUES
-(1, 1, 'Super Admin', 'admin', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-01-01'),
-(1, 2, 'Changsha Manager', 'manager_cs', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-03-15'),
-(1, 3, 'Changsha Staff', 'staff_cs', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-06-01'),
-(2, 2, 'Shanghai Manager', 'manager_sh', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-04-01'),
-(2, 3, 'Shanghai Staff', 'staff_sh', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-07-15'),
-(3, 3, 'Warehouse Packer', 'staff_wh', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-08-01');
+INSERT INTO Employee (ShopID, Role, Name, Username, PasswordHash, HireDate) VALUES
+(1, 'Admin', 'Super Admin', 'admin', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-01-01'),
+(1, 'Manager', 'Changsha Manager', 'manager_cs', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-03-15'),
+(1, 'Staff', 'Changsha Staff', 'staff_cs', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-06-01'),
+(2, 'Manager', 'Shanghai Manager', 'manager_sh', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-04-01'),
+(2, 'Staff', 'Shanghai Staff', 'staff_sh', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-07-15'),
+(3, 'Staff', 'Warehouse Packer', 'staff_wh', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-08-01');
 
 -- ==========================================
 -- 3. 客户数据 (密码: password123)

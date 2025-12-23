@@ -111,18 +111,19 @@ INSERT INTO Track (ReleaseID, Title, TrackNumber, Duration) VALUES
 
 -- ==========================================
 -- 6. 采购订单
+-- BuybackCustomerID added to track which customer sold items back
 -- ==========================================
-INSERT INTO PurchaseOrder (SupplierID, CreatedByEmployeeID, OrderDate, Status, SourceType) VALUES
+INSERT INTO PurchaseOrder (SupplierID, BuybackCustomerID, CreatedByEmployeeID, OrderDate, Status, SourceType) VALUES
 -- 70天前的采购，用于测试滞销预警
-(1, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received', 'Supplier'),
+(1, NULL, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received', 'Supplier'),
 -- 30天前的采购
-(2, 1, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', 'Supplier'),
+(2, NULL, 1, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', 'Supplier'),
 -- 10天前的采购
-(3, 1, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', 'Supplier'),
+(3, NULL, 1, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', 'Supplier'),
 -- 最近的采购
-(4, 2, DATE_SUB(NOW(), INTERVAL 3 DAY), 'Received', 'Supplier'),
--- 二手回购
-(NULL, 3, DATE_SUB(NOW(), INTERVAL 5 DAY), 'Received', 'Buyback');
+(4, NULL, 2, DATE_SUB(NOW(), INTERVAL 3 DAY), 'Received', 'Supplier'),
+-- 二手回购 - 从客户Bob Collector (CustomerID=2) 处回购
+(NULL, 2, 3, DATE_SUB(NOW(), INTERVAL 5 DAY), 'Received', 'Buyback');
 
 INSERT INTO PurchaseOrderLine (PO_ID, ReleaseID, Quantity, UnitCost) VALUES
 -- PO 1: 老库存
@@ -262,10 +263,14 @@ INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale) VALUES
 
 -- ==========================================
 -- 10. 库存转运记录
+-- Now includes Status, ReceivedByEmployeeID, ReceivedDate for complete tracking
 -- ==========================================
-INSERT INTO InventoryTransfer (StockItemID, FromShopID, ToShopID, TransferDate, AuthorizedByEmployeeID) VALUES
-(5, 1, 2, DATE_SUB(NOW(), INTERVAL 40 DAY), 2),
-(6, 1, 2, DATE_SUB(NOW(), INTERVAL 35 DAY), 2);
+INSERT INTO InventoryTransfer (StockItemID, FromShopID, ToShopID, TransferDate, AuthorizedByEmployeeID, ReceivedByEmployeeID, Status, ReceivedDate) VALUES
+-- 已完成的转运：长沙店 -> 上海店
+(5, 1, 2, DATE_SUB(NOW(), INTERVAL 40 DAY), 2, 5, 'Completed', DATE_SUB(NOW(), INTERVAL 39 DAY)),
+(6, 1, 2, DATE_SUB(NOW(), INTERVAL 35 DAY), 2, 5, 'Completed', DATE_SUB(NOW(), INTERVAL 34 DAY)),
+-- 进行中的转运：仓库 -> 长沙店 (等待接收)
+(14, 3, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), 6, NULL, 'InTransit', NULL);
 
 SET FOREIGN_KEY_CHECKS = 1;
 

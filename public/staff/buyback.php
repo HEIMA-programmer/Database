@@ -13,15 +13,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $condition = $_POST['condition'];
         $buyPrice = $_POST['buy_price'];
         $resalePrice = $_POST['resale_price'];
+        $customerId = !empty($_POST['customer_id']) ? $_POST['customer_id'] : null;
         $shopId = $_SESSION['shop_id'] ?? 1;
         $empId = $_SESSION['user_id'];
 
         // 1. 创建回购单 (Purchase Order - Type: Buyback)
-        // 这确保了财务上的支出有据可查
-        $poSql = "INSERT INTO PurchaseOrder (SupplierID, CreatedByEmployeeID, OrderDate, Status, SourceType) 
-                  VALUES (NULL, ?, NOW(), 'Received', 'Buyback')";
+        // BuybackCustomerID tracks which customer sold the item back
+        $poSql = "INSERT INTO PurchaseOrder (SupplierID, BuybackCustomerID, CreatedByEmployeeID, OrderDate, Status, SourceType)
+                  VALUES (NULL, ?, ?, NOW(), 'Received', 'Buyback')";
         $stmtPo = $pdo->prepare($poSql);
-        $stmtPo->execute([$empId]);
+        $stmtPo->execute([$customerId, $empId]);
         $poId = $pdo->lastInsertId();
 
         // 2. 记录 PO Line (作为单据明细)
@@ -58,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $releases = $pdo->query("SELECT ReleaseID, Title, ArtistName FROM ReleaseAlbum ORDER BY Title")->fetchAll();
+$customers = $pdo->query("SELECT CustomerID, Name, Email FROM Customer ORDER BY Name")->fetchAll();
 ?>
 
 <div class="row justify-content-center">
@@ -70,6 +72,17 @@ $releases = $pdo->query("SELECT ReleaseID, Title, ArtistName FROM ReleaseAlbum O
         <div class="card bg-dark border-secondary shadow-lg">
             <div class="card-body p-4">
                 <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label text-info">Seller (Customer)</label>
+                        <select name="customer_id" class="form-select">
+                            <option value="">-- Walk-in / Anonymous --</option>
+                            <?php foreach($customers as $c): ?>
+                                <option value="<?= $c['CustomerID'] ?>"><?= h($c['Name']) ?> (<?= h($c['Email']) ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text text-muted">Select member to track buyback source. Leave empty for walk-in customers.</div>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label text-warning">Select Release Album</label>
                         <select name="release_id" class="form-select" required>

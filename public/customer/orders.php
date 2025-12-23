@@ -56,7 +56,9 @@ $orders = $orders->fetchAll();
                         </td>
                         <td class="text-warning fw-bold"><?= formatPrice($o['TotalAmount']) ?></td>
                         <td>
-                            <button class="btn btn-sm btn-outline-light" disabled>Details</button>
+                            <a href="order_detail.php?id=<?= $o['OrderID'] ?>" class="btn btn-sm btn-outline-warning">
+                                <i class="fa-solid fa-eye me-1"></i>Details
+                            </a>
                         </td>
                     </tr>
                     <?php endforeach; ?>

@@ -1,17 +1,20 @@
--- 1. [Customer View] Browse Catalog
+-- 1. [Customer View] Browse Catalog (只显示仓库的库存供线上购买)
 CREATE OR REPLACE VIEW vw_customer_catalog AS
-SELECT 
+SELECT
     s.StockItemID,
+    s.ReleaseID,
     r.Title,
     r.ArtistName,
     r.Genre,
+    r.Format,
     s.ConditionGrade,
     s.UnitPrice,
     sh.Name AS LocationName
 FROM StockItem s
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 JOIN Shop sh ON s.ShopID = sh.ShopID
-WHERE s.Status = 'Available';
+WHERE s.Status = 'Available'
+  AND sh.Type = 'Warehouse';
 
 -- 2. [Customer View] Order History (Details)
 -- 用于查看订单包含的具体商品详情

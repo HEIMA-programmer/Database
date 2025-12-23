@@ -69,11 +69,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_po'])) {
             
             // 循环 Quantity 次，插入 StockItem
             for ($i = 0; $i < $line['Quantity']; $i++) {
-                $insertStock = "INSERT INTO StockItem (ReleaseID, ShopID, Status, BatchNo, SourcePO_ID, AcquiredDate, UnitPrice) 
-                                VALUES (?, ?, 'Available', ?, ?, NOW(), ?)"; 
-                                // 注意: Status 'InStock' -> 'Available' 保持一致性
-                                // 修正: UnitPrice 暂时用 UnitCost 代替，或需要额外的定价逻辑。这里假设进货价作为初始参考价
-                                // 实际业务中通常会有 Markup (加价)，为了简化，我们这里设为 Cost * 1.5
+                $insertStock = "INSERT INTO StockItem (ReleaseID, ShopID, Status, ConditionGrade, BatchNo, SourcePO_ID, AcquiredDate, UnitPrice)
+                                VALUES (?, ?, 'Available', 'New', ?, ?, NOW(), ?)";
+                // 新进货默认为 New 状态，定价策略：进货价 × 1.5
                 $resalePrice = $line['UnitCost'] * 1.5;
 
                 $pdo->prepare($insertStock)->execute([

@@ -104,6 +104,7 @@ CREATE TABLE StockItem (
     Status ENUM('Available', 'Sold', 'Reserved') DEFAULT 'Available',
     UnitPrice DECIMAL(10,2) NOT NULL,
     AcquiredDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+    DateSold DATETIME DEFAULT NULL, -- 售出日期，用于计算库存周转率
     FOREIGN KEY (ReleaseID) REFERENCES ReleaseAlbum(ReleaseID),
     FOREIGN KEY (ShopID) REFERENCES Shop(ShopID),
     FOREIGN KEY (SourcePO_ID) REFERENCES PurchaseOrder(PO_ID)

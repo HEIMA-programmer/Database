@@ -7,14 +7,14 @@ require_once __DIR__ . '/../../includes/header.php';
 // --- Action: Add Employee ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_employee'])) {
     try {
-        $sql = "INSERT INTO Employee (Name, Username, PasswordHash, RoleID, ShopID, HireDate) 
+        $sql = "INSERT INTO Employee (Name, Username, PasswordHash, Role, ShopID, HireDate)
                 VALUES (:name, :user, :pass, :role, :shop, CURDATE())";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
             ':name' => trim($_POST['name']),
             ':user' => trim($_POST['username']),
             ':pass' => password_hash($_POST['password'], PASSWORD_DEFAULT),
-            ':role' => $_POST['role_id'],
+            ':role' => $_POST['role'],
             ':shop' => $_POST['shop_id']
         ]);
         flash("Employee '{$_POST['name']}' added successfully.", 'success');
@@ -30,19 +30,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employee'])) {
     try {
         $id = $_POST['employee_id'];
         $name = trim($_POST['name']);
-        $role = $_POST['role_id'];
+        $role = $_POST['role'];
         $shop = $_POST['shop_id'];
-        
+
         // 检查是否在修改密码
         if (!empty($_POST['password'])) {
             $passHash = password_hash($_POST['password'], PASSWORD_DEFAULT);
-            $sql = "UPDATE Employee SET Name = ?, RoleID = ?, ShopID = ?, PasswordHash = ? WHERE EmployeeID = ?";
+            $sql = "UPDATE Employee SET Name = ?, Role = ?, ShopID = ?, PasswordHash = ? WHERE EmployeeID = ?";
             $pdo->prepare($sql)->execute([$name, $role, $shop, $passHash, $id]);
         } else {
-            $sql = "UPDATE Employee SET Name = ?, RoleID = ?, ShopID = ? WHERE EmployeeID = ?";
+            $sql = "UPDATE Employee SET Name = ?, Role = ?, ShopID = ? WHERE EmployeeID = ?";
             $pdo->prepare($sql)->execute([$name, $role, $shop, $id]);
         }
-        
+
         flash("Employee details updated.", 'success');
     } catch (PDOException $e) {
         flash("Error updating employee: " . $e->getMessage(), 'danger');
@@ -69,10 +69,11 @@ if (isset($_POST['delete_employee'])) {
 }
 
 // --- Data Queries ---
-$employees = $pdo->query("SELECT * FROM vw_admin_employee_list ORDER BY RoleID ASC, Name ASC")->fetchAll();
+$employees = $pdo->query("SELECT * FROM vw_admin_employee_list ORDER BY Role ASC, Name ASC")->fetchAll();
 $customers = $pdo->query("SELECT * FROM vw_admin_customer_list ORDER BY Points DESC")->fetchAll();
 $shops = $pdo->query("SELECT * FROM Shop")->fetchAll();
-$roles = $pdo->query("SELECT * FROM UserRole")->fetchAll();
+// UserRole table removed; Role is now ENUM in Employee table
+$roles = ['Admin', 'Manager', 'Staff'];
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -113,24 +114,24 @@ $roles = $pdo->query("SELECT * FROM UserRole")->fetchAll();
                                 <div class="small text-muted">@<?= h($e['Username']) ?></div>
                             </td>
                             <td>
-                                <?php 
-                                $badge = match($e['RoleName']) {
+                                <?php
+                                $badge = match($e['Role']) {
                                     'Admin' => 'bg-danger',
                                     'Manager' => 'bg-warning text-dark',
                                     default => 'bg-info text-dark'
                                 };
                                 ?>
-                                <span class="badge <?= $badge ?>"><?= h($e['RoleName']) ?></span>
+                                <span class="badge <?= $badge ?>"><?= h($e['Role']) ?></span>
                             </td>
                             <td><?= h($e['ShopName']) ?></td>
                             <td><?= $e['HireDate'] ?></td>
                             <td>
                                 <button class="btn btn-sm btn-outline-info me-1 edit-btn"
-                                        data-bs-toggle="modal" 
+                                        data-bs-toggle="modal"
                                         data-bs-target="#editEmpModal"
                                         data-id="<?= $e['EmployeeID'] ?>"
                                         data-name="<?= h($e['Name']) ?>"
-                                        data-role="<?= $e['RoleID'] ?>"
+                                        data-role="<?= h($e['Role']) ?>"
                                         data-shop="<?= $e['ShopID'] ?>">
                                     <i class="fa-solid fa-pen-to-square"></i>
                                 </button>
@@ -215,9 +216,9 @@ $roles = $pdo->query("SELECT * FROM UserRole")->fetchAll();
                     <div class="row mb-3">
                         <div class="col">
                             <label>Role</label>
-                            <select name="role_id" class="form-select bg-dark text-white border-secondary">
+                            <select name="role" class="form-select bg-dark text-white border-secondary">
                                 <?php foreach($roles as $r): ?>
-                                    <option value="<?= $r['RoleID'] ?>"><?= h($r['RoleName']) ?></option>
+                                    <option value="<?= h($r) ?>"><?= h($r) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -250,12 +251,12 @@ $roles = $pdo->query("SELECT * FROM UserRole")->fetchAll();
                 <div class="modal-body">
                     <input type="hidden" name="edit_employee" value="1">
                     <input type="hidden" name="employee_id" id="edit_emp_id">
-                    
+
                     <div class="mb-3">
                         <label>Full Name</label>
                         <input type="text" name="name" id="edit_name" class="form-control bg-dark text-white border-secondary" required>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label>Reset Password (Optional)</label>
                         <input type="password" name="password" class="form-control bg-dark text-white border-secondary" placeholder="Leave blank to keep current">
@@ -264,9 +265,9 @@ $roles = $pdo->query("SELECT * FROM UserRole")->fetchAll();
                     <div class="row mb-3">
                         <div class="col">
                             <label>Role</label>
-                            <select name="role_id" id="edit_role" class="form-select bg-dark text-white border-secondary">
+                            <select name="role" id="edit_role" class="form-select bg-dark text-white border-secondary">
                                 <?php foreach($roles as $r): ?>
-                                    <option value="<?= $r['RoleID'] ?>"><?= h($r['RoleName']) ?></option>
+                                    <option value="<?= h($r) ?>"><?= h($r) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>

@@ -9,21 +9,18 @@ CREATE TABLE Shop (
     Type ENUM('Retail', 'Warehouse') NOT NULL
 );
 
-CREATE TABLE UserRole (
-    RoleID INT AUTO_INCREMENT PRIMARY KEY,
-    RoleName VARCHAR(50) NOT NULL UNIQUE -- 'Customer', 'Staff', 'Manager', 'Admin'
-);
+-- UserRole removed per teacher feedback: "字典表" with only 2 attributes is redundant
+-- Role is now an ENUM directly in Employee table
 
 CREATE TABLE Employee (
     EmployeeID INT AUTO_INCREMENT PRIMARY KEY,
     ShopID INT,
-    RoleID INT NOT NULL,
+    Role ENUM('Admin', 'Manager', 'Staff') NOT NULL,
     Name VARCHAR(100) NOT NULL,
     Username VARCHAR(50) NOT NULL UNIQUE,
     PasswordHash VARCHAR(255) NOT NULL,
     HireDate DATE DEFAULT (CURRENT_DATE),
-    FOREIGN KEY (ShopID) REFERENCES Shop(ShopID),
-    FOREIGN KEY (RoleID) REFERENCES UserRole(RoleID)
+    FOREIGN KEY (ShopID) REFERENCES Shop(ShopID)
 );
 
 -- 2. Customer & Membership

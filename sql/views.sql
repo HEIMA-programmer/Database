@@ -107,19 +107,18 @@ SELECT * FROM ReleaseAlbum;
 
 -- 9. [Admin View] Employee List
 -- 替代 users.php 中的员工查询
+-- UserRole table removed; Role is now ENUM in Employee table
 CREATE OR REPLACE VIEW vw_admin_employee_list AS
-SELECT 
+SELECT
     e.EmployeeID,
     e.Name,
     e.Username,
     e.HireDate,
-    e.RoleID,
-    ur.RoleName,
+    e.Role,
     e.ShopID,
     s.Name AS ShopName
-FROM Employee e 
-JOIN Shop s ON e.ShopID = s.ShopID 
-JOIN UserRole ur ON e.RoleID = ur.RoleID;
+FROM Employee e
+JOIN Shop s ON e.ShopID = s.ShopID;
 
 -- 10. [Admin View] Customer List
 -- 替代 users.php 中的顾客查询

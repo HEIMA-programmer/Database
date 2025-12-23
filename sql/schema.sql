@@ -73,11 +73,13 @@ CREATE TABLE Supplier (
 CREATE TABLE PurchaseOrder (
     PO_ID INT AUTO_INCREMENT PRIMARY KEY,
     SupplierID INT, -- Nullable if SourceType is Buyback
+    BuybackCustomerID INT, -- Customer who sold items back (only for Buyback)
     CreatedByEmployeeID INT NOT NULL,
     OrderDate DATETIME DEFAULT CURRENT_TIMESTAMP,
     Status ENUM('Pending', 'Received') DEFAULT 'Pending',
     SourceType ENUM('Supplier', 'Buyback') NOT NULL,
     FOREIGN KEY (SupplierID) REFERENCES Supplier(SupplierID),
+    FOREIGN KEY (BuybackCustomerID) REFERENCES Customer(CustomerID),
     FOREIGN KEY (CreatedByEmployeeID) REFERENCES Employee(EmployeeID)
 );
 
@@ -113,11 +115,15 @@ CREATE TABLE InventoryTransfer (
     FromShopID INT NOT NULL,
     ToShopID INT NOT NULL,
     TransferDate DATETIME DEFAULT CURRENT_TIMESTAMP,
-    AuthorizedByEmployeeID INT,
+    AuthorizedByEmployeeID INT, -- Employee who initiated/approved the transfer
+    ReceivedByEmployeeID INT, -- Employee who confirmed receipt at destination
+    Status ENUM('InTransit', 'Completed', 'Cancelled') DEFAULT 'InTransit',
+    ReceivedDate DATETIME, -- When the transfer was completed
     FOREIGN KEY (StockItemID) REFERENCES StockItem(StockItemID),
     FOREIGN KEY (FromShopID) REFERENCES Shop(ShopID),
     FOREIGN KEY (ToShopID) REFERENCES Shop(ShopID),
-    FOREIGN KEY (AuthorizedByEmployeeID) REFERENCES Employee(EmployeeID)
+    FOREIGN KEY (AuthorizedByEmployeeID) REFERENCES Employee(EmployeeID),
+    FOREIGN KEY (ReceivedByEmployeeID) REFERENCES Employee(EmployeeID)
 );
 
 -- 5. Sales (Outbound)

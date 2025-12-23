@@ -22,7 +22,7 @@ if (!empty($genre)) {
     $params[':genre'] = $genre;
 }
 
-$sql .= " ORDER BY ReleaseID DESC, ConditionGrade ASC";
+$sql .= " ORDER BY Title ASC, ConditionGrade ASC";
 
 try {
     $stmt = $pdo->prepare($sql);

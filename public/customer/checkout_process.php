@@ -48,9 +48,9 @@ try {
     // 应用折扣逻辑（简单复现 cart.php 的逻辑，确保金额一致）
     // ... (此处为了代码简洁，直接使用计算出的 totalAmount，实际应复用 Discount 逻辑)
 
-    // 2. 创建订单头
-    $stmt = $pdo->prepare("INSERT INTO CustomerOrder (CustomerID, OrderDate, TotalAmount, Status, Type) VALUES (?, NOW(), ?, 'Pending', 'Online')");
-    $stmt->execute([$customerId, $totalAmount]);
+    // 2. 创建订单头 (发货由仓库处理)
+    $stmt = $pdo->prepare("INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, OrderDate, TotalAmount, OrderStatus, OrderType) VALUES (?, ?, NOW(), ?, 'Pending', 'Online')");
+    $stmt->execute([$customerId, $warehouseId, $totalAmount]);
     $orderId = $pdo->lastInsertId();
 
     // 3. 处理库存锁定和订单行
@@ -69,8 +69,8 @@ try {
             throw new Exception("Item '{$item['Title']}' is no longer available.");
         }
 
-        // 插入 OrderLine
-        $lineSql = "INSERT INTO OrderLine (OrderID, StockItemID, Quantity, PriceAtSale) VALUES (?, ?, 1, ?)";
+        // 插入 OrderLine (每个 StockItem 是唯一的，不需要 Quantity)
+        $lineSql = "INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale) VALUES (?, ?, ?)";
         $pdo->prepare($lineSql)->execute([$orderId, $item['StockItemID'], $item['UnitPrice']]);
 
         // 更新 StockItem 状态

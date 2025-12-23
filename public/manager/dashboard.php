@@ -8,16 +8,16 @@ require_once __DIR__ . '/../../includes/header.php';
 // 使用 DENSE_RANK() 对客户消费进行排名
 $vipSql = "
     SELECT * FROM (
-        SELECT 
-            c.Name, 
-            c.Email, 
+        SELECT
+            c.Name,
+            c.Email,
             mt.TierName,
             SUM(co.TotalAmount) as TotalSpent,
             DENSE_RANK() OVER (ORDER BY SUM(co.TotalAmount) DESC) as RankPosition
         FROM Customer c
         JOIN CustomerOrder co ON c.CustomerID = co.CustomerID
         JOIN MembershipTier mt ON c.TierID = mt.TierID
-        WHERE co.Status != 'Cancelled'
+        WHERE co.OrderStatus != 'Cancelled'
         GROUP BY c.CustomerID, c.Name, c.Email, mt.TierName
     ) as RankedCustomers
     WHERE RankPosition <= 5
@@ -28,26 +28,26 @@ $vips = $pdo->query($vipSql)->fetchAll();
 $topVipName = !empty($vips) ? $vips[0]['Name'] : 'No Data';
 
 // --- Advanced SQL 2: Dead Stock Alert ---
-// 找出进货超过 6 个月但从未卖出过的商品
+// 找出进货超过 60 天但从未卖出过的商品
 $deadStockSql = "
-    SELECT 
-        r.Title, 
-        r.ArtistName, 
-        s.BatchNo, 
-        s.DateAdded,
-        DATEDIFF(NOW(), s.DateAdded) as DaysInStock
+    SELECT
+        r.Title,
+        r.ArtistName,
+        s.BatchNo,
+        s.AcquiredDate,
+        DATEDIFF(NOW(), s.AcquiredDate) as DaysInStock
     FROM StockItem s
     JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
-    WHERE s.Status = 'InStock' 
-    AND s.DateAdded < DATE_SUB(NOW(), INTERVAL 6 MONTH)
-    ORDER BY s.DateAdded ASC
+    WHERE s.Status = 'Available'
+    AND s.AcquiredDate < DATE_SUB(NOW(), INTERVAL 60 DAY)
+    ORDER BY s.AcquiredDate ASC
     LIMIT 10
 ";
 $deadStock = $pdo->query($deadStockSql)->fetchAll();
 
 // --- KPI Stats ---
-$totalSales = $pdo->query("SELECT SUM(TotalAmount) FROM CustomerOrder WHERE Status != 'Cancelled'")->fetchColumn() ?: 0.00;
-$activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE Status IN ('Pending', 'Processing')")->fetchColumn();
+$totalSales = $pdo->query("SELECT SUM(TotalAmount) FROM CustomerOrder WHERE OrderStatus != 'Cancelled'")->fetchColumn() ?: 0.00;
+$activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE OrderStatus IN ('Pending', 'Paid', 'Shipped')")->fetchColumn();
 ?>
 
 <div class="row mb-4">

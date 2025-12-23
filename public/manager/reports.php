@@ -5,12 +5,12 @@ requireRole('Manager');
 require_once __DIR__ . '/../../includes/header.php';
 
 // --- Report: Inventory Turnover Rate ---
-// 计算已售出商品的平均售出天数 (DateSold - DateAdded)
+// 计算已售出商品的平均售出天数 (DateSold - AcquiredDate)
 $turnoverSql = "
-    SELECT 
+    SELECT
         r.Genre,
         COUNT(s.StockItemID) as ItemsSold,
-        AVG(DATEDIFF(s.DateSold, s.DateAdded)) as AvgDaysToSell,
+        AVG(DATEDIFF(COALESCE(s.DateSold, NOW()), s.AcquiredDate)) as AvgDaysToSell,
         SUM(ol.PriceAtSale) as RevenueGenerated
     FROM StockItem s
     JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
@@ -23,12 +23,12 @@ $turnoverStats = $pdo->query($turnoverSql)->fetchAll();
 
 // --- Report: Monthly Sales Trend ---
 $trendSql = "
-    SELECT 
+    SELECT
         DATE_FORMAT(OrderDate, '%Y-%m') as SalesMonth,
         COUNT(*) as OrderCount,
         SUM(TotalAmount) as MonthlyRevenue
     FROM CustomerOrder
-    WHERE Status != 'Cancelled'
+    WHERE OrderStatus != 'Cancelled'
     GROUP BY SalesMonth
     ORDER BY SalesMonth DESC
     LIMIT 12

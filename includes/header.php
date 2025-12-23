@@ -45,37 +45,70 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         <?php if (hasRole('Staff')): ?>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'pos.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pos.php">POS</a>
+                <a class="nav-link <?= $current_page == 'pos.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pos.php">
+                    <i class="fa-solid fa-cash-register me-1"></i>POS
+                </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'buyback.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/buyback.php">Buyback</a>
+                <a class="nav-link <?= $current_page == 'buyback.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/buyback.php">
+                    <i class="fa-solid fa-recycle me-1"></i>Buyback
+                </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/inventory.php">Inventory</a>
+                <a class="nav-link <?= $current_page == 'fulfillment.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/fulfillment.php">
+                    <i class="fa-solid fa-truck-fast me-1"></i>Fulfillment
+                </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'pickup.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pickup.php">Pickups</a>
+                <a class="nav-link <?= $current_page == 'pickup.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pickup.php">
+                    <i class="fa-solid fa-box-open me-1"></i>Pickups
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/inventory.php">
+                    <i class="fa-solid fa-boxes-stacked me-1"></i>Inventory
+                </a>
             </li>
         <?php endif; ?>
 
         <?php if (hasRole('Manager')): ?>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'dashboard.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/dashboard.php">Dashboard</a>
+                <a class="nav-link <?= $current_page == 'dashboard.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/dashboard.php">
+                    <i class="fa-solid fa-chart-line me-1"></i>Dashboard
+                </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'transfer.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/transfer.php">Transfers</a>
+                <a class="nav-link <?= $current_page == 'reports.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/reports.php">
+                    <i class="fa-solid fa-file-invoice-dollar me-1"></i>Reports
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'transfer.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/transfer.php">
+                    <i class="fa-solid fa-truck-ramp-box me-1"></i>Transfers
+                </a>
             </li>
         <?php endif; ?>
 
         <?php if (hasRole('Admin')): ?>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'products.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/products.php">Products</a>
+                <a class="nav-link <?= $current_page == 'products.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/products.php">
+                    <i class="fa-solid fa-record-vinyl me-1"></i>Products
+                </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'procurement.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/procurement.php">Procurement</a>
+                <a class="nav-link <?= $current_page == 'procurement.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/procurement.php">
+                    <i class="fa-solid fa-boxes-packing me-1"></i>Procurement
+                </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'users.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/users.php">Users</a>
+                <a class="nav-link <?= $current_page == 'suppliers.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/suppliers.php">
+                    <i class="fa-solid fa-truck-field me-1"></i>Suppliers
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'users.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/users.php">
+                    <i class="fa-solid fa-users-gear me-1"></i>Users
+                </a>
             </li>
         <?php endif; ?>
       </ul>
@@ -98,17 +131,36 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </li>
             <?php endif; ?>
 
+            <?php if (isset($_SESSION['shop_name'])): ?>
+                <li class="nav-item me-3">
+                    <span class="nav-link text-info">
+                        <i class="fa-solid fa-store me-1"></i><?= h($_SESSION['shop_name']) ?>
+                    </span>
+                </li>
+            <?php endif; ?>
+
             <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle text-warning fw-bold" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
                     <i class="fa-regular fa-circle-user me-1"></i><?= h($_SESSION['username']) ?>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end border-warning">
-                    <li><span class="dropdown-header text-muted">Role: <?= h($_SESSION['role']) ?></span></li>
+                    <li><span class="dropdown-header text-muted">
+                        <i class="fa-solid fa-user-tag me-1"></i>Role: <?= h($_SESSION['role']) ?>
+                    </span></li>
+                    <?php if (isset($_SESSION['shop_name'])): ?>
+                        <li><span class="dropdown-header text-muted small">
+                            <i class="fa-solid fa-location-dot me-1"></i><?= h($_SESSION['shop_name']) ?>
+                        </span></li>
+                    <?php endif; ?>
                     <li><hr class="dropdown-divider border-secondary"></li>
                     <?php if (hasRole('Customer')): ?>
-                        <li><a class="dropdown-item" href="<?= BASE_URL ?>/customer/profile.php">My Profile</a></li>
+                        <li><a class="dropdown-item" href="<?= BASE_URL ?>/customer/profile.php">
+                            <i class="fa-solid fa-id-card me-2"></i>My Profile
+                        </a></li>
                     <?php endif; ?>
-                    <li><a class="dropdown-item text-danger" href="<?= BASE_URL ?>/logout.php">Logout</a></li>
+                    <li><a class="dropdown-item text-danger" href="<?= BASE_URL ?>/logout.php">
+                        <i class="fa-solid fa-right-from-bracket me-2"></i>Logout
+                    </a></li>
                 </ul>
             </li>
 

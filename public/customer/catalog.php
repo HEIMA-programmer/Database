@@ -29,8 +29,8 @@ try {
     $stmt->execute($params);
     $items = $stmt->fetchAll();
 
-    // 获取流派列表
-    $genres = $pdo->query("SELECT DISTINCT Genre FROM ReleaseAlbum ORDER BY Genre")->fetchAll(PDO::FETCH_COLUMN);
+    // 获取流派列表（从视图中获取，确保只显示有库存的流派）
+    $genres = $pdo->query("SELECT DISTINCT Genre FROM vw_customer_catalog ORDER BY Genre")->fetchAll(PDO::FETCH_COLUMN);
 } catch (PDOException $e) {
     error_log($e->getMessage());
     $items = [];

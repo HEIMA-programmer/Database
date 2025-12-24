@@ -58,12 +58,12 @@ if ($search) {
     }
 }
 
-// 计算当前购物车总览（为了显示总价）
+// 计算当前购物车总览（为了显示总价）使用视图查询
 $cartTotal = 0;
 $cartCount = count($_SESSION['pos_cart']);
 if ($cartCount > 0) {
     $placeholders = implode(',', array_fill(0, $cartCount, '?'));
-    $stmt = $pdo->prepare("SELECT UnitPrice FROM StockItem WHERE StockItemID IN ($placeholders)");
+    $stmt = $pdo->prepare("SELECT UnitPrice FROM vw_staff_pos_lookup WHERE StockItemID IN ($placeholders)");
     $stmt->execute($_SESSION['pos_cart']);
     $prices = $stmt->fetchAll(PDO::FETCH_COLUMN);
     $cartTotal = array_sum($prices);

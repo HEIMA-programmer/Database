@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../config/db_connect.php';
-require_once __DIR__ . '/../../includes/header.php';
+require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/db_procedures.php';
 
 // 必须登录
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Customer') {
@@ -17,7 +18,6 @@ if (empty($_SESSION['cart'])) {
 
 $customerId = $_SESSION['user_id'];
 $cart = $_SESSION['cart'];
-$totalAmount = 0;
 
 // 动态获取线上仓库ID
 $warehouseId = getShopIdByType($pdo, 'Warehouse');
@@ -31,57 +31,51 @@ try {
     // 1. 开启事务
     $pdo->beginTransaction();
 
-    // 重新计算总价（安全起见，应重新查询数据库价格，这里为保持原逻辑结构简化处理，但建议生产环境重查）
-    // 此处假设 $cart 中存储的是带有价格信息的数组，但根据 cart_action.php，session['cart']只存了ID。
-    // *修正*: 需要先查出所有商品信息来计算价格和生成订单
+    // 2. 从视图获取购物车商品信息并计算总价
     $placeholders = implode(',', array_fill(0, count($cart), '?'));
-    $stmt = $pdo->prepare("SELECT StockItemID, ReleaseID, UnitPrice, Title FROM vw_customer_catalog WHERE StockItemID IN ($placeholders)");
+    $stmt = $pdo->prepare("SELECT StockItemID, UnitPrice, Title FROM vw_customer_catalog WHERE StockItemID IN ($placeholders)");
     $stmt->execute($cart);
     $cartItems = $stmt->fetchAll();
 
-    if (empty($cartItems)) throw new Exception("Cart items invalid.");
+    if (empty($cartItems)) {
+        throw new Exception("Cart items invalid.");
+    }
 
+    $totalAmount = 0;
     foreach ($cartItems as $item) {
         $totalAmount += $item['UnitPrice'];
     }
 
-    // 应用折扣逻辑（简单复现 cart.php 的逻辑，确保金额一致）
-    // ... (此处为了代码简洁，直接使用计算出的 totalAmount，实际应复用 Discount 逻辑)
+    // 3. 使用存储过程创建客户订单
+    $orderId = DBProcedures::createCustomerOrder($pdo, $customerId, $warehouseId, null, 'Online');
 
-    // 2. 创建订单头 (发货由仓库处理)
-    $stmt = $pdo->prepare("INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, OrderDate, TotalAmount, OrderStatus, OrderType) VALUES (?, ?, NOW(), ?, 'Pending', 'Online')");
-    $stmt->execute([$customerId, $warehouseId, $totalAmount]);
-    $orderId = $pdo->lastInsertId();
-
-    // 3. 处理库存锁定和订单行
-    foreach ($cartItems as $item) {
-        // [Logic Fix] 锁定特定行，防止并发。
-        // 由于这里我们已经具体到了 StockItemID (Unique Item)，不需要按 ReleaseID 聚合查找
-        // 直接检查该 Item 是否仍为 Available
-        
-        $checkSql = "SELECT StockItemID FROM StockItem 
-                     WHERE StockItemID = ? AND Status = 'Available' 
-                     FOR UPDATE"; // 锁定行
-        $stmt = $pdo->prepare($checkSql);
-        $stmt->execute([$item['StockItemID']]);
-        
-        if (!$stmt->fetch()) {
-            throw new Exception("Item '{$item['Title']}' is no longer available.");
-        }
-
-        // 插入 OrderLine (每个 StockItem 是唯一的，不需要 Quantity)
-        $lineSql = "INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale) VALUES (?, ?, ?)";
-        $pdo->prepare($lineSql)->execute([$orderId, $item['StockItemID'], $item['UnitPrice']]);
-
-        // 更新 StockItem 状态
-        $updateStock = "UPDATE StockItem SET Status = 'Sold', DateSold = NOW() WHERE StockItemID = ?";
-        $pdo->prepare($updateStock)->execute([$item['StockItemID']]);
+    if (!$orderId) {
+        throw new Exception("Failed to create order.");
     }
 
-    // 4. [New] 积分与会员升级
+    // 4. 使用存储过程添加订单商品并预留库存
+    foreach ($cartItems as $item) {
+        $success = DBProcedures::addOrderItem($pdo, $orderId, $item['StockItemID'], $item['UnitPrice']);
+
+        if (!$success) {
+            throw new Exception("Item '{$item['Title']}' is no longer available.");
+        }
+    }
+
+    // 5. 计算积分（暂不完成订单，等待支付）
+    $pointsEarned = floor($totalAmount);
+
+    // 6. 使用存储过程完成订单
+    $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+
+    if (!$success) {
+        throw new Exception("Failed to complete order.");
+    }
+
+    // 7. 使用改进后的函数处理积分和升级（内部使用存储过程）
     $result = addPointsAndCheckUpgrade($pdo, $customerId, $totalAmount);
-    
-    // 5. 提交事务
+
+    // 8. 提交事务
     $pdo->commit();
 
     // 构建成功消息

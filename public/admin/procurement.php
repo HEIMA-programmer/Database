@@ -12,41 +12,47 @@ if (!$warehouseId) {
     $warehouseId = 0; // Prevent crash, logic will handle 0
 }
 
-// --- Action 1: Create New Purchase Order ---
+// --- Action 1: Create New Supplier Order ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_po'])) {
     try {
         $pdo->beginTransaction();
-        
-        $supplierId = $_POST['supplier_id'];
-        $empId = $_SESSION['user_id']; // 记录是谁创建的
 
-        // 创建 PO 头
-        $stmt = $pdo->prepare("INSERT INTO PurchaseOrder (SupplierID, CreatedByEmployeeID, OrderDate, Status, SourceType) VALUES (?, ?, CURDATE(), 'Pending', 'Supplier')");
-        $stmt->execute([$supplierId, $empId]);
-        $poId = $pdo->lastInsertId();
-        
-        // 创建 PO Lines
+        $supplierId = $_POST['supplier_id'];
+        $empId = $_SESSION['user_id'];
         $releaseId = $_POST['release_id'];
         $qty = $_POST['quantity'];
         $cost = $_POST['unit_cost'];
-        
-        $lineSql = "INSERT INTO PurchaseOrderLine (PO_ID, ReleaseID, Quantity, UnitCost) VALUES (?, ?, ?, ?)";
-        $pdo->prepare($lineSql)->execute([$poId, $releaseId, $qty, $cost]);
-        
-        $pdo->commit();
-        flash("Purchase Order #$poId created.", 'success');
+
+        // 使用存储过程创建供应商订单
+        $stmt = $pdo->prepare("CALL sp_create_supplier_order(?, ?, ?, @order_id)");
+        $stmt->execute([$supplierId, $empId, $warehouseId]);
+
+        // 获取创建的订单ID
+        $result = $pdo->query("SELECT @order_id AS order_id")->fetch();
+        $orderId = $result['order_id'];
+
+        if ($orderId > 0) {
+            // 添加订单行项目
+            $stmt = $pdo->prepare("CALL sp_add_supplier_order_line(?, ?, ?, ?)");
+            $stmt->execute([$orderId, $releaseId, $qty, $cost]);
+
+            $pdo->commit();
+            flash("Supplier Order #$orderId created successfully.", 'success');
+        } else {
+            throw new Exception("Failed to create supplier order.");
+        }
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        flash("Error creating PO: " . $e->getMessage(), 'danger');
+        flash("Error creating order: " . $e->getMessage(), 'danger');
     }
     header("Location: procurement.php");
     exit();
 }
 
-// --- Action 2: Receive PO (The "Put-away" Flow) ---
+// --- Action 2: Receive Supplier Order (The "Put-away" Flow) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_po'])) {
-    $poId = $_POST['po_id'];
-    
+    $orderId = $_POST['po_id'];
+
     if (!$warehouseId) {
         flash("Cannot receive items: Warehouse ID not configured.", 'danger');
         header("Location: procurement.php");
@@ -54,58 +60,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_po'])) {
     }
 
     try {
-        $pdo->beginTransaction();
-        
-        // 1. 获取该 PO 的所有行
-        $lines = $pdo->prepare("SELECT * FROM PurchaseOrderLine WHERE PO_ID = ?");
-        $lines->execute([$poId]);
-        $poLines = $lines->fetchAll();
-        
-        if (!$poLines) throw new Exception("PO not found or empty.");
-        
-        // 2. 遍历每一行，将数量转化为具体的 StockItems
-        foreach ($poLines as $line) {
-            $batchNo = "BATCH-" . date('ymd') . "-" . $poId;
-            
-            // 循环 Quantity 次，插入 StockItem
-            for ($i = 0; $i < $line['Quantity']; $i++) {
-                $insertStock = "INSERT INTO StockItem (ReleaseID, ShopID, Status, ConditionGrade, BatchNo, SourcePO_ID, AcquiredDate, UnitPrice)
-                                VALUES (?, ?, 'Available', 'New', ?, ?, NOW(), ?)";
-                // 新进货默认为 New 状态，定价策略：进货价 × 1.5
-                $resalePrice = $line['UnitCost'] * 1.5;
+        // 使用存储过程接收供应商订单并生成库存
+        $batchNo = "BATCH-" . date('Ymd') . "-" . $orderId;
+        $stmt = $pdo->prepare("CALL sp_receive_supplier_order(?, ?, ?, ?)");
+        $stmt->execute([$orderId, $batchNo, 'New', 1.5]); // 定价倍率1.5
 
-                $pdo->prepare($insertStock)->execute([
-                    $line['ReleaseID'],
-                    $warehouseId,
-                    $batchNo,
-                    $poId,
-                    $resalePrice
-                ]);
-            }
-        }
-        
-        // 3. 更新 PO 状态为 Received
-        $pdo->prepare("UPDATE PurchaseOrder SET Status = 'Received' WHERE PO_ID = ?")->execute([$poId]);
-        
-        $pdo->commit();
-        flash("PO #$poId received. Items added to Warehouse inventory.", 'success');
+        flash("Supplier Order #$orderId received. Items added to Warehouse inventory.", 'success');
     } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        flash("Error receiving PO: " . $e->getMessage(), 'danger');
+        flash("Error receiving order: " . $e->getMessage(), 'danger');
     }
     header("Location: procurement.php");
     exit();
 }
 
 // --- Data Queries ---
-$suppliers = $pdo->query("SELECT * FROM Supplier")->fetchAll();
+$suppliers = $pdo->query("SELECT * FROM Supplier ORDER BY Name")->fetchAll();
 $releases = $pdo->query("SELECT ReleaseID, Title, ArtistName FROM ReleaseAlbum ORDER BY Title")->fetchAll();
-$pendingPOs = $pdo->query("SELECT po.*, s.Name as SupplierName, 
-    (SELECT SUM(Quantity) FROM PurchaseOrderLine WHERE PO_ID = po.PO_ID) as TotalItems,
-    (SELECT SUM(Quantity * UnitCost) FROM PurchaseOrderLine WHERE PO_ID = po.PO_ID) as EstTotalCost
-    FROM PurchaseOrder po 
-    JOIN Supplier s ON po.SupplierID = s.SupplierID 
-    WHERE po.Status = 'Pending'")->fetchAll();
+
+// 使用视图查询待处理的供应商订单
+$pendingPOs = $pdo->query("SELECT * FROM vw_admin_supplier_orders WHERE Status = 'Pending' ORDER BY OrderDate DESC")->fetchAll();
 
 ?>
 
@@ -138,16 +111,16 @@ $pendingPOs = $pdo->query("SELECT po.*, s.Name as SupplierName,
             <tbody>
                 <?php foreach ($pendingPOs as $po): ?>
                 <tr>
-                    <td><?= $po['PO_ID'] ?></td>
+                    <td><?= $po['SupplierOrderID'] ?></td>
                     <td><?= h($po['SupplierName']) ?></td>
-                    <td><?= $po['OrderDate'] ?></td>
-                    <td><?= $po['TotalItems'] ?> units</td>
-                    <td><?= formatPrice($po['EstTotalCost']) ?></td>
+                    <td><?= date('Y-m-d', strtotime($po['OrderDate'])) ?></td>
+                    <td><?= $po['TotalItems'] ?? 0 ?> units</td>
+                    <td><?= formatPrice($po['TotalCost'] ?? 0) ?></td>
                     <td><span class="badge bg-warning text-dark">Pending Arrival</span></td>
                     <td>
                         <form method="POST" onsubmit="return confirm('Confirm receipt of goods? This will generate Stock Items.');">
                             <input type="hidden" name="receive_po" value="1">
-                            <input type="hidden" name="po_id" value="<?= $po['PO_ID'] ?>">
+                            <input type="hidden" name="po_id" value="<?= $po['SupplierOrderID'] ?>">
                             <button type="submit" class="btn btn-sm btn-success" <?= !$warehouseId ? 'disabled' : '' ?>>
                                 <i class="fa-solid fa-check-to-slot me-1"></i> Receive Goods
                             </button>

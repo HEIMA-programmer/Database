@@ -7,8 +7,6 @@ require_once __DIR__ . '/../../includes/header.php';
 // 处理回购提交
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        $pdo->beginTransaction();
-
         $releaseId = $_POST['release_id'];
         $condition = $_POST['condition'];
         $buyPrice = $_POST['buy_price'];
@@ -17,40 +15,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $shopId = $_SESSION['shop_id'] ?? 1;
         $empId = $_SESSION['user_id'];
 
-        // 1. 创建回购单 (Purchase Order - Type: Buyback)
-        // BuybackCustomerID tracks which customer sold the item back
-        $poSql = "INSERT INTO PurchaseOrder (SupplierID, BuybackCustomerID, CreatedByEmployeeID, OrderDate, Status, SourceType)
-                  VALUES (NULL, ?, ?, NOW(), 'Received', 'Buyback')";
-        $stmtPo = $pdo->prepare($poSql);
-        $stmtPo->execute([$customerId, $empId]);
-        $poId = $pdo->lastInsertId();
-
-        // 2. 记录 PO Line (作为单据明细)
-        $lineSql = "INSERT INTO PurchaseOrderLine (PO_ID, ReleaseID, Quantity, UnitCost) VALUES (?, ?, 1, ?)";
-        $stmtLine = $pdo->prepare($lineSql);
-        $stmtLine->execute([$poId, $releaseId, $buyPrice]);
-
-        // 3. 插入物理库存 (StockItem) 并关联 PO
-        $stockSql = "INSERT INTO StockItem (ReleaseID, ShopID, SourcePO_ID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) 
-                     VALUES (?, ?, ?, ?, ?, 'Available', ?, NOW())";
-        
-        $batchNo = 'BUYBACK-' . date('Ymd') . '-' . $poId;
-        
-        $stmtStock = $pdo->prepare($stockSql);
-        $stmtStock->execute([
-            $releaseId,
+        // 使用存储过程处理回购（一站式处理）
+        $stmt = $pdo->prepare("CALL sp_process_buyback(?, ?, ?, ?, 1, ?, ?, ?, @buyback_id)");
+        $stmt->execute([
+            $customerId,
+            $empId,
             $shopId,
-            $poId, // Traceability: 关联到回购单
-            $batchNo,
-            $condition,
-            $resalePrice
+            $releaseId,
+            $buyPrice,      // 回购单价（支付给客户）
+            $condition,     // 品相
+            $resalePrice    // 转售价格
         ]);
 
-        $pdo->commit();
-        flash("Buyback processed successfully. PO #$poId created. Item added to inventory.", 'success');
-        
+        // 获取创建的回购订单ID
+        $result = $pdo->query("SELECT @buyback_id AS buyback_id")->fetch();
+        $buybackId = $result['buyback_id'];
+
+        if ($buybackId > 0) {
+            flash("Buyback processed successfully. Buyback Order #$buybackId created. Item added to inventory.", 'success');
+        } else {
+            throw new Exception("Failed to process buyback.");
+        }
     } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
         error_log($e->getMessage());
         flash("Error processing buyback: " . $e->getMessage(), 'danger');
     }

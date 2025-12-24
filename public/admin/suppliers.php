@@ -35,17 +35,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_supplier'])) {
 // 3. 删除供应商 (工业级：先检查依赖)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_supplier'])) {
     $id = $_POST['supplier_id'];
-    
-    // 检查是否有关联的采购单
-    $check = $pdo->prepare("SELECT COUNT(*) FROM PurchaseOrder WHERE SupplierID = ?");
+
+    // 检查是否有关联的供应商订单
+    $check = $pdo->prepare("SELECT COUNT(*) FROM SupplierOrder WHERE SupplierID = ?");
     $check->execute([$id]);
-    
+
     if ($check->fetchColumn() > 0) {
-        flash("Cannot delete supplier: There are existing Purchase Orders linked to this supplier.", 'danger');
+        flash("Cannot delete supplier: There are existing Supplier Orders linked to this supplier.", 'danger');
     } else {
         try {
             $pdo->prepare("DELETE FROM Supplier WHERE SupplierID = ?")->execute([$id]);
-            flash("Supplier deleted.", 'warning');
+            flash("Supplier deleted successfully.", 'warning');
         } catch (PDOException $e) {
             flash("Delete failed: " . $e->getMessage(), 'danger');
         }

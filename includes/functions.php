@@ -110,32 +110,17 @@ function addPointsAndCheckUpgrade($pdo, $customerId, $amountSpent) {
     if ($pointsEarned <= 0) return false;
 
     try {
-        // 2. 获取升级前的会员等级信息
+        // 注意：积分更新和会员升级现在由触发器 trg_after_order_complete 自动处理
+        // 此函数仅查询当前状态用于显示
+
+        // 2. 查询当前会员状态（触发器已自动更新积分和等级）
         $stmt = $pdo->prepare("SELECT TierID, TierName FROM vw_customer_profile_info WHERE CustomerID = ?");
         $stmt->execute([$customerId]);
-        $beforeUpgrade = $stmt->fetch();
-        $oldTierId = $beforeUpgrade['TierID'] ?? null;
+        $currentStatus = $stmt->fetch();
 
-        // 3. 更新用户积分 (这个简单的更新操作保留在应用层)
-        $stmt = $pdo->prepare("UPDATE Customer SET Points = Points + ? WHERE CustomerID = ?");
-        $stmt->execute([$pointsEarned, $customerId]);
-
-        // 4. 使用存储过程检查并自动升级会员等级
-        $stmt = $pdo->prepare("CALL sp_update_customer_tier(?)");
-        $stmt->execute([$customerId]);
-
-        // 5. 获取升级后的状态
-        $stmt = $pdo->prepare("SELECT TierID, TierName FROM vw_customer_profile_info WHERE CustomerID = ?");
-        $stmt->execute([$customerId]);
-        $afterUpgrade = $stmt->fetch();
-
+        // 由于无法知道升级前的等级，这里只返回当前状态
         $upgraded = false;
-        $newTierName = '';
-
-        if ($afterUpgrade && $oldTierId != $afterUpgrade['TierID']) {
-            $upgraded = true;
-            $newTierName = $afterUpgrade['TierName'];
-        }
+        $newTierName = $currentStatus['TierName'] ?? 'Unknown';
 
         return [
             'points_earned' => $pointsEarned,

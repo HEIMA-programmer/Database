@@ -11,23 +11,8 @@ $vips = $pdo->query("SELECT * FROM vw_report_top_customers LIMIT 5")->fetchAll()
 // [Robustness Fix] 获取第一名 VIP 用于卡片展示，如果为空则提供默认值
 $topVipName = !empty($vips) ? $vips[0]['Name'] : 'No Data';
 
-// --- Advanced SQL 2: Dead Stock Alert ---
-// 找出进货超过 60 天但从未卖出过的商品
-$deadStockSql = "
-    SELECT
-        r.Title,
-        r.ArtistName,
-        s.BatchNo,
-        s.AcquiredDate,
-        DATEDIFF(NOW(), s.AcquiredDate) as DaysInStock
-    FROM StockItem s
-    JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
-    WHERE s.Status = 'Available'
-    AND s.AcquiredDate < DATE_SUB(NOW(), INTERVAL 60 DAY)
-    ORDER BY s.AcquiredDate ASC
-    LIMIT 10
-";
-$deadStock = $pdo->query($deadStockSql)->fetchAll();
+// 使用视图查询死库存预警（超过60天未售出）
+$deadStock = $pdo->query("SELECT * FROM vw_dead_stock_alert LIMIT 10")->fetchAll();
 
 // --- KPI Stats ---
 $totalSales = $pdo->query("SELECT SUM(TotalAmount) FROM CustomerOrder WHERE OrderStatus != 'Cancelled'")->fetchColumn() ?: 0.00;

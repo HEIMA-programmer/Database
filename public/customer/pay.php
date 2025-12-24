@@ -27,20 +27,46 @@ if (!$order) {
 
 // 处理支付请求 (模拟支付)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_once __DIR__ . '/../../includes/db_procedures.php';
+
     $paymentMethod = $_POST['payment_method'] ?? '';
 
     if (!in_array($paymentMethod, ['alipay', 'wechat', 'card'])) {
         flash("Invalid payment method.", 'danger');
     } else {
         try {
-            // 更新订单状态为已支付
-            $updateSql = "UPDATE CustomerOrder SET OrderStatus = 'Paid' WHERE OrderID = ?";
-            $pdo->prepare($updateSql)->execute([$orderId]);
+            $pdo->beginTransaction();
+
+            // 验证库存仍然Reserved（防止超时释放或被其他人购买）
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as cnt FROM OrderLine ol
+                JOIN StockItem s ON ol.StockItemID = s.StockItemID
+                WHERE ol.OrderID = ? AND s.Status = 'Reserved'
+            ");
+            $stmt->execute([$orderId]);
+            $reservedCount = $stmt->fetchColumn();
+
+            if ($reservedCount == 0) {
+                throw new Exception("订单商品已失效，请重新下单");
+            }
+
+            // 使用存储过程完成订单（自动更新库存状态、增加积分、升级会员）
+            $pointsEarned = floor($order['TotalAmount']);
+            $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+
+            if (!$success) {
+                throw new Exception("订单完成失败，请联系客服");
+            }
+
+            $pdo->commit();
 
             flash("Payment successful! Your order is now being processed.", 'success');
             header("Location: order_detail.php?id=$orderId");
             exit();
         } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             flash("Payment failed: " . $e->getMessage(), 'danger');
         }
     }

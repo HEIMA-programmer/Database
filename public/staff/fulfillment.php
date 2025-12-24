@@ -6,22 +6,53 @@ require_once __DIR__ . '/../../includes/header.php';
 
 // 处理发货动作
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_once __DIR__ . '/../../includes/db_procedures.php';
+
     $orderId = $_POST['order_id'] ?? 0;
     $action = $_POST['action'] ?? '';
 
     try {
         if ($action === 'ship') {
-            // 标记为已发货
+            // 标记为已发货（这个可以保留直接UPDATE，因为只是物流状态）
             $stmt = $pdo->prepare("UPDATE CustomerOrder SET OrderStatus = 'Shipped' WHERE OrderID = ? AND OrderType = 'Online' AND OrderStatus = 'Paid'");
             $stmt->execute([$orderId]);
+
+            if ($stmt->rowCount() === 0) {
+                throw new Exception("订单不存在或状态不正确");
+            }
+
             flash("Order #$orderId has been shipped!", 'success');
+
         } elseif ($action === 'complete') {
-            // 标记为完成（已送达）
-            $stmt = $pdo->prepare("UPDATE CustomerOrder SET OrderStatus = 'Completed' WHERE OrderID = ? AND OrderType = 'Online' AND OrderStatus = 'Shipped'");
+            // 使用存储过程完成订单（标记为已送达）
+            $pdo->beginTransaction();
+
+            $stmt = $pdo->prepare("
+                SELECT TotalAmount, OrderStatus FROM CustomerOrder
+                WHERE OrderID = ? AND OrderType = 'Online' AND OrderStatus = 'Shipped'
+            ");
             $stmt->execute([$orderId]);
+            $order = $stmt->fetch();
+
+            if (!$order) {
+                throw new Exception("订单不存在或状态不正确");
+            }
+
+            // 使用存储过程完成订单（自动更新库存、增加积分、升级会员）
+            $pointsEarned = floor($order['TotalAmount']);
+            $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+
+            if (!$success) {
+                throw new Exception("订单完成失败");
+            }
+
+            $pdo->commit();
             flash("Order #$orderId delivery confirmed!", 'success');
         }
-    } catch (PDOException $e) {
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         flash("Error updating order: " . $e->getMessage(), 'danger');
     }
     header("Location: fulfillment.php");

@@ -150,61 +150,61 @@ INSERT INTO PurchaseOrderLine (PO_ID, ReleaseID, Quantity, UnitCost) VALUES
 -- ==========================================
 
 -- 长沙店库存 (ShopID=1) - 滞销测试
-INSERT INTO StockItem (ReleaseID, ShopID, SourcePO_ID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
-(1, 1, 1, 'B20251001-CS', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 70 DAY)),
-(1, 1, 1, 'B20251001-CS', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 70 DAY)),
-(2, 1, 1, 'B20251001-CS', 'Mint', 'Available', 42.00, DATE_SUB(NOW(), INTERVAL 70 DAY)),
-(2, 1, 1, 'B20251001-CS', 'Mint', 'Available', 42.00, DATE_SUB(NOW(), INTERVAL 70 DAY));
+INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
+(1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 70 DAY)),
+(1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 70 DAY)),
+(2, 1, 'Supplier', 1, 'B20251001-CS', 'Mint', 'Available', 42.00, DATE_SUB(NOW(), INTERVAL 70 DAY)),
+(2, 1, 'Supplier', 1, 'B20251001-CS', 'Mint', 'Available', 42.00, DATE_SUB(NOW(), INTERVAL 70 DAY));
 
 -- 上海店库存 (ShopID=2)
-INSERT INTO StockItem (ReleaseID, ShopID, SourcePO_ID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
-(3, 2, 2, 'B20251115-SH', 'New', 'Available', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
-(3, 2, 2, 'B20251115-SH', 'New', 'Available', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
-(4, 2, 2, 'B20251115-SH', 'New', 'Available', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
-(4, 2, 2, 'B20251115-SH', 'New', 'Available', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
-(5, 2, 2, 'B20251115-SH', 'Mint', 'Available', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
-(5, 2, 2, 'B20251115-SH', 'Mint', 'Available', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY));
+INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
+(3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
+(3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
+(4, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
+(4, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
+(5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
+(5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY));
 
 -- 仓库库存 (ShopID=3) - 线上销售
-INSERT INTO StockItem (ReleaseID, ShopID, SourcePO_ID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
+INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
 -- Rumours
-(6, 3, 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
-(6, 3, 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
-(6, 3, 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+(6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+(6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+(6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
 -- Led Zeppelin IV
-(7, 3, 3, 'B20251210-WH', 'New', 'Available', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
-(7, 3, 3, 'B20251210-WH', 'New', 'Available', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+(7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+(7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
 -- The Wall
-(8, 3, 3, 'B20251210-WH', 'New', 'Available', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
-(8, 3, 3, 'B20251210-WH', 'New', 'Available', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+(8, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+(8, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
 -- A Night at the Opera
-(9, 3, 4, 'B20251218-WH', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
-(9, 3, 4, 'B20251218-WH', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
-(9, 3, 4, 'B20251218-WH', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(9, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(9, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(9, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
 -- Hotel California
-(10, 3, 4, 'B20251218-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
-(10, 3, 4, 'B20251218-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(10, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(10, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
 -- Born to Run
-(11, 3, 4, 'B20251218-WH', 'New', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
-(11, 3, 4, 'B20251218-WH', 'New', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
--- 二手唱片
-(12, 3, 5, 'BUYBACK-20251215', 'VG+', 'Available', 22.00, DATE_SUB(NOW(), INTERVAL 5 DAY)),
-(12, 3, 5, 'BUYBACK-20251215', 'VG', 'Available', 18.00, DATE_SUB(NOW(), INTERVAL 5 DAY)),
-(13, 3, 5, 'BUYBACK-20251215', 'NM', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 5 DAY));
+(11, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(11, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+-- 二手唱片 (回购)
+(12, 3, 'Buyback', 1, 'BUYBACK-20251215', 'VG+', 'Available', 22.00, DATE_SUB(NOW(), INTERVAL 5 DAY)),
+(12, 3, 'Buyback', 1, 'BUYBACK-20251215', 'VG', 'Available', 18.00, DATE_SUB(NOW(), INTERVAL 5 DAY)),
+(13, 3, 'Buyback', 1, 'BUYBACK-20251215', 'NM', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 5 DAY));
 
 -- 已售出的库存项 (用于报表测试)
-INSERT INTO StockItem (ReleaseID, ShopID, SourcePO_ID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate, DateSold) VALUES
+INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate, DateSold) VALUES
 -- 长沙门店销售
-(1, 1, 1, 'B20251001-CS', 'New', 'Sold', 35.00, DATE_SUB(NOW(), INTERVAL 70 DAY), DATE_SUB(NOW(), INTERVAL 60 DAY)),
-(2, 1, 1, 'B20251001-CS', 'Mint', 'Sold', 42.00, DATE_SUB(NOW(), INTERVAL 70 DAY), DATE_SUB(NOW(), INTERVAL 55 DAY)),
+(1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Sold', 35.00, DATE_SUB(NOW(), INTERVAL 70 DAY), DATE_SUB(NOW(), INTERVAL 60 DAY)),
+(2, 1, 'Supplier', 1, 'B20251001-CS', 'Mint', 'Sold', 42.00, DATE_SUB(NOW(), INTERVAL 70 DAY), DATE_SUB(NOW(), INTERVAL 55 DAY)),
 -- 上海门店销售
-(3, 2, 2, 'B20251115-SH', 'New', 'Sold', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 20 DAY)),
-(4, 2, 2, 'B20251115-SH', 'New', 'Sold', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 18 DAY)),
-(5, 2, 2, 'B20251115-SH', 'Mint', 'Sold', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 15 DAY)),
+(3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Sold', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 20 DAY)),
+(4, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Sold', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 18 DAY)),
+(5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Sold', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 15 DAY)),
 -- 线上仓库销售
-(6, 3, 3, 'B20251210-WH', 'New', 'Sold', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 7 DAY)),
-(7, 3, 3, 'B20251210-WH', 'New', 'Sold', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY)),
-(8, 3, 3, 'B20251210-WH', 'New', 'Sold', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY));
+(6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Sold', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 7 DAY)),
+(7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Sold', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY)),
+(8, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Sold', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY));
 
 -- ==========================================
 -- 8. 销售订单 (各种状态)

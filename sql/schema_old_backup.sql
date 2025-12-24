@@ -1,8 +1,4 @@
--- ========================================
--- Refactored Schema for Retro Echo Records
--- 重构版架构 - PurchaseOrder拆分为SupplierOrder和BuybackOrder
--- ========================================
-
+-- Disable foreign key checks for bulk creation
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- 1. Organization & Roles
@@ -12,6 +8,9 @@ CREATE TABLE Shop (
     Address TEXT,
     Type ENUM('Retail', 'Warehouse') NOT NULL
 );
+
+-- UserRole removed per teacher feedback: "字典表" with only 2 attributes is redundant
+-- Role is now an ENUM directly in Employee table
 
 CREATE TABLE Employee (
     EmployeeID INT AUTO_INCREMENT PRIMARY KEY,
@@ -27,9 +26,9 @@ CREATE TABLE Employee (
 -- 2. Customer & Membership
 CREATE TABLE MembershipTier (
     TierID INT AUTO_INCREMENT PRIMARY KEY,
-    TierName VARCHAR(50) NOT NULL,
+    TierName VARCHAR(50) NOT NULL, -- 'Standard', 'VIP', 'Gold'
     MinPoints INT NOT NULL,
-    DiscountRate DECIMAL(3,2) NOT NULL
+    DiscountRate DECIMAL(3,2) NOT NULL -- e.g., 0.05 for 5%
 );
 
 CREATE TABLE Customer (
@@ -43,7 +42,7 @@ CREATE TABLE Customer (
     FOREIGN KEY (TierID) REFERENCES MembershipTier(TierID)
 );
 
--- 3. Product Catalog
+-- 3. Product Catalog (Merged Artist/Label into Release per feedback)
 CREATE TABLE ReleaseAlbum (
     ReleaseID INT AUTO_INCREMENT PRIMARY KEY,
     Title VARCHAR(255) NOT NULL,
@@ -64,82 +63,50 @@ CREATE TABLE Track (
     FOREIGN KEY (ReleaseID) REFERENCES ReleaseAlbum(ReleaseID) ON DELETE CASCADE
 );
 
--- 4. Procurement - REFACTORED
+-- 4. Procurement & Inventory
 CREATE TABLE Supplier (
     SupplierID INT AUTO_INCREMENT PRIMARY KEY,
     Name VARCHAR(255) NOT NULL,
     Email VARCHAR(255)
 );
 
--- 【重构】供应商订单表 - 专门处理从供应商进货
-CREATE TABLE SupplierOrder (
-    SupplierOrderID INT AUTO_INCREMENT PRIMARY KEY,
-    SupplierID INT NOT NULL,
+CREATE TABLE PurchaseOrder (
+    PO_ID INT AUTO_INCREMENT PRIMARY KEY,
+    SupplierID INT, -- Nullable if SourceType is Buyback
+    BuybackCustomerID INT, -- Customer who sold items back (only for Buyback)
     CreatedByEmployeeID INT NOT NULL,
-    DestinationShopID INT, -- 目标仓库/门店
     OrderDate DATETIME DEFAULT CURRENT_TIMESTAMP,
-    Status ENUM('Pending', 'Received', 'Cancelled') DEFAULT 'Pending',
-    ReceivedDate DATETIME, -- 收货日期
-    TotalCost DECIMAL(10,2), -- 总成本
+    Status ENUM('Pending', 'Received') DEFAULT 'Pending',
+    SourceType ENUM('Supplier', 'Buyback') NOT NULL,
     FOREIGN KEY (SupplierID) REFERENCES Supplier(SupplierID),
-    FOREIGN KEY (CreatedByEmployeeID) REFERENCES Employee(EmployeeID),
-    FOREIGN KEY (DestinationShopID) REFERENCES Shop(ShopID)
+    FOREIGN KEY (BuybackCustomerID) REFERENCES Customer(CustomerID),
+    FOREIGN KEY (CreatedByEmployeeID) REFERENCES Employee(EmployeeID)
 );
 
--- 供应商订单明细表
-CREATE TABLE SupplierOrderLine (
-    SupplierOrderID INT,
+CREATE TABLE PurchaseOrderLine (
+    PO_ID INT,
     ReleaseID INT,
     Quantity INT NOT NULL,
     UnitCost DECIMAL(10,2) NOT NULL,
-    PRIMARY KEY (SupplierOrderID, ReleaseID),
-    FOREIGN KEY (SupplierOrderID) REFERENCES SupplierOrder(SupplierOrderID) ON DELETE CASCADE,
+    PRIMARY KEY (PO_ID, ReleaseID), -- Composite PK per feedback
+    FOREIGN KEY (PO_ID) REFERENCES PurchaseOrder(PO_ID) ON DELETE CASCADE,
     FOREIGN KEY (ReleaseID) REFERENCES ReleaseAlbum(ReleaseID)
 );
 
--- 【重构】回购订单表 - 专门处理客户回购
-CREATE TABLE BuybackOrder (
-    BuybackOrderID INT AUTO_INCREMENT PRIMARY KEY,
-    CustomerID INT NOT NULL,
-    ProcessedByEmployeeID INT NOT NULL,
-    ShopID INT NOT NULL, -- 回购处理门店
-    BuybackDate DATETIME DEFAULT CURRENT_TIMESTAMP,
-    Status ENUM('Pending', 'Completed', 'Cancelled') DEFAULT 'Pending',
-    TotalPayment DECIMAL(10,2), -- 支付给客户的总金额
-    Notes TEXT, -- 备注
-    FOREIGN KEY (CustomerID) REFERENCES Customer(CustomerID),
-    FOREIGN KEY (ProcessedByEmployeeID) REFERENCES Employee(EmployeeID),
-    FOREIGN KEY (ShopID) REFERENCES Shop(ShopID)
-);
-
--- 回购订单明细表
-CREATE TABLE BuybackOrderLine (
-    BuybackOrderID INT,
-    ReleaseID INT,
-    Quantity INT NOT NULL,
-    UnitPrice DECIMAL(10,2) NOT NULL, -- 回购单价
-    ConditionGrade ENUM('New', 'Mint', 'NM', 'VG+', 'VG') NOT NULL,
-    PRIMARY KEY (BuybackOrderID, ReleaseID),
-    FOREIGN KEY (BuybackOrderID) REFERENCES BuybackOrder(BuybackOrderID) ON DELETE CASCADE,
-    FOREIGN KEY (ReleaseID) REFERENCES ReleaseAlbum(ReleaseID)
-);
-
--- 5. Inventory Management
 CREATE TABLE StockItem (
     StockItemID INT AUTO_INCREMENT PRIMARY KEY,
     ReleaseID INT NOT NULL,
     ShopID INT NOT NULL,
-    SourceType ENUM('Supplier', 'Buyback') NOT NULL, -- 来源类型
-    SourceOrderID INT, -- 来源订单ID（根据SourceType查对应表）
-    BatchNo VARCHAR(50) NOT NULL,
+    SourcePO_ID INT, -- Traceability link
+    BatchNo VARCHAR(50) NOT NULL, -- "B2025-12-01"
     ConditionGrade ENUM('New', 'Mint', 'NM', 'VG+', 'VG') NOT NULL,
-    Status ENUM('Available', 'Sold', 'Reserved', 'InTransit') DEFAULT 'Available',
+    Status ENUM('Available', 'Sold', 'Reserved') DEFAULT 'Available',
     UnitPrice DECIMAL(10,2) NOT NULL,
     AcquiredDate DATETIME DEFAULT CURRENT_TIMESTAMP,
-    DateSold DATETIME DEFAULT NULL,
+    DateSold DATETIME DEFAULT NULL, -- 售出日期，用于计算库存周转率
     FOREIGN KEY (ReleaseID) REFERENCES ReleaseAlbum(ReleaseID),
-    FOREIGN KEY (ShopID) REFERENCES Shop(ShopID)
-    -- Note: 无法直接用FK引用SourceOrderID，需在应用层或触发器中验证
+    FOREIGN KEY (ShopID) REFERENCES Shop(ShopID),
+    FOREIGN KEY (SourcePO_ID) REFERENCES PurchaseOrder(PO_ID)
 );
 
 CREATE TABLE InventoryTransfer (
@@ -148,10 +115,10 @@ CREATE TABLE InventoryTransfer (
     FromShopID INT NOT NULL,
     ToShopID INT NOT NULL,
     TransferDate DATETIME DEFAULT CURRENT_TIMESTAMP,
-    AuthorizedByEmployeeID INT,
-    ReceivedByEmployeeID INT,
-    Status ENUM('Pending', 'InTransit', 'Completed', 'Cancelled') DEFAULT 'Pending',
-    ReceivedDate DATETIME,
+    AuthorizedByEmployeeID INT, -- Employee who initiated/approved the transfer
+    ReceivedByEmployeeID INT, -- Employee who confirmed receipt at destination
+    Status ENUM('InTransit', 'Completed', 'Cancelled') DEFAULT 'InTransit',
+    ReceivedDate DATETIME, -- When the transfer was completed
     FOREIGN KEY (StockItemID) REFERENCES StockItem(StockItemID),
     FOREIGN KEY (FromShopID) REFERENCES Shop(ShopID),
     FOREIGN KEY (ToShopID) REFERENCES Shop(ShopID),
@@ -159,26 +126,24 @@ CREATE TABLE InventoryTransfer (
     FOREIGN KEY (ReceivedByEmployeeID) REFERENCES Employee(EmployeeID)
 );
 
--- 6. Sales (Outbound)
+-- 5. Sales (Outbound)
 CREATE TABLE CustomerOrder (
     OrderID INT AUTO_INCREMENT PRIMARY KEY,
     CustomerID INT,
     FulfilledByShopID INT NOT NULL,
-    ProcessedByEmployeeID INT, -- 处理员工（店内销售时）
     OrderDate DATETIME DEFAULT CURRENT_TIMESTAMP,
     TotalAmount DECIMAL(10,2),
     OrderStatus ENUM('Pending', 'Paid', 'Shipped', 'Completed', 'Cancelled') DEFAULT 'Pending',
     OrderType ENUM('InStore', 'Online') NOT NULL,
     FOREIGN KEY (CustomerID) REFERENCES Customer(CustomerID),
-    FOREIGN KEY (FulfilledByShopID) REFERENCES Shop(ShopID),
-    FOREIGN KEY (ProcessedByEmployeeID) REFERENCES Employee(EmployeeID)
+    FOREIGN KEY (FulfilledByShopID) REFERENCES Shop(ShopID)
 );
 
 CREATE TABLE OrderLine (
     OrderID INT,
     StockItemID INT,
     PriceAtSale DECIMAL(10,2) NOT NULL,
-    PRIMARY KEY (OrderID, StockItemID),
+    PRIMARY KEY (OrderID, StockItemID), -- Composite PK per feedback
     FOREIGN KEY (OrderID) REFERENCES CustomerOrder(OrderID) ON DELETE CASCADE,
     FOREIGN KEY (StockItemID) REFERENCES StockItem(StockItemID)
 );

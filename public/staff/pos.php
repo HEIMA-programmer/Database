@@ -36,14 +36,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $shopId = $_SESSION['shop_id'] ?? 1;
 $shopName = $_SESSION['shop_name'] ?? 'Unknown Shop';
 
-// 搜索逻辑
+// 搜索逻辑（优化：ID用精确匹配，标题用模糊匹配）
 $search = $_GET['q'] ?? '';
 $items = [];
 if ($search) {
-    $sql = "SELECT * FROM vw_staff_pos_lookup WHERE ShopID = :shop AND Status = 'Available' AND (Title LIKE :q OR StockItemID LIKE :q) LIMIT 20";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([':shop' => $shopId, ':q' => "%$search%"]);
-    $items = $stmt->fetchAll();
+    // 智能判断：如果输入是纯数字，优先精确匹配ID；否则模糊匹配标题
+    if (is_numeric($search)) {
+        // ID精确搜索
+        $sql = "SELECT * FROM vw_staff_pos_lookup WHERE ShopID = :shop AND Status = 'Available' AND StockItemID = :id LIMIT 20";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':shop' => $shopId, ':id' => (int)$search]);
+        $items = $stmt->fetchAll();
+    }
+
+    // 如果ID搜索无结果，或者输入不是纯数字，则按标题搜索
+    if (empty($items)) {
+        $sql = "SELECT * FROM vw_staff_pos_lookup WHERE ShopID = :shop AND Status = 'Available' AND Title LIKE :q LIMIT 20";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':shop' => $shopId, ':q' => "%$search%"]);
+        $items = $stmt->fetchAll();
+    }
 }
 
 // 计算当前购物车总览（为了显示总价）

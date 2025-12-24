@@ -121,7 +121,7 @@ $activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE OrderStatu
     <div class="col-lg-6">
         <div class="card bg-dark border-secondary h-100">
             <div class="card-header border-secondary bg-transparent">
-                <h5 class="card-title text-danger mb-0"><i class="fa-solid fa-triangle-exclamation me-2"></i>Stagnant Inventory (>6 Months)</h5>
+                <h5 class="card-title text-danger mb-0"><i class="fa-solid fa-triangle-exclamation me-2"></i>Stagnant Inventory (>60 Days)</h5>
             </div>
             <div class="table-responsive">
                 <table class="table table-dark table-sm mb-0">

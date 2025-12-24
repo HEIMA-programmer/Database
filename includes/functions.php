@@ -100,7 +100,8 @@ function getShopIdByType($pdo, $type) {
 }
 
 /**
- * [New] 核心业务逻辑：增加积分并检查会员升级
+ * [Refactored] 核心业务逻辑：增加积分并检查会员升级
+ * 使用存储过程 sp_update_customer_tier 来处理会员等级升级
  * 此函数可在 Online Checkout 和 POS Checkout 中复用
  */
 function addPointsAndCheckUpgrade($pdo, $customerId, $amountSpent) {
@@ -108,41 +109,42 @@ function addPointsAndCheckUpgrade($pdo, $customerId, $amountSpent) {
     $pointsEarned = floor($amountSpent);
     if ($pointsEarned <= 0) return false;
 
-    // 2. 更新用户积分
-    $stmt = $pdo->prepare("UPDATE Customer SET Points = Points + ? WHERE CustomerID = ?");
-    $stmt->execute([$pointsEarned, $customerId]);
+    try {
+        // 2. 获取升级前的会员等级信息
+        $stmt = $pdo->prepare("SELECT TierID, TierName FROM vw_customer_profile_info WHERE CustomerID = ?");
+        $stmt->execute([$customerId]);
+        $beforeUpgrade = $stmt->fetch();
+        $oldTierId = $beforeUpgrade['TierID'] ?? null;
 
-    // 3. 获取最新状态
-    $stmt = $pdo->prepare("SELECT Points, TierID FROM Customer WHERE CustomerID = ?");
-    $stmt->execute([$customerId]);
-    $customer = $stmt->fetch();
-    
-    if (!$customer) return false;
+        // 3. 更新用户积分 (这个简单的更新操作保留在应用层)
+        $stmt = $pdo->prepare("UPDATE Customer SET Points = Points + ? WHERE CustomerID = ?");
+        $stmt->execute([$pointsEarned, $customerId]);
 
-    $newPoints = $customer['Points'];
-    $currentTier = $customer['TierID'];
+        // 4. 使用存储过程检查并自动升级会员等级
+        $stmt = $pdo->prepare("CALL sp_update_customer_tier(?)");
+        $stmt->execute([$customerId]);
 
-    // 4. 检查是否满足更高级别
-    // 查找积分门槛小于等于当前积分的最高等级
-    $stmt = $pdo->prepare("SELECT TierID, TierName FROM MembershipTier WHERE MinPoints <= ? ORDER BY MinPoints DESC LIMIT 1");
-    $stmt->execute([$newPoints]);
-    $targetTier = $stmt->fetch();
+        // 5. 获取升级后的状态
+        $stmt = $pdo->prepare("SELECT TierID, TierName FROM vw_customer_profile_info WHERE CustomerID = ?");
+        $stmt->execute([$customerId]);
+        $afterUpgrade = $stmt->fetch();
 
-    $upgraded = false;
-    $newTierName = '';
+        $upgraded = false;
+        $newTierName = '';
 
-    // 如果目标等级ID与当前不同（且通常ID更大代表等级更高，这里假设逻辑正确），则升级
-    if ($targetTier && $targetTier['TierID'] != $currentTier) {
-        $update = $pdo->prepare("UPDATE Customer SET TierID = ? WHERE CustomerID = ?");
-        $update->execute([$targetTier['TierID'], $customerId]);
-        $upgraded = true;
-        $newTierName = $targetTier['TierName'];
+        if ($afterUpgrade && $oldTierId != $afterUpgrade['TierID']) {
+            $upgraded = true;
+            $newTierName = $afterUpgrade['TierName'];
+        }
+
+        return [
+            'points_earned' => $pointsEarned,
+            'upgraded'      => $upgraded,
+            'new_tier_name' => $newTierName
+        ];
+    } catch (Exception $e) {
+        error_log("Error in addPointsAndCheckUpgrade: " . $e->getMessage());
+        return false;
     }
-
-    return [
-        'points_earned' => $pointsEarned,
-        'upgraded'      => $upgraded,
-        'new_tier_name' => $newTierName
-    ];
 }
 ?>

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Manager');
+require_once __DIR__ . '/../../includes/db_procedures.php';
 require_once __DIR__ . '/../../includes/header.php';
 
 // 获取所有店铺
@@ -31,31 +32,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initiate_transfer']))
         $currentItem = $stmt->fetch();
 
         if ($currentItem && $currentItem['ShopID'] != $toShopId) {
-            try {
-                $pdo->beginTransaction();
+            // 使用存储过程发起调拨
+            $transferId = DBProcedures::initiateTransfer($pdo, $stockId, $currentItem['ShopID'], $toShopId, $empId);
 
-                // 1. 记录调拨日志 - 状态为InTransit，等待接收确认
-                $logSql = "INSERT INTO InventoryTransfer (StockItemID, FromShopID, ToShopID, AuthorizedByEmployeeID, Status)
-                           VALUES (:sid, :from, :to, :emp, 'InTransit')";
-                $stmt = $pdo->prepare($logSql);
-                $stmt->execute([
-                    ':sid' => $stockId,
-                    ':from' => $currentItem['ShopID'],
-                    ':to' => $toShopId,
-                    ':emp' => $empId
-                ]);
-
-                // 2. 更新物品状态为Reserved（在途中不可售）
-                $updSql = "UPDATE StockItem SET Status = 'Reserved' WHERE StockItemID = :sid";
-                $stmt = $pdo->prepare($updSql);
-                $stmt->execute([':sid' => $stockId]);
-
-                $pdo->commit();
-                flash("Transfer initiated. Item #$stockId is now InTransit. Awaiting receipt confirmation at destination.", 'success');
-
-            } catch (Exception $e) {
-                if ($pdo->inTransaction()) $pdo->rollBack();
-                flash("Transfer failed: " . $e->getMessage(), 'danger');
+            if ($transferId) {
+                flash("Transfer #$transferId initiated. Item #$stockId is now InTransit. Awaiting receipt confirmation at destination.", 'success');
+            } else {
+                flash("Transfer failed. Please check item availability.", 'danger');
             }
         } else {
             flash("Invalid Item ID or Item already at destination.", 'danger');
@@ -68,31 +51,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
     $transferId = $_POST['transfer_id'];
     $empId = $_SESSION['user_id'];
 
-    try {
-        $pdo->beginTransaction();
+    // 使用存储过程完成调拨
+    $success = DBProcedures::completeTransfer($pdo, $transferId, $empId);
 
-        // 获取转运信息
-        $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND Status = 'InTransit'");
-        $stmt->execute([$transferId]);
-        $transfer = $stmt->fetch();
-
-        if ($transfer) {
-            // 1. 更新转运记录：设置接收人、完成状态、接收时间
-            $updTransfer = "UPDATE InventoryTransfer SET ReceivedByEmployeeID = ?, Status = 'Completed', ReceivedDate = NOW() WHERE TransferID = ?";
-            $pdo->prepare($updTransfer)->execute([$empId, $transferId]);
-
-            // 2. 更新物品物理位置和状态
-            $updStock = "UPDATE StockItem SET ShopID = ?, Status = 'Available' WHERE StockItemID = ?";
-            $pdo->prepare($updStock)->execute([$transfer['ToShopID'], $transfer['StockItemID']]);
-
-            $pdo->commit();
-            flash("Transfer #$transferId confirmed. Item received and added to local inventory.", 'success');
-        } else {
-            flash("Invalid transfer or already completed.", 'danger');
-        }
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        flash("Receipt confirmation failed: " . $e->getMessage(), 'danger');
+    if ($success) {
+        flash("Transfer #$transferId confirmed. Item received and added to local inventory.", 'success');
+    } else {
+        flash("Receipt confirmation failed. Please verify transfer status.", 'danger');
     }
 }
 

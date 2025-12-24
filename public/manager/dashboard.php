@@ -4,25 +4,9 @@ require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Manager');
 require_once __DIR__ . '/../../includes/header.php';
 
-// --- Advanced SQL 1: Top Spending VIPs (using Window Function) ---
-// 使用 DENSE_RANK() 对客户消费进行排名
-$vipSql = "
-    SELECT * FROM (
-        SELECT
-            c.Name,
-            c.Email,
-            mt.TierName,
-            SUM(co.TotalAmount) as TotalSpent,
-            DENSE_RANK() OVER (ORDER BY SUM(co.TotalAmount) DESC) as RankPosition
-        FROM Customer c
-        JOIN CustomerOrder co ON c.CustomerID = co.CustomerID
-        JOIN MembershipTier mt ON c.TierID = mt.TierID
-        WHERE co.OrderStatus != 'Cancelled'
-        GROUP BY c.CustomerID, c.Name, c.Email, mt.TierName
-    ) as RankedCustomers
-    WHERE RankPosition <= 5
-";
-$vips = $pdo->query($vipSql)->fetchAll();
+// --- 使用视图: Top Spending VIPs ---
+// 使用报表视图获取顶级客户（限制前5名）
+$vips = $pdo->query("SELECT * FROM vw_report_top_customers LIMIT 5")->fetchAll();
 
 // [Robustness Fix] 获取第一名 VIP 用于卡片展示，如果为空则提供默认值
 $topVipName = !empty($vips) ? $vips[0]['Name'] : 'No Data';

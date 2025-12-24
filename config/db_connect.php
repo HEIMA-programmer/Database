@@ -14,7 +14,14 @@ if (strpos($scriptPath, '/public') !== false) {
 // 移除末尾的斜杠（如果有多余的话）
 $baseUrl = rtrim($baseUrl, '/');
 
-define('BASE_URL', $baseUrl);
+// 确保BASE_URL是绝对路径，避免跳转问题
+if (!defined('BASE_URL')) {
+    define('BASE_URL', $baseUrl);
+}
+
+// 调试信息（生产环境应注释掉）
+// error_log("BASE_URL: " . BASE_URL);
+
 // 本地开发环境配置
 date_default_timezone_set('Asia/Shanghai');
 

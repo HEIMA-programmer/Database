@@ -1,0 +1,30 @@
+# Apache配置 - 确保正确的路由
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # 如果请求的是目录且不存在index.php，跳转到登录页
+    DirectoryIndex index.php
+
+    # 防止访问隐藏文件
+    RewriteRule ^(.*/)?\.(.*)$ - [F,L]
+
+    # 确保所有跳转都是相对路径
+    # 不做强制重定向，保持原有路径结构
+</IfModule>
+
+# 安全设置
+<FilesMatch "\.(txt|log|ini)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 启用会话cookie
+php_flag session.cookie_httponly On
+php_flag session.use_strict_mode On
+
+# 字符集
+AddDefaultCharset UTF-8
+
+# 错误页面（可选）
+# ErrorDocument 404 /error/404.php
+# ErrorDocument 500 /error/500.php

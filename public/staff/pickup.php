@@ -8,11 +8,46 @@ $shopId = $_SESSION['shop_id'];
 
 // 处理取货操作
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'])) {
+    require_once __DIR__ . '/../../includes/db_procedures.php';
+
     $orderId = $_POST['order_id'];
-    // 更新状态为 Completed
-    $stmt = $pdo->prepare("UPDATE CustomerOrder SET OrderStatus = 'Completed' WHERE OrderID = ? AND FulfilledByShopID = ?");
-    $stmt->execute([$orderId, $shopId]);
-    flash("Order #$orderId marked as collected.", 'success');
+
+    try {
+        $pdo->beginTransaction();
+
+        // 获取订单信息并验证
+        $stmt = $pdo->prepare("
+            SELECT TotalAmount, OrderStatus FROM CustomerOrder
+            WHERE OrderID = ? AND FulfilledByShopID = ?
+        ");
+        $stmt->execute([$orderId, $shopId]);
+        $order = $stmt->fetch();
+
+        if (!$order) {
+            throw new Exception("订单不存在或不属于本店");
+        }
+
+        if ($order['OrderStatus'] !== 'Paid') {
+            throw new Exception("订单状态不正确，当前状态: {$order['OrderStatus']}");
+        }
+
+        // 使用存储过程完成订单（自动更新库存、增加积分、升级会员）
+        $pointsEarned = floor($order['TotalAmount']);
+        $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+
+        if (!$success) {
+            throw new Exception("订单完成失败");
+        }
+
+        $pdo->commit();
+        flash("Order #$orderId marked as collected.", 'success');
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        flash("Error: " . $e->getMessage(), 'danger');
+    }
+
     header("Location: pickup.php");
     exit();
 }

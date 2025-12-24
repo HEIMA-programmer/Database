@@ -61,20 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
     }
 }
 
-// 获取当前店铺待接收的转运
-$pendingTransfers = $pdo->prepare("
-    SELECT it.*, s.Title, s.StockItemID as SID, si.BatchNo, si.ConditionGrade,
-           fromShop.Name as FromShopName, toShop.Name as ToShopName
-    FROM InventoryTransfer it
-    JOIN StockItem si ON it.StockItemID = si.StockItemID
-    JOIN ReleaseAlbum s ON si.ReleaseID = s.ReleaseID
-    JOIN Shop fromShop ON it.FromShopID = fromShop.ShopID
-    JOIN Shop toShop ON it.ToShopID = toShop.ShopID
-    WHERE it.Status = 'InTransit'
-    ORDER BY it.TransferDate DESC
-");
-$pendingTransfers->execute();
-$pending = $pendingTransfers->fetchAll();
+// 使用视图查询待接收的转运
+$pending = $pdo->query("SELECT * FROM vw_manager_pending_transfers ORDER BY TransferDate DESC")->fetchAll();
 ?>
 
 <div class="row">

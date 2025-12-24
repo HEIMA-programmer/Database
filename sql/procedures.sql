@@ -428,12 +428,8 @@ BEGIN
     SET s.Status = 'Sold', s.DateSold = NOW()
     WHERE ol.OrderID = p_order_id;
 
-    -- 更新客户积分
-    IF v_customer_id IS NOT NULL THEN
-        UPDATE Customer
-        SET Points = Points + p_points_earned
-        WHERE CustomerID = v_customer_id;
-    END IF;
+    -- 注意: 积分更新和会员升级由触发器 trg_after_order_complete 自动处理
+    -- 避免重复增加积分，已删除手动更新逻辑
 
     COMMIT;
 END$$
@@ -492,7 +488,52 @@ BEGIN
 END$$
 
 -- ================================================
--- 6. 会员等级自动升级
+-- 6. 库存超时释放机制
+-- ================================================
+
+-- 释放过期的预留库存（超过30分钟未支付）
+DROP PROCEDURE IF EXISTS sp_release_expired_reservations$$
+CREATE PROCEDURE sp_release_expired_reservations()
+BEGIN
+    DECLARE v_affected_orders INT DEFAULT 0;
+    DECLARE v_released_items INT DEFAULT 0;
+
+    START TRANSACTION;
+
+    -- 统计受影响的订单数
+    SELECT COUNT(DISTINCT co.OrderID) INTO v_affected_orders
+    FROM CustomerOrder co
+    WHERE co.OrderStatus = 'Pending'
+      AND co.OrderDate < DATE_SUB(NOW(), INTERVAL 30 MINUTE);
+
+    -- 释放预留库存
+    UPDATE StockItem s
+    JOIN OrderLine ol ON s.StockItemID = ol.StockItemID
+    JOIN CustomerOrder co ON ol.OrderID = co.OrderID
+    SET s.Status = 'Available'
+    WHERE co.OrderStatus = 'Pending'
+      AND s.Status = 'Reserved'
+      AND co.OrderDate < DATE_SUB(NOW(), INTERVAL 30 MINUTE);
+
+    SET v_released_items = ROW_COUNT();
+
+    -- 自动取消过期订单
+    UPDATE CustomerOrder
+    SET OrderStatus = 'Cancelled'
+    WHERE OrderStatus = 'Pending'
+      AND OrderDate < DATE_SUB(NOW(), INTERVAL 30 MINUTE);
+
+    COMMIT;
+
+    -- 返回统计信息
+    SELECT
+        v_affected_orders AS ExpiredOrders,
+        v_released_items AS ReleasedItems,
+        NOW() AS ProcessedAt;
+END$$
+
+-- ================================================
+-- 7. 会员等级自动升级
 -- ================================================
 
 DROP PROCEDURE IF EXISTS sp_update_customer_tier$$
@@ -531,3 +572,17 @@ BEGIN
 END$$
 
 DELIMITER ;
+
+-- ================================================
+-- 定时事件：自动释放过期预留库存
+-- ================================================
+-- 注意：需要确保 MySQL 的 event_scheduler 已开启
+-- 执行：SET GLOBAL event_scheduler = ON;
+
+DROP EVENT IF EXISTS evt_release_expired_reservations;
+
+CREATE EVENT evt_release_expired_reservations
+ON SCHEDULE EVERY 15 MINUTE
+STARTS CURRENT_TIMESTAMP
+DO
+    CALL sp_release_expired_reservations();

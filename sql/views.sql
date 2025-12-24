@@ -42,6 +42,23 @@ FROM vw_inventory_summary
 WHERE AvailableQuantity < 3
 ORDER BY AvailableQuantity ASC, ShopID;
 
+-- 【新增】死库存预警视图 - 超过60天未售出的商品
+CREATE OR REPLACE VIEW vw_dead_stock_alert AS
+SELECT
+    r.Title,
+    r.ArtistName,
+    s.BatchNo,
+    s.AcquiredDate,
+    DATEDIFF(NOW(), s.AcquiredDate) as DaysInStock,
+    sh.Name as ShopName,
+    sh.ShopID
+FROM StockItem s
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+JOIN Shop sh ON s.ShopID = sh.ShopID
+WHERE s.Status = 'Available'
+  AND s.AcquiredDate < DATE_SUB(NOW(), INTERVAL 60 DAY)
+ORDER BY s.AcquiredDate ASC;
+
 -- ================================================
 -- 用户访问视图 (View-based Access Control)
 -- ================================================
@@ -162,9 +179,11 @@ CREATE OR REPLACE VIEW vw_manager_pending_transfers AS
 SELECT
     t.TransferID,
     t.StockItemID,
-    r.Title AS AlbumTitle,
-    s1.Name AS FromShop,
-    s2.Name AS ToShop,
+    r.Title,
+    si.BatchNo,
+    si.ConditionGrade,
+    s1.Name AS FromShopName,
+    s2.Name AS ToShopName,
     t.TransferDate,
     t.Status,
     e.Name AS AuthorizedBy

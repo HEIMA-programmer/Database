@@ -1,10 +1,16 @@
 <?php
+/**
+ * 注册页面
+ * 【架构重构】遵循理想化分层架构
+ * - 通过 functions.php 的注册函数处理注册逻辑
+ * - 通过 DBProcedures 的存储过程处理数据库操作
+ */
 require_once __DIR__ . '/../config/db_connect.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 session_start();
 
-// 如果已登录，直接跳转
+// 已登录用户直接跳转
 if (isset($_SESSION['user_id'])) {
     header("Location: " . BASE_URL . "/index.php");
     exit();
@@ -12,6 +18,9 @@ if (isset($_SESSION['user_id'])) {
 
 $error = '';
 
+// =============================================
+// 【业务逻辑层调用】通过 functions.php 处理注册
+// =============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
@@ -19,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
     $confirmPass = $_POST['confirm_password'] ?? '';
 
-    // 1. 基础验证
+    // 基础验证
     if (empty($name) || empty($email) || empty($password)) {
         $error = 'Please fill in all required fields.';
     } elseif ($password !== $confirmPass) {
@@ -27,44 +36,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (strlen($password) < 6) {
         $error = 'Password must be at least 6 characters long.';
     } else {
-        try {
-            // 2. 检查邮箱是否已存在
-            $stmt = $pdo->prepare("SELECT CustomerID FROM Customer WHERE Email = ?");
-            $stmt->execute([$email]);
-            if ($stmt->fetch()) {
-                $error = 'This email is already registered. Please login.';
-            } else {
-                // 3. 创建新用户
-                // 获取默认等级 (Standard)
-                $tierStmt = $pdo->query("SELECT TierID FROM MembershipTier ORDER BY MinPoints ASC LIMIT 1");
-                $defaultTierId = $tierStmt->fetchColumn() ?: 1;
+        // 调用注册函数（通过存储过程）
+        $result = registerNewCustomer($pdo, $name, $email, $password, $birthday ?: null);
 
-                $hash = password_hash($password, PASSWORD_DEFAULT);
-                
-                $sql = "INSERT INTO Customer (TierID, Name, Email, PasswordHash, Birthday, Points) 
-                        VALUES (?, ?, ?, ?, ?, 0)";
-                $insertStmt = $pdo->prepare($sql);
-                $insertStmt->execute([$defaultTierId, $name, $email, $hash, $birthday ?: null]);
-                
-                $newUserId = $pdo->lastInsertId();
-
-                // 4. 自动登录
-                session_regenerate_id(true);
-                $_SESSION['user_id']   = $newUserId;
-                $_SESSION['username']  = $name;
-                $_SESSION['role']      = 'Customer';
-                $_SESSION['tier_id']   = $defaultTierId;
-                if ($birthday) {
-                    $_SESSION['birth_month'] = (int)date('m', strtotime($birthday));
-                }
-
-                flash("Welcome to Retro Echo, $name! Start your collection today.", 'success');
-                header("Location: " . BASE_URL . "/customer/catalog.php");
-                exit();
-            }
-        } catch (PDOException $e) {
-            error_log("Registration Error: " . $e->getMessage());
-            $error = 'System error during registration. Please try again.';
+        if ($result['success']) {
+            flash("Welcome to Retro Echo, $name! Start your collection today.", 'success');
+            header("Location: " . BASE_URL . "/customer/catalog.php");
+            exit();
+        } else {
+            $error = $result['message'];
         }
     }
 }
@@ -72,9 +52,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
+<!-- =============================================
+     【表现层】仅负责 HTML 渲染
+     ============================================= -->
+
 <div class="row justify-content-center align-items-center" style="min-height: 80vh;">
     <div class="col-md-6 col-lg-5">
-        
+
         <div class="text-center mb-4">
             <h1 class="display-5 text-warning fw-bold mb-0">Join the Club</h1>
             <p class="text-secondary">Create your Retro Echo account</p>

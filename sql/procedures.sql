@@ -588,3 +588,185 @@ ON SCHEDULE EVERY 15 MINUTE
 STARTS CURRENT_TIMESTAMP
 DO
     CALL sp_release_expired_reservations();
+
+-- ================================================
+-- 【架构重构】新增存储过程 - 消除 PHP 直接写物理表
+-- ================================================
+
+DELIMITER $$
+
+-- ------------------------------------------------
+-- 8. 客户注册存储过程
+-- 替换 register.php 中的直接 INSERT
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_register_customer$$
+CREATE PROCEDURE sp_register_customer(
+    IN p_name VARCHAR(100),
+    IN p_email VARCHAR(100),
+    IN p_password_hash VARCHAR(255),
+    IN p_birthday DATE,
+    OUT p_customer_id INT,
+    OUT p_tier_id INT
+)
+BEGIN
+    DECLARE v_email_exists INT DEFAULT 0;
+    DECLARE v_default_tier_id INT;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_customer_id = -1;
+        SET p_tier_id = -1;
+    END;
+
+    START TRANSACTION;
+
+    -- 检查邮箱是否已存在
+    SELECT COUNT(*) INTO v_email_exists FROM Customer WHERE Email = p_email;
+
+    IF v_email_exists > 0 THEN
+        SET p_customer_id = -2; -- 表示邮箱已存在
+        SET p_tier_id = -1;
+        ROLLBACK;
+    ELSE
+        -- 获取默认等级（积分最低的等级）
+        SELECT TierID INTO v_default_tier_id
+        FROM MembershipTier
+        ORDER BY MinPoints ASC
+        LIMIT 1;
+
+        -- 创建新客户
+        INSERT INTO Customer (TierID, Name, Email, PasswordHash, Birthday, Points)
+        VALUES (v_default_tier_id, p_name, p_email, p_password_hash, p_birthday, 0);
+
+        SET p_customer_id = LAST_INSERT_ID();
+        SET p_tier_id = v_default_tier_id;
+
+        COMMIT;
+    END IF;
+END$$
+
+-- ------------------------------------------------
+-- 9. 更新客户资料存储过程
+-- 替换 profile.php 中的直接 UPDATE
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_update_customer_profile$$
+CREATE PROCEDURE sp_update_customer_profile(
+    IN p_customer_id INT,
+    IN p_name VARCHAR(100),
+    IN p_password_hash VARCHAR(255) -- NULL 表示不更新密码
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to update customer profile';
+    END;
+
+    START TRANSACTION;
+
+    IF p_password_hash IS NOT NULL AND p_password_hash != '' THEN
+        UPDATE Customer
+        SET Name = p_name, PasswordHash = p_password_hash
+        WHERE CustomerID = p_customer_id;
+    ELSE
+        UPDATE Customer
+        SET Name = p_name
+        WHERE CustomerID = p_customer_id;
+    END IF;
+
+    COMMIT;
+END$$
+
+-- ------------------------------------------------
+-- 10. 添加员工存储过程
+-- 替换 users.php 中的直接 INSERT
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_add_employee$$
+CREATE PROCEDURE sp_add_employee(
+    IN p_name VARCHAR(100),
+    IN p_username VARCHAR(50),
+    IN p_password_hash VARCHAR(255),
+    IN p_role ENUM('Admin', 'Manager', 'Staff'),
+    IN p_shop_id INT,
+    OUT p_employee_id INT
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_employee_id = -1;
+    END;
+
+    START TRANSACTION;
+
+    INSERT INTO Employee (Name, Username, PasswordHash, Role, ShopID, HireDate)
+    VALUES (p_name, p_username, p_password_hash, p_role, p_shop_id, CURDATE());
+
+    SET p_employee_id = LAST_INSERT_ID();
+
+    COMMIT;
+END$$
+
+-- ------------------------------------------------
+-- 11. 更新员工存储过程
+-- 替换 users.php 中的直接 UPDATE
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_update_employee$$
+CREATE PROCEDURE sp_update_employee(
+    IN p_employee_id INT,
+    IN p_name VARCHAR(100),
+    IN p_role ENUM('Admin', 'Manager', 'Staff'),
+    IN p_shop_id INT,
+    IN p_password_hash VARCHAR(255) -- NULL 表示不更新密码
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to update employee';
+    END;
+
+    START TRANSACTION;
+
+    IF p_password_hash IS NOT NULL AND p_password_hash != '' THEN
+        UPDATE Employee
+        SET Name = p_name, Role = p_role, ShopID = p_shop_id, PasswordHash = p_password_hash
+        WHERE EmployeeID = p_employee_id;
+    ELSE
+        UPDATE Employee
+        SET Name = p_name, Role = p_role, ShopID = p_shop_id
+        WHERE EmployeeID = p_employee_id;
+    END IF;
+
+    COMMIT;
+END$$
+
+-- ------------------------------------------------
+-- 12. 删除员工存储过程
+-- 替换 users.php 中的直接 DELETE
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_delete_employee$$
+CREATE PROCEDURE sp_delete_employee(
+    IN p_employee_id INT,
+    IN p_current_user_id INT -- 防止删除自己
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot delete employee - may be linked to records';
+    END;
+
+    IF p_employee_id = p_current_user_id THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot delete your own account';
+    END IF;
+
+    START TRANSACTION;
+
+    DELETE FROM Employee WHERE EmployeeID = p_employee_id;
+
+    COMMIT;
+END$$
+
+DELIMITER ;

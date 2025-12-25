@@ -147,12 +147,12 @@ INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, Co
 
 -- [ID 5-10] 上海店库存 (ShopID=2)
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
-(3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
-(3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
-(4, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
-(4, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
-(5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
-(5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY));
+(3, 1, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY)), -- ID 5 【修改：ShopID 改为 1】
+(3, 1, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY)), -- ID 6 【修改：ShopID 改为 1】
+(4, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY)), -- ID 7
+(4, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY)), -- ID 8
+(5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY)), -- ID 9
+(5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY)); -- ID 10
 
 -- [ID 11-24] 仓库库存 (ShopID=3)
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
@@ -160,7 +160,7 @@ INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, Co
 (6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
 (6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
 -- [ID 14] 下面这条是用于测试“在途”状态的，必须设为 InTransit
-(7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'InTransit', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY)), 
+(7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY)), 
 (7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
 (8, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
 (8, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
@@ -250,6 +250,16 @@ INSERT INTO InventoryTransfer (StockItemID, FromShopID, ToShopID, TransferDate, 
 -- ID 14 在 StockItem 中被我们手动修正为 'InTransit' 且 ShopID=3 (源)
 -- 逻辑：正在从 Warehouse 发往 CS，尚未接收。数据一致。
 (14, 3, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), 6, NULL, 'InTransit', NULL);
+
+
+-- ==========================================
+-- 11. 修正库存最终状态 (绕过触发器逻辑以匹配历史记录)
+-- ==========================================
+-- 将已完成调拨的商品 (ID 5, 6) 移动到目标商店 (Shop 2)
+UPDATE StockItem SET ShopID = 2 WHERE StockItemID IN (5, 6);
+
+-- 将在途商品 (ID 14) 更新为 InTransit 状态
+UPDATE StockItem SET Status = 'InTransit' WHERE StockItemID = 14;
 
 SET FOREIGN_KEY_CHECKS = 1;
 

@@ -145,6 +145,7 @@ FROM StockItem s
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID;
 
 -- 6. [Staff View] Pending Pickups (BOPIS - Buy Online Pick up In Store)
+-- 【修复】BOPIS 是在线下单到店自提，所以 OrderType 应该是 'Online' 而非 'InStore'
 CREATE OR REPLACE VIEW vw_staff_bopis_pending AS
 SELECT
     co.OrderID,
@@ -156,7 +157,7 @@ SELECT
     co.TotalAmount
 FROM CustomerOrder co
 JOIN Customer c ON co.CustomerID = c.CustomerID
-WHERE co.OrderType = 'InStore' AND co.OrderStatus = 'Paid';
+WHERE co.OrderType = 'Online' AND co.OrderStatus = 'Paid';
 
 -- 7. [Manager View] Shop Performance
 CREATE OR REPLACE VIEW vw_manager_shop_performance AS

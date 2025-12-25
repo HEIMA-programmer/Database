@@ -387,7 +387,6 @@ DROP PROCEDURE IF EXISTS sp_complete_order$$
 -- 调用方传递的值不会被使用
 CREATE PROCEDURE sp_complete_order(
     IN p_order_id INT,
-    IN p_points_earned INT -- 【已废弃】积分由触发器自动计算，此参数仅为API兼容保留
 )
 BEGIN
     DECLARE v_customer_id INT;

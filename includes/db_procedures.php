@@ -676,10 +676,10 @@ class DBProcedures {
     /**
      * 完成订单
      */
-    public static function completeOrder($pdo, $orderId, $pointsEarned) {
+    public static function completeOrder($pdo, $orderId) {
         try {
-            $stmt = $pdo->prepare("CALL sp_complete_order(?, ?)");
-            return $stmt->execute([$orderId, $pointsEarned]);
+            $stmt = $pdo->prepare("CALL sp_complete_order(?)");
+            return $stmt->execute([$orderId]);
         } catch (PDOException $e) {
             error_log("completeOrder Error: " . $e->getMessage());
             return false;

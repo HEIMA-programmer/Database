@@ -88,7 +88,7 @@ try {
     }
 
     // 7. 使用存储过程完成订单
-    $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+    $success = DBProcedures::completeOrder($pdo, $orderId);
     if (!$success) {
         throw new Exception("Failed to complete order.");
     }

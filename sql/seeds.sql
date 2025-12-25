@@ -135,17 +135,17 @@ INSERT INTO BuybackOrderLine (BuybackOrderID, ReleaseID, Quantity, UnitPrice, Co
 (1, 12, 3, 12.00, 'VG+'),
 (1, 13, 2, 15.00, 'NM')
 -- ==========================================
--- 7. 库存项 (更完整的数据)
+-- 7. 库存项 (修正后的数据，确保 ID 对应)
 -- ==========================================
 
--- 长沙店库存 (ShopID=1) - 滞销测试
+-- [ID 1-4] 长沙店库存 (ShopID=1)
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
 (1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 70 DAY)),
 (1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 70 DAY)),
 (2, 1, 'Supplier', 1, 'B20251001-CS', 'Mint', 'Available', 42.00, DATE_SUB(NOW(), INTERVAL 70 DAY)),
 (2, 1, 'Supplier', 1, 'B20251001-CS', 'Mint', 'Available', 42.00, DATE_SUB(NOW(), INTERVAL 70 DAY));
 
--- 上海店库存 (ShopID=2)
+-- [ID 5-10] 上海店库存 (ShopID=2)
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
 (3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
 (3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
@@ -154,34 +154,31 @@ INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, Co
 (5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY)),
 (5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY));
 
--- 仓库库存 (ShopID=3) - 线上销售
+-- [ID 11-24] 仓库库存 (ShopID=3)
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
--- Rumours
 (6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
 (6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
 (6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
--- Led Zeppelin IV
+-- [ID 14] 下面这条是用于测试“在途”状态的，必须设为 InTransit
+(7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'InTransit', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY)), 
 (7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
-(7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
--- The Wall
 (8, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
 (8, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY)),
--- A Night at the Opera
 (9, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
 (9, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
 (9, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 35.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
--- Hotel California
 (10, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
 (10, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 32.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
--- Born to Run
 (11, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
-(11, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 3 DAY)),
--- 二手唱片 (回购)
+(11, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 3 DAY));
+
+-- [ID 25-27] 二手唱片 (回购)
+INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
 (12, 3, 'Buyback', 1, 'BUYBACK-20251215', 'VG+', 'Available', 22.00, DATE_SUB(NOW(), INTERVAL 5 DAY)),
 (12, 3, 'Buyback', 1, 'BUYBACK-20251215', 'VG', 'Available', 18.00, DATE_SUB(NOW(), INTERVAL 5 DAY)),
 (13, 3, 'Buyback', 1, 'BUYBACK-20251215', 'NM', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 5 DAY));
 
--- 已售出的库存项 (用于报表测试)
+-- [ID 28-35] 已售出的库存项 (8项)
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate, DateSold) VALUES
 -- 长沙门店销售
 (1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Sold', 35.00, DATE_SUB(NOW(), INTERVAL 70 DAY), DATE_SUB(NOW(), INTERVAL 60 DAY)),
@@ -190,11 +187,10 @@ INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, Co
 (3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Sold', 25.00, DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 20 DAY)),
 (4, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Sold', 30.00, DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 18 DAY)),
 (5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Sold', 36.00, DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 15 DAY)),
--- 线上仓库销售
+-- 线上仓库销售 (对应 ID 33, 34, 35)
 (6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Sold', 32.00, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 7 DAY)),
 (7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Sold', 38.00, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY)),
 (8, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Sold', 45.00, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY));
-
 -- ==========================================
 -- 8. 销售订单 (各种状态)
 -- ==========================================
@@ -228,37 +224,31 @@ INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, OrderDate, TotalAmount
 (2, 3, DATE_SUB(NOW(), INTERVAL 3 DAY), 56.00, 'Shipped', 'Online');
 
 -- ==========================================
--- 9. 订单明细
+-- 9. 订单明细 (修正 StockItemID)
 -- ==========================================
-
--- 关联已售出的库存到订单
+-- 注意：ID 必须与上面 StockItem 的生成顺序对应
+-- 28-35 是 Sold 的项目
 INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale) VALUES
--- 订单1: Abbey Road
-(1, 32, 35.00),
--- 订单2: Dark Side
-(2, 33, 42.00),
--- 订单3: Thriller
-(3, 34, 25.00),
--- 订单4: Kind of Blue
-(4, 35, 30.00),
--- 订单5: Back in Black
-(5, 36, 36.00),
--- 订单6: Rumours (线上已完成)
-(6, 37, 32.00),
--- 订单7: Led Zeppelin IV (线上已完成)
-(7, 38, 38.00),
--- 订单8: The Wall (线上已完成)
-(8, 39, 45.00);
+(1, 28, 35.00), -- Abbey Road
+(2, 29, 42.00), -- Dark Side
+(3, 30, 25.00), -- Thriller
+(4, 31, 30.00), -- Kind of Blue
+(5, 32, 36.00), -- Back in Black
+(6, 33, 32.00), -- Rumours
+(7, 34, 38.00), -- Led Zeppelin
+(8, 35, 45.00); -- The Wall
 
 -- ==========================================
 -- 10. 库存转运记录
--- Now includes Status, ReceivedByEmployeeID, ReceivedDate for complete tracking
 -- ==========================================
 INSERT INTO InventoryTransfer (StockItemID, FromShopID, ToShopID, TransferDate, AuthorizedByEmployeeID, ReceivedByEmployeeID, Status, ReceivedDate) VALUES
--- 已完成的转运：长沙店 -> 上海店
+-- ID 5, 6 现在在 Shop 2，且状态是 Available。
+-- 逻辑：它们原本在 Shop 1，通过此调拨单移动到了 Shop 2。数据一致。
 (5, 1, 2, DATE_SUB(NOW(), INTERVAL 40 DAY), 2, 5, 'Completed', DATE_SUB(NOW(), INTERVAL 39 DAY)),
 (6, 1, 2, DATE_SUB(NOW(), INTERVAL 35 DAY), 2, 5, 'Completed', DATE_SUB(NOW(), INTERVAL 34 DAY)),
--- 进行中的转运：仓库 -> 长沙店 (等待接收)
+
+-- ID 14 在 StockItem 中被我们手动修正为 'InTransit' 且 ShopID=3 (源)
+-- 逻辑：正在从 Warehouse 发往 CS，尚未接收。数据一致。
 (14, 3, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), 6, NULL, 'InTransit', NULL);
 
 SET FOREIGN_KEY_CHECKS = 1;

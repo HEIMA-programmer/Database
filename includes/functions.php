@@ -1029,7 +1029,7 @@ function handlePickupConfirmation($pdo, $orderId, $shopId) {
     }
 
     $pointsEarned = floor($order['TotalAmount']);
-    $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+    $success = DBProcedures::completeOrder($pdo, $orderId);
 
     if ($success) {
         return ['success' => true, 'message' => "Order #$orderId marked as collected."];
@@ -1070,7 +1070,7 @@ function handleDeliveryConfirmation($pdo, $orderId) {
         }
 
         $pointsEarned = floor($order['TotalAmount']);
-        $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+        $success = DBProcedures::completeOrder($pdo, $orderId;
 
         if ($success) {
             return ['success' => true, 'message' => "Order #$orderId delivery confirmed!"];
@@ -1177,7 +1177,7 @@ function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
 
     // 完成订单
     $pointsEarned = floor($order['TotalAmount']);
-    $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+    $success = DBProcedures::completeOrder($pdo, $orderId);
 
     if ($success) {
         return ['success' => true, 'message' => 'Payment successful!', 'order_id' => $orderId];

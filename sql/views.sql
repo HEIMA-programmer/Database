@@ -328,3 +328,205 @@ FROM (
 ) AS customer_stats
 ORDER BY TotalSpent DESC
 LIMIT 50;
+
+-- ================================================
+-- 【架构重构】新增视图 - 消除 PHP 直接物理表访问
+-- ================================================
+
+-- 16. [架构重构] 库存状态检查视图 - 用于购物车验证
+-- 替换 cart_action.php 中的直接 StockItem 查询
+CREATE OR REPLACE VIEW vw_stock_item_status AS
+SELECT
+    StockItemID,
+    ReleaseID,
+    ShopID,
+    Status,
+    UnitPrice,
+    ConditionGrade
+FROM StockItem;
+
+-- 17. [架构重构] 客户查找视图 - 通过 Email 查找会员
+-- 替换 pos_checkout.php 中的直接 Customer 查询
+CREATE OR REPLACE VIEW vw_customer_lookup AS
+SELECT
+    CustomerID,
+    Name,
+    Email,
+    TierID,
+    Points
+FROM Customer;
+
+-- 18. [架构重构] 商品详情视图 - 包含完整的专辑和店铺信息
+-- 替换 product.php 中的多表联接查询
+CREATE OR REPLACE VIEW vw_product_detail AS
+SELECT
+    s.StockItemID,
+    s.ReleaseID,
+    s.ShopID,
+    s.Status,
+    s.ConditionGrade,
+    s.UnitPrice,
+    s.BatchNo,
+    s.AcquiredDate,
+    r.Title,
+    r.ArtistName,
+    r.LabelName,
+    r.ReleaseYear,
+    r.Genre,
+    r.Format,
+    r.Description,
+    sh.Name AS ShopName,
+    sh.Type AS ShopType
+FROM StockItem s
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+JOIN Shop sh ON s.ShopID = sh.ShopID;
+
+-- 19. [架构重构] 同款商品替代库存视图
+-- 替换 product.php 中的其他库存查询
+CREATE OR REPLACE VIEW vw_product_alternatives AS
+SELECT
+    s.StockItemID,
+    s.ReleaseID,
+    s.ConditionGrade,
+    s.UnitPrice,
+    s.ShopID,
+    sh.Name AS ShopName
+FROM StockItem s
+JOIN Shop sh ON s.ShopID = sh.ShopID
+WHERE s.Status = 'Available';
+
+-- 20. [架构重构] 员工库存详细列表视图
+-- 替换 inventory.php 中的详细查询
+CREATE OR REPLACE VIEW vw_staff_inventory_detail AS
+SELECT
+    s.StockItemID,
+    s.ShopID,
+    s.ReleaseID,
+    s.BatchNo,
+    s.ConditionGrade,
+    s.UnitPrice,
+    s.Status,
+    s.AcquiredDate,
+    r.Title,
+    r.ArtistName,
+    DATEDIFF(NOW(), s.AcquiredDate) AS DaysInStock
+FROM StockItem s
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID;
+
+-- 21. [架构重构] 取货订单验证视图
+-- 替换 pickup.php 中的直接 CustomerOrder 查询
+CREATE OR REPLACE VIEW vw_order_for_pickup AS
+SELECT
+    OrderID,
+    CustomerID,
+    FulfilledByShopID AS ShopID,
+    TotalAmount,
+    OrderStatus,
+    OrderType
+FROM CustomerOrder;
+
+-- 22. [架构重构] 专辑简单列表视图 - 用于下拉选择
+-- 替换 buyback.php 中的直接 ReleaseAlbum 查询
+CREATE OR REPLACE VIEW vw_release_simple_list AS
+SELECT
+    ReleaseID,
+    Title,
+    ArtistName,
+    Genre,
+    Format,
+    ReleaseYear
+FROM ReleaseAlbum
+ORDER BY Title;
+
+-- 23. [架构重构] 客户简单列表视图 - 用于下拉选择
+-- 替换 buyback.php 中的直接 Customer 查询
+CREATE OR REPLACE VIEW vw_customer_simple_list AS
+SELECT
+    CustomerID,
+    Name,
+    Email
+FROM Customer
+ORDER BY Name;
+
+-- 24. [架构重构] 待支付订单视图 - 用于支付页面验证
+-- 替换 pay.php 中的直接 CustomerOrder 查询
+CREATE OR REPLACE VIEW vw_customer_pending_order AS
+SELECT
+    co.OrderID,
+    co.CustomerID,
+    co.TotalAmount,
+    co.OrderStatus,
+    co.OrderDate,
+    co.OrderType,
+    co.FulfilledByShopID
+FROM CustomerOrder co
+WHERE co.OrderStatus = 'Pending';
+
+-- 25. [架构重构] 订单预留商品验证视图
+-- 替换 pay.php 中的直接 OrderLine + StockItem 查询
+CREATE OR REPLACE VIEW vw_order_reserved_items AS
+SELECT
+    ol.OrderID,
+    ol.StockItemID,
+    ol.PriceAtSale,
+    s.Status AS StockStatus,
+    s.ReleaseID
+FROM OrderLine ol
+JOIN StockItem s ON ol.StockItemID = s.StockItemID;
+
+-- 26. [架构重构] 员工认证视图
+-- 替换 login.php 中的直接 Employee + Shop 查询
+CREATE OR REPLACE VIEW vw_auth_employee AS
+SELECT
+    e.EmployeeID,
+    e.Name,
+    e.Username,
+    e.PasswordHash,
+    e.Role,
+    e.ShopID,
+    s.Name AS ShopName
+FROM Employee e
+JOIN Shop s ON e.ShopID = s.ShopID;
+
+-- 27. [架构重构] 客户认证视图
+-- 替换 login.php 中的直接 Customer 查询
+CREATE OR REPLACE VIEW vw_auth_customer AS
+SELECT
+    CustomerID,
+    Name,
+    Email,
+    PasswordHash,
+    Birthday,
+    TierID,
+    Points
+FROM Customer;
+
+-- 28. [架构重构] KPI 统计视图
+-- 替换 dashboard.php 中的直接聚合查询
+CREATE OR REPLACE VIEW vw_kpi_stats AS
+SELECT
+    (SELECT COALESCE(SUM(TotalAmount), 0) FROM CustomerOrder WHERE OrderStatus != 'Cancelled') AS TotalSales,
+    (SELECT COUNT(*) FROM CustomerOrder WHERE OrderStatus IN ('Pending', 'Paid', 'Shipped')) AS ActiveOrders,
+    (SELECT COUNT(*) FROM vw_low_stock_alert) AS LowStockCount;
+
+-- 29. [架构重构] 店铺列表视图
+-- 通用店铺查询
+CREATE OR REPLACE VIEW vw_shop_list AS
+SELECT
+    ShopID,
+    Name,
+    Type,
+    Address,
+    Phone
+FROM Shop;
+
+-- 30. [架构重构] 会员等级规则视图
+-- 替换 profile.php 和 register.php 中的直接 MembershipTier 查询
+CREATE OR REPLACE VIEW vw_membership_tier_rules AS
+SELECT
+    TierID,
+    TierName,
+    MinPoints,
+    DiscountRate
+FROM MembershipTier
+ORDER BY MinPoints ASC;

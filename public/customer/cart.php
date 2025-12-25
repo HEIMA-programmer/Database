@@ -1,64 +1,42 @@
 <?php
+/**
+ * 购物车页面
+ * 【架构重构】遵循理想化分层架构
+ * - 顶部：仅调用业务逻辑函数准备数据
+ * - 底部：仅负责 HTML 渲染
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Customer');
+require_once __DIR__ . '/../../includes/functions.php';
+
+// =============================================
+// 【数据准备层】调用 functions.php 的业务逻辑
+// =============================================
+$pageData = prepareCartPageData($pdo);
+$cartItems = $pageData['items'];
+$summary = $pageData['summary'];
+$isEmpty = $pageData['empty'];
+
+// 提取变量供模板使用
+$subtotal = $summary['subtotal'] ?? 0;
+$isBirthdayMonth = $summary['is_birthday_month'] ?? false;
+$discountAmount = $summary['discount_amount'] ?? 0;
+$shippingCost = $summary['shipping_cost'] ?? 0;
+$finalTotal = $summary['final_total'] ?? 0;
+
 require_once __DIR__ . '/../../includes/header.php';
-
-$cartIds = $_SESSION['cart'] ?? [];
-$cartItems = [];
-$subtotal = 0.00;
-
-// 如果购物车不为空，从数据库获取详细信息
-if (!empty($cartIds)) {
-    // 生成占位符 ?,?,?
-    $placeholders = implode(',', array_fill(0, count($cartIds), '?'));
-    
-    // 复用 Catalog 视图
-    $sql = "SELECT * FROM vw_customer_catalog WHERE StockItemID IN ($placeholders)";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($cartIds);
-    $cartItems = $stmt->fetchAll();
-    
-    // 计算小计
-    foreach ($cartItems as $item) {
-        $subtotal += $item['UnitPrice'];
-    }
-}
-
-// --- 业务规则计算 (Business Rules) ---
-
-// 1. 生日折扣 (15% off during birthday month)
-$isBirthdayMonth = false;
-$discountRate = 0;
-$discountAmount = 0;
-
-if (isset($_SESSION['birth_month']) && $_SESSION['birth_month'] == date('m')) {
-    $isBirthdayMonth = true;
-    $discountRate = 0.15; // 15%
-    $discountAmount = $subtotal * $discountRate;
-}
-
-// 2. 运费规则 (Free shipping over 200 RMB)
-$shippingCost = ($subtotal > 200) ? 0 : 15.00;
-if ($subtotal == 0) $shippingCost = 0; // 空车不收运费
-
-// 最终总价
-$finalTotal = $subtotal - $discountAmount + $shippingCost;
-
-// 将计算结果存入 Session，供 Checkout 步骤验证使用
-$_SESSION['checkout_totals'] = [
-    'subtotal' => $subtotal,
-    'discount' => $discountAmount,
-    'shipping' => $shippingCost,
-    'total'    => $finalTotal
-];
 ?>
+
+<!-- =============================================
+     【表现层】仅负责 HTML 渲染，无任何业务逻辑
+     ============================================= -->
 
 <h2 class="text-warning mb-4"><i class="fa-solid fa-cart-shopping me-2"></i>Shopping Cart</h2>
 
 <div class="row">
     <div class="col-lg-8">
-        <?php if (empty($cartItems)): ?>
+        <?php if ($isEmpty): ?>
             <div class="alert alert-secondary text-center py-5">
                 <h4>Your cart is empty.</h4>
                 <a href="catalog.php" class="btn btn-warning mt-3">Browse Catalog</a>
@@ -110,7 +88,7 @@ $_SESSION['checkout_totals'] = [
                     <span>Subtotal</span>
                     <span><?= formatPrice($subtotal) ?></span>
                 </div>
-                
+
                 <?php if ($isBirthdayMonth): ?>
                     <div class="d-flex justify-content-between mb-2 text-success">
                         <span><i class="fa-solid fa-cake-candles me-1"></i>Birthday Discount (15%)</span>
@@ -128,13 +106,13 @@ $_SESSION['checkout_totals'] = [
                 </div>
 
                 <hr class="border-secondary">
-                
+
                 <div class="d-flex justify-content-between mb-4">
                     <span class="h5">Total</span>
                     <span class="h4 text-warning"><?= formatPrice($finalTotal) ?></span>
                 </div>
 
-                <?php if (!empty($cartItems)): ?>
+                <?php if (!$isEmpty): ?>
                     <form action="checkout_process.php" method="POST">
                         <div class="mb-3">
                             <label class="form-label small">Order Type</label>
@@ -143,7 +121,7 @@ $_SESSION['checkout_totals'] = [
                                 <option value="InStore">Pick up in Store (BOPIS)</option>
                             </select>
                         </div>
-                        
+
                         <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Proceed to Checkout</button>
                     </form>
                 <?php else: ?>
@@ -151,7 +129,7 @@ $_SESSION['checkout_totals'] = [
                 <?php endif; ?>
             </div>
         </div>
-        
+
         <?php if ($subtotal > 0 && $subtotal < 200): ?>
             <div class="alert alert-info mt-3 small">
                 <i class="fa-solid fa-truck-fast me-2"></i>

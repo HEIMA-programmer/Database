@@ -1,4 +1,10 @@
 <?php
+/**
+ * 购物车操作处理
+ * 【架构重构】遵循理想化分层架构
+ * - 仅调用 functions.php 中的业务逻辑函数
+ * - 无直接数据库访问
+ */
 session_start();
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -7,35 +13,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $stockId = $_POST['stock_id'] ?? null;
 
-    if (!isset($_SESSION['cart'])) {
-        $_SESSION['cart'] = [];
-    }
+    // =============================================
+    // 【业务逻辑层调用】通过 functions.php 处理
+    // =============================================
 
-    if ($action === 'add' && $stockId) {
-        // 简单检查该物品是否已在购物车
-        if (!in_array($stockId, $_SESSION['cart'])) {
-            // 检查数据库中状态是否仍为 Available (防止重复添加已售出的)
-            $stmt = $pdo->prepare("SELECT Status FROM StockItem WHERE StockItemID = ?");
-            $stmt->execute([$stockId]);
-            $status = $stmt->fetchColumn();
-
-            if ($status === 'Available') {
-                $_SESSION['cart'][] = $stockId;
-                flash('Item added to cart.', 'success');
-            } else {
-                flash('Item is no longer available.', 'danger');
+    switch ($action) {
+        case 'add':
+            if ($stockId) {
+                $result = addToCart($pdo, $stockId);
+                flash($result['message'], $result['success'] ? 'success' : 'warning');
             }
-        } else {
-            flash('Item is already in your cart.', 'warning');
-        }
-    } 
-    
-    elseif ($action === 'remove' && $stockId) {
-        $key = array_search($stockId, $_SESSION['cart']);
-        if ($key !== false) {
-            unset($_SESSION['cart'][$key]);
-            flash('Item removed from cart.', 'info');
-        }
+            break;
+
+        case 'remove':
+            if ($stockId) {
+                if (removeFromCart($stockId)) {
+                    flash('Item removed from cart.', 'info');
+                }
+            }
+            break;
+
+        case 'clear':
+            clearCart();
+            flash('Cart cleared.', 'info');
+            break;
     }
 
     // 重定向回来源页面

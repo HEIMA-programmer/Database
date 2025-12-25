@@ -1,9 +1,16 @@
 <?php
+/**
+ * 登录页面
+ * 【架构重构】遵循理想化分层架构
+ * - 通过 functions.php 的认证函数处理登录逻辑
+ * - 无直接数据库访问
+ */
 require_once __DIR__ . '/../config/db_connect.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 session_start();
 
+// 已登录用户直接跳转
 if (isset($_SESSION['user_id'])) {
     header("Location: " . BASE_URL . "/index.php");
     exit();
@@ -11,6 +18,9 @@ if (isset($_SESSION['user_id'])) {
 
 $error = '';
 
+// =============================================
+// 【业务逻辑层调用】通过 functions.php 处理认证
+// =============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $loginType = $_POST['login_type'] ?? 'customer';
     $username  = trim($_POST['username'] ?? '');
@@ -21,69 +31,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             if ($loginType === 'employee') {
-                // UserRole table removed; Role is now ENUM in Employee table
-                $sql = "SELECT e.EmployeeID, e.Name, e.PasswordHash, e.ShopID, e.Role, s.Name as ShopName
-                        FROM Employee e
-                        JOIN Shop s ON e.ShopID = s.ShopID
-                        WHERE e.Username = :username";
-                $stmt = $pdo->prepare($sql);
-                $stmt->execute([':username' => $username]);
-                $user = $stmt->fetch();
+                // 员工登录
+                $result = authenticateEmployee($pdo, $username, $password);
 
-                if ($user && password_verify($password, $user['PasswordHash'])) {
-                    session_regenerate_id(true);
-                    $_SESSION['user_id']   = $user['EmployeeID'];
-                    $_SESSION['username']  = $user['Name'];
-                    $_SESSION['role']      = $user['Role'];
-                    $_SESSION['shop_id']   = $user['ShopID'];
-                    $_SESSION['shop_name'] = $user['ShopName'];
-                    
-                    flash("Welcome back, {$user['Name']}!", 'success');
-                    $redirect = $_SESSION['redirect_url'] ?? '/index.php';
+                if ($result['success']) {
+                    flash("Welcome back, {$_SESSION['username']}!", 'success');
+                    $redirect = $_SESSION['redirect_url'] ?? getLoginRedirectUrl($result['role']);
                     unset($_SESSION['redirect_url']);
                     header("Location: " . $redirect);
                     exit();
                 } else {
-                    $error = 'Invalid credentials.';
+                    $error = $result['message'];
                 }
-
             } else {
-                $sql = "SELECT CustomerID, Name, PasswordHash, Birthday, TierID FROM Customer WHERE Email = :email";
-                $stmt = $pdo->prepare($sql);
-                $stmt->execute([':email' => $username]);
-                $user = $stmt->fetch();
+                // 客户登录
+                $result = authenticateCustomer($pdo, $username, $password);
 
-                if ($user && password_verify($password, $user['PasswordHash'])) {
-                    session_regenerate_id(true);
-                    $_SESSION['user_id']   = $user['CustomerID'];
-                    $_SESSION['username']  = $user['Name'];
-                    $_SESSION['role']      = 'Customer';
-                    $_SESSION['tier_id']   = $user['TierID'];
-                    if ($user['Birthday']) {
-                        $_SESSION['birth_month'] = (int)date('m', strtotime($user['Birthday']));
-                    }
-
+                if ($result['success']) {
                     flash('Welcome to Retro Echo Records!', 'success');
                     $redirect = $_SESSION['redirect_url'] ?? (BASE_URL . '/customer/catalog.php');
                     unset($_SESSION['redirect_url']);
                     header("Location: " . $redirect);
                     exit();
                 } else {
-                    $error = 'Invalid credentials.';
+                    $error = $result['message'];
                 }
             }
-        } catch (PDOException $e) {
-            error_log($e->getMessage());
+        } catch (Exception $e) {
+            error_log("Login Error: " . $e->getMessage());
             $error = 'System error.';
         }
     }
 }
+
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
+<!-- =============================================
+     【表现层】仅负责 HTML 渲染
+     ============================================= -->
+
 <div class="row justify-content-center align-items-center" style="min-height: 70vh;">
     <div class="col-md-5 col-lg-4">
-        
+
         <div class="text-center mb-4">
             <h1 class="display-4 text-warning fw-bold mb-0">Retro Echo</h1>
             <p class="text-secondary letter-spacing-2">ACCESS TERMINAL</p>
@@ -129,7 +119,7 @@ require_once __DIR__ . '/../includes/header.php';
                     </button>
                 </form>
             </div>
-            
+
             <div class="card-footer bg-dark border-0 text-center py-3">
                 <span class="text-secondary small">Don't have an account?</span>
                 <a href="register.php" class="text-warning fw-bold ms-1 text-decoration-none small">Register Now</a>

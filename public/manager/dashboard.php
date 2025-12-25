@@ -1,30 +1,36 @@
 <?php
+/**
+ * 管理仪表板
+ * 【架构重构】遵循理想化分层架构
+ * - 通过 functions.php 的数据准备函数获取所有数据
+ * - 底部仅负责 HTML 渲染
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Manager');
+require_once __DIR__ . '/../../includes/functions.php';
+
+// =============================================
+// 【数据准备层】调用 functions.php 获取所有数据
+// =============================================
+$dashboardData = prepareDashboardData($pdo);
+
+// 提取变量供模板使用
+$totalSales = $dashboardData['total_sales'];
+$activeOrders = $dashboardData['active_orders'];
+$lowStockCount = $dashboardData['low_stock_count'];
+$topVipName = $dashboardData['top_vip_name'];
+$vips = $dashboardData['vips'];
+$deadStock = $dashboardData['dead_stock'];
+$lowStock = $dashboardData['low_stock'];
+$shopPerformance = $dashboardData['shop_performance'];
+
 require_once __DIR__ . '/../../includes/header.php';
-
-// --- 使用视图: Top Spending VIPs ---
-// 使用报表视图获取顶级客户（限制前5名）
-$vips = $pdo->query("SELECT * FROM vw_report_top_customers LIMIT 5")->fetchAll();
-
-// [Robustness Fix] 获取第一名 VIP 用于卡片展示，如果为空则提供默认值
-$topVipName = !empty($vips) ? $vips[0]['Name'] : 'No Data';
-
-// 使用视图查询死库存预警（超过60天未售出）
-$deadStock = $pdo->query("SELECT * FROM vw_dead_stock_alert LIMIT 10")->fetchAll();
-
-// 【新增】使用视图查询低库存预警（库存少于3件）
-$lowStock = $pdo->query("SELECT * FROM vw_low_stock_alert LIMIT 10")->fetchAll();
-
-// 【新增】使用视图查询店铺业绩
-$shopPerformance = $pdo->query("SELECT * FROM vw_manager_shop_performance ORDER BY Revenue DESC")->fetchAll();
-
-// --- KPI Stats ---
-$totalSales = $pdo->query("SELECT SUM(TotalAmount) FROM CustomerOrder WHERE OrderStatus != 'Cancelled'")->fetchColumn() ?: 0.00;
-$activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE OrderStatus IN ('Pending', 'Paid', 'Shipped')")->fetchColumn();
-$lowStockCount = count($lowStock);
 ?>
+
+<!-- =============================================
+     【表现层】仅负责 HTML 渲染，无任何业务逻辑
+     ============================================= -->
 
 <div class="row mb-4">
     <div class="col-12">
@@ -93,7 +99,7 @@ $lowStockCount = count($lowStock);
                             <td class="text-end text-success fw-bold"><?= formatPrice($v['TotalSpent']) ?></td>
                         </tr>
                         <?php endforeach; ?>
-                        <?php if(empty($vips)): ?>
+                        <?php if (empty($vips)): ?>
                             <tr><td colspan="4" class="text-center text-muted py-3">No sales data available yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
@@ -127,7 +133,7 @@ $lowStockCount = count($lowStock);
                             <td><span class="badge bg-secondary"><?= h($d['BatchNo']) ?></span></td>
                         </tr>
                         <?php endforeach; ?>
-                        <?php if(empty($deadStock)): ?>
+                        <?php if (empty($deadStock)): ?>
                             <tr><td colspan="3" class="text-center text-success py-3">No stagnant inventory found! Excellent work.</td></tr>
                         <?php endif; ?>
                     </tbody>
@@ -137,7 +143,6 @@ $lowStockCount = count($lowStock);
     </div>
 </div>
 
-<!-- 【新增】低库存预警和店铺业绩 -->
 <div class="row g-4 mt-4">
     <div class="col-lg-6">
         <div class="card bg-dark border-secondary h-100">
@@ -164,7 +169,7 @@ $lowStockCount = count($lowStock);
                             <td class="text-center"><span class="badge bg-danger"><?= $ls['AvailableQuantity'] ?></span></td>
                         </tr>
                         <?php endforeach; ?>
-                        <?php if(empty($lowStock)): ?>
+                        <?php if (empty($lowStock)): ?>
                             <tr><td colspan="3" class="text-center text-success py-3">All items well stocked!</td></tr>
                         <?php endif; ?>
                     </tbody>
@@ -197,7 +202,7 @@ $lowStockCount = count($lowStock);
                             <td class="text-end text-success fw-bold"><?= formatPrice($sp['Revenue']) ?></td>
                         </tr>
                         <?php endforeach; ?>
-                        <?php if(empty($shopPerformance)): ?>
+                        <?php if (empty($shopPerformance)): ?>
                             <tr><td colspan="4" class="text-center text-muted py-3">No sales data yet.</td></tr>
                         <?php endif; ?>
                     </tbody>

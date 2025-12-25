@@ -167,4 +167,463 @@ function addPointsAndCheckUpgrade($pdo, $customerId, $amountSpent) {
     // 此函数仅用于向后兼容，返回当前状态但无法检测升级
     return checkMembershipUpgrade($pdo, $customerId, $amountSpent, null);
 }
+
+// =============================================
+// 【架构重构】业务逻辑层 - 购物车与订单计算
+// =============================================
+
+/**
+ * 计算购物车汇总数据
+ * 包含：小计、生日折扣、运费、最终总价
+ *
+ * @param array $cartItems 购物车商品列表 (从 DBProcedures::getCartItems 获取)
+ * @return array 计算结果
+ */
+function calculateCartSummary($cartItems) {
+    // 基础小计
+    $subtotal = 0;
+    foreach ($cartItems as $item) {
+        $subtotal += (float)$item['UnitPrice'];
+    }
+
+    // 生日折扣 (15% off during birthday month)
+    $isBirthdayMonth = false;
+    $discountRate = 0;
+    $discountAmount = 0;
+
+    if (isset($_SESSION['birth_month']) && $_SESSION['birth_month'] == date('m')) {
+        $isBirthdayMonth = true;
+        $discountRate = 0.15;
+        $discountAmount = $subtotal * $discountRate;
+    }
+
+    // 运费规则 (Free shipping over 200, otherwise 15)
+    $shippingCost = ($subtotal > 200) ? 0 : 15.00;
+
+    // 最终总价
+    $finalTotal = $subtotal - $discountAmount + $shippingCost;
+
+    return [
+        'subtotal'         => $subtotal,
+        'is_birthday_month' => $isBirthdayMonth,
+        'discount_rate'    => $discountRate,
+        'discount_amount'  => $discountAmount,
+        'shipping_cost'    => $shippingCost,
+        'final_total'      => $finalTotal,
+        'item_count'       => count($cartItems)
+    ];
+}
+
+/**
+ * 计算 POS 购物车总额
+ *
+ * @param array $prices 价格数组
+ * @return float 总额
+ */
+function calculatePOSTotal($prices) {
+    return array_sum(array_map('floatval', $prices));
+}
+
+/**
+ * 验证购物车商品库存状态
+ * 返回已售出/不可用的商品ID列表
+ *
+ * @param PDO $pdo
+ * @param array $stockIds 要验证的库存ID
+ * @return array 不可用的商品ID数组
+ */
+function validateCartItemsAvailability($pdo, $stockIds) {
+    if (empty($stockIds)) return [];
+
+    require_once __DIR__ . '/db_procedures.php';
+
+    $unavailable = [];
+    foreach ($stockIds as $stockId) {
+        $status = DBProcedures::getStockItemStatus($pdo, $stockId);
+        if ($status !== 'Available') {
+            $unavailable[] = $stockId;
+        }
+    }
+    return $unavailable;
+}
+
+/**
+ * 从购物车移除不可用商品
+ *
+ * @param array $unavailableIds 不可用的商品ID数组
+ * @return int 移除的数量
+ */
+function removeUnavailableFromCart($unavailableIds) {
+    if (empty($unavailableIds) || !isset($_SESSION['cart'])) return 0;
+
+    $beforeCount = count($_SESSION['cart']);
+    $_SESSION['cart'] = array_values(array_diff($_SESSION['cart'], $unavailableIds));
+    return $beforeCount - count($_SESSION['cart']);
+}
+
+/**
+ * 添加商品到购物车
+ * 包含库存验证和重复检查
+ *
+ * @param PDO $pdo
+ * @param int $stockId
+ * @return array ['success' => bool, 'message' => string]
+ */
+function addToCart($pdo, $stockId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    // 初始化购物车
+    if (!isset($_SESSION['cart'])) {
+        $_SESSION['cart'] = [];
+    }
+
+    // 检查是否已在购物车
+    if (in_array($stockId, $_SESSION['cart'])) {
+        return ['success' => false, 'message' => 'Item already in cart.'];
+    }
+
+    // 验证库存状态
+    $status = DBProcedures::getStockItemStatus($pdo, $stockId);
+
+    if ($status === 'Available') {
+        $_SESSION['cart'][] = $stockId;
+        return ['success' => true, 'message' => 'Item added to cart.'];
+    } else {
+        return ['success' => false, 'message' => 'Item is no longer available.'];
+    }
+}
+
+/**
+ * 从购物车移除商品
+ *
+ * @param int $stockId
+ * @return bool 是否成功移除
+ */
+function removeFromCart($stockId) {
+    if (!isset($_SESSION['cart'])) return false;
+
+    $key = array_search($stockId, $_SESSION['cart']);
+    if ($key !== false) {
+        unset($_SESSION['cart'][$key]);
+        $_SESSION['cart'] = array_values($_SESSION['cart']);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * 清空购物车
+ */
+function clearCart() {
+    $_SESSION['cart'] = [];
+}
+
+/**
+ * 存储订单计算结果到 Session（用于结账验证）
+ *
+ * @param array $summary 计算汇总
+ */
+function storeCheckoutSummary($summary) {
+    $_SESSION['checkout_summary'] = [
+        'subtotal'        => $summary['subtotal'],
+        'discount_amount' => $summary['discount_amount'],
+        'shipping_cost'   => $summary['shipping_cost'],
+        'final_total'     => $summary['final_total'],
+        'timestamp'       => time()
+    ];
+}
+
+/**
+ * 获取存储的结账汇总（用于结账验证）
+ * 超过30分钟自动失效
+ *
+ * @return array|false
+ */
+function getCheckoutSummary() {
+    if (!isset($_SESSION['checkout_summary'])) return false;
+
+    $summary = $_SESSION['checkout_summary'];
+
+    // 30分钟有效期
+    if (time() - $summary['timestamp'] > 1800) {
+        unset($_SESSION['checkout_summary']);
+        return false;
+    }
+
+    return $summary;
+}
+
+// =============================================
+// 【架构重构】业务逻辑层 - POS 系统
+// =============================================
+
+/**
+ * 获取 POS 购物车数据
+ *
+ * @return array
+ */
+function getPOSCart() {
+    return $_SESSION['pos_cart'] ?? [];
+}
+
+/**
+ * 添加商品到 POS 购物车
+ *
+ * @param int $stockId
+ * @return bool
+ */
+function addToPOSCart($stockId) {
+    if (!isset($_SESSION['pos_cart'])) {
+        $_SESSION['pos_cart'] = [];
+    }
+
+    if (!in_array($stockId, $_SESSION['pos_cart'])) {
+        $_SESSION['pos_cart'][] = $stockId;
+        return true;
+    }
+    return false;
+}
+
+/**
+ * 从 POS 购物车移除商品
+ *
+ * @param int $stockId
+ * @return bool
+ */
+function removeFromPOSCart($stockId) {
+    if (!isset($_SESSION['pos_cart'])) return false;
+
+    $key = array_search($stockId, $_SESSION['pos_cart']);
+    if ($key !== false) {
+        unset($_SESSION['pos_cart'][$key]);
+        $_SESSION['pos_cart'] = array_values($_SESSION['pos_cart']);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * 清空 POS 购物车
+ */
+function clearPOSCart() {
+    $_SESSION['pos_cart'] = [];
+}
+
+// =============================================
+// 【架构重构】业务逻辑层 - 认证与授权
+// =============================================
+
+/**
+ * 执行员工登录
+ *
+ * @param PDO $pdo
+ * @param string $username
+ * @param string $password
+ * @return array ['success' => bool, 'message' => string]
+ */
+function authenticateEmployee($pdo, $username, $password) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $employee = DBProcedures::getEmployeeForAuth($pdo, $username);
+
+    if ($employee && password_verify($password, $employee['PasswordHash'])) {
+        session_regenerate_id(true);
+        $_SESSION['user_id']   = $employee['EmployeeID'];
+        $_SESSION['username']  = $employee['Name'];
+        $_SESSION['role']      = $employee['Role'];
+        $_SESSION['shop_id']   = $employee['ShopID'];
+        $_SESSION['shop_name'] = $employee['ShopName'];
+
+        return ['success' => true, 'role' => $employee['Role']];
+    }
+
+    return ['success' => false, 'message' => 'Invalid username or password.'];
+}
+
+/**
+ * 执行客户登录
+ *
+ * @param PDO $pdo
+ * @param string $email
+ * @param string $password
+ * @return array ['success' => bool, 'message' => string]
+ */
+function authenticateCustomer($pdo, $email, $password) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $customer = DBProcedures::getCustomerForAuth($pdo, $email);
+
+    if ($customer && password_verify($password, $customer['PasswordHash'])) {
+        session_regenerate_id(true);
+        $_SESSION['user_id']   = $customer['CustomerID'];
+        $_SESSION['username']  = $customer['Name'];
+        $_SESSION['role']      = 'Customer';
+        $_SESSION['tier_id']   = $customer['TierID'];
+
+        if ($customer['Birthday']) {
+            $_SESSION['birth_month'] = (int)date('m', strtotime($customer['Birthday']));
+        }
+
+        return ['success' => true];
+    }
+
+    return ['success' => false, 'message' => 'Invalid email or password.'];
+}
+
+/**
+ * 执行客户注册
+ *
+ * @param PDO $pdo
+ * @param string $name
+ * @param string $email
+ * @param string $password
+ * @param string|null $birthday
+ * @return array ['success' => bool, 'message' => string, 'customer_id' => int|null]
+ */
+function registerNewCustomer($pdo, $name, $email, $password, $birthday = null) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $hash = password_hash($password, PASSWORD_DEFAULT);
+    $result = DBProcedures::registerCustomer($pdo, $name, $email, $hash, $birthday);
+
+    if ($result === false) {
+        return ['success' => false, 'message' => 'System error during registration.'];
+    }
+
+    if ($result['customer_id'] == -2) {
+        return ['success' => false, 'message' => 'This email is already registered.'];
+    }
+
+    if ($result['customer_id'] > 0) {
+        // 自动登录
+        session_regenerate_id(true);
+        $_SESSION['user_id']   = $result['customer_id'];
+        $_SESSION['username']  = $name;
+        $_SESSION['role']      = 'Customer';
+        $_SESSION['tier_id']   = $result['tier_id'];
+
+        if ($birthday) {
+            $_SESSION['birth_month'] = (int)date('m', strtotime($birthday));
+        }
+
+        return ['success' => true, 'customer_id' => $result['customer_id']];
+    }
+
+    return ['success' => false, 'message' => 'Registration failed.'];
+}
+
+/**
+ * 获取当前用户的重定向目标
+ *
+ * @param string $role
+ * @return string URL
+ */
+function getLoginRedirectUrl($role) {
+    return match($role) {
+        'Admin'    => BASE_URL . '/admin/users.php',
+        'Manager'  => BASE_URL . '/manager/dashboard.php',
+        'Staff'    => BASE_URL . '/staff/pos.php',
+        'Customer' => BASE_URL . '/customer/catalog.php',
+        default    => BASE_URL . '/index.php'
+    };
+}
+
+// =============================================
+// 【架构重构】数据准备函数 - 页面顶部调用
+// =============================================
+
+/**
+ * 准备购物车页面数据
+ *
+ * @param PDO $pdo
+ * @return array 页面所需的所有数据
+ */
+function prepareCartPageData($pdo) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $cart = $_SESSION['cart'] ?? [];
+    $items = [];
+    $summary = null;
+
+    if (!empty($cart)) {
+        // 验证库存可用性
+        $unavailable = validateCartItemsAvailability($pdo, $cart);
+        if (!empty($unavailable)) {
+            removeUnavailableFromCart($unavailable);
+            $cart = $_SESSION['cart'];
+        }
+
+        // 获取商品详情
+        $items = DBProcedures::getCartItems($pdo, $cart);
+
+        // 计算汇总
+        $summary = calculateCartSummary($items);
+
+        // 存储到 Session 供结账使用
+        storeCheckoutSummary($summary);
+    }
+
+    return [
+        'items'   => $items,
+        'summary' => $summary,
+        'empty'   => empty($items)
+    ];
+}
+
+/**
+ * 准备 POS 页面数据
+ *
+ * @param PDO $pdo
+ * @param int $shopId
+ * @param string|null $searchTerm
+ * @return array
+ */
+function preparePOSPageData($pdo, $shopId, $searchTerm = null) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $searchResults = [];
+    if (!empty($searchTerm)) {
+        $searchResults = DBProcedures::searchPOSItems($pdo, $shopId, $searchTerm);
+    }
+
+    $posCart = getPOSCart();
+    $prices = [];
+    if (!empty($posCart)) {
+        $prices = DBProcedures::getPOSCartPrices($pdo, $posCart);
+    }
+
+    return [
+        'search_results' => $searchResults,
+        'cart'           => $posCart,
+        'total'          => calculatePOSTotal($prices),
+        'search_term'    => $searchTerm
+    ];
+}
+
+/**
+ * 准备仪表板页面数据
+ *
+ * @param PDO $pdo
+ * @return array
+ */
+function prepareDashboardData($pdo) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $kpi = DBProcedures::getKpiStats($pdo);
+    $vips = DBProcedures::getTopCustomers($pdo, 5);
+    $deadStock = DBProcedures::getDeadStockAlert($pdo, 10);
+    $lowStock = DBProcedures::getLowStockAlert($pdo, 10);
+    $shopPerformance = DBProcedures::getShopPerformance($pdo);
+
+    return [
+        'total_sales'      => $kpi['TotalSales'] ?? 0,
+        'active_orders'    => $kpi['ActiveOrders'] ?? 0,
+        'low_stock_count'  => count($lowStock),
+        'top_vip_name'     => !empty($vips) ? $vips[0]['Name'] : 'No Data',
+        'vips'             => $vips,
+        'dead_stock'       => $deadStock,
+        'low_stock'        => $lowStock,
+        'shop_performance' => $shopPerformance
+    ];
+}
 ?>

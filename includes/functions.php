@@ -828,7 +828,7 @@ function prepareProfilePageData($pdo, $customerId) {
     }
 
     $currentPoints = $user['Points'];
-    $nextTierInfo = DBProcedures::getNextMembershipTier($pdo, $currentPoints);
+    $nextTierInfo = DBProcedures::getNextTierInfo($pdo, $currentPoints);
 
     $nextTarget = $nextTierInfo['MinPoints'] ?? 0;
     $nextTierName = $nextTierInfo['TierName'] ?? 'Max Level';
@@ -855,7 +855,7 @@ function prepareProfilePageData($pdo, $customerId) {
 function preparePayPageData($pdo, $orderId, $customerId) {
     require_once __DIR__ . '/db_procedures.php';
 
-    $order = DBProcedures::getOrderForPayment($pdo, $orderId, $customerId);
+    $order = DBProcedures::getPendingOrder($pdo, $orderId, $customerId);
 
     if (!$order) {
         return ['found' => false];
@@ -1164,13 +1164,13 @@ function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
     }
 
     // 验证订单
-    $order = DBProcedures::getOrderForPayment($pdo, $orderId, $customerId);
+    $order = DBProcedures::getPendingOrder($pdo, $orderId, $customerId);
     if (!$order) {
         return ['success' => false, 'message' => 'Order not found or already paid.'];
     }
 
     // 验证库存仍然预留
-    $reservedCount = DBProcedures::validateOrderReservedItems($pdo, $orderId);
+    $reservedCount = DBProcedures::getOrderReservedCount($pdo, $orderId);
     if ($reservedCount == 0) {
         return ['success' => false, 'message' => 'Order items expired. Please create a new order.'];
     }

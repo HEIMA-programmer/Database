@@ -7,8 +7,10 @@ DELETE FROM OrderLine;
 DELETE FROM CustomerOrder;
 DELETE FROM InventoryTransfer;
 DELETE FROM StockItem;
-DELETE FROM PurchaseOrderLine;
-DELETE FROM PurchaseOrder;
+DELETE FROM SupplierOrderLine;
+DELETE FROM SupplierOrder;
+DELETE FROM BuybackOrderLine;
+DELETE FROM BuybackOrder;
 DELETE FROM Track;
 DELETE FROM ReleaseAlbum;
 DELETE FROM Customer;
@@ -24,7 +26,8 @@ ALTER TABLE Employee AUTO_INCREMENT = 1;
 ALTER TABLE Customer AUTO_INCREMENT = 1;
 ALTER TABLE Supplier AUTO_INCREMENT = 1;
 ALTER TABLE ReleaseAlbum AUTO_INCREMENT = 1;
-ALTER TABLE PurchaseOrder AUTO_INCREMENT = 1;
+ALTER TABLE SupplierOrder AUTO_INCREMENT = 1;
+ALTER TABLE BuybackOrder AUTO_INCREMENT = 1;
 ALTER TABLE StockItem AUTO_INCREMENT = 1;
 ALTER TABLE CustomerOrder AUTO_INCREMENT = 1;
 ALTER TABLE InventoryTransfer AUTO_INCREMENT = 1;
@@ -109,42 +112,28 @@ INSERT INTO Track (ReleaseID, Title, TrackNumber, Duration) VALUES
 (3, 'Billie Jean', 6, '4:54'),
 (3, 'Beat It', 5, '4:18');
 
--- ==========================================
--- 6. 采购订单
--- BuybackCustomerID added to track which customer sold items back
--- ==========================================
-INSERT INTO PurchaseOrder (SupplierID, BuybackCustomerID, CreatedByEmployeeID, OrderDate, Status, SourceType) VALUES
--- 70天前的采购，用于测试滞销预警
-(1, NULL, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received', 'Supplier'),
--- 30天前的采购
-(2, NULL, 1, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', 'Supplier'),
--- 10天前的采购
-(3, NULL, 1, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', 'Supplier'),
--- 最近的采购
-(4, NULL, 2, DATE_SUB(NOW(), INTERVAL 3 DAY), 'Received', 'Supplier'),
--- 二手回购 - 从客户Bob Collector (CustomerID=2) 处回购
-(NULL, 2, 3, DATE_SUB(NOW(), INTERVAL 5 DAY), 'Received', 'Buyback');
+-- 2. 插入供应商订单 (替换原 PurchaseOrder 1-4 号数据)
+INSERT INTO SupplierOrder (SupplierID, CreatedByEmployeeID, DestinationShopID, OrderDate, Status) VALUES
+(1, 1, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received'),
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received'),
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received'),
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 3 DAY), 'Received');
 
-INSERT INTO PurchaseOrderLine (PO_ID, ReleaseID, Quantity, UnitCost) VALUES
--- PO 1: 老库存
-(1, 1, 10, 20.00),  -- Abbey Road
-(1, 2, 8, 25.00),   -- Dark Side
--- PO 2: 中期库存
-(2, 3, 15, 15.00),  -- Thriller
-(2, 4, 10, 18.00),  -- Kind of Blue
-(2, 5, 12, 22.00),  -- Back in Black
--- PO 3: 新库存
-(3, 6, 20, 20.00),  -- Rumours
-(3, 7, 15, 24.00),  -- Led Zeppelin IV
-(3, 8, 10, 28.00),  -- The Wall
--- PO 4: 最新库存
-(4, 9, 25, 22.00),  -- A Night at the Opera
-(4, 10, 20, 20.00), -- Hotel California
-(4, 11, 15, 18.00), -- Born to Run
--- PO 5: 二手回购
-(5, 12, 3, 12.00),  -- Blue (二手)
-(5, 13, 2, 15.00);  -- What's Going On (二手)
+-- 3. 插入供应商订单明细 (替换原 PurchaseOrderLine 1-11 行)
+INSERT INTO SupplierOrderLine (SupplierOrderID, ReleaseID, Quantity, UnitCost) VALUES
+(1, 1, 10, 20.00), (1, 2, 8, 25.00),
+(2, 3, 15, 15.00), (2, 4, 10, 18.00), (2, 5, 12, 22.00),
+(3, 6, 20, 20.00), (3, 7, 15, 24.00), (3, 8, 10, 28.00),
+(4, 9, 25, 22.00), (4, 10, 20, 20.00), (4, 11, 15, 18.00);
 
+-- 4. 插入回购订单 (替换原 PurchaseOrder 5 号数据)
+INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, BuybackDate, Status) VALUES
+(2, 3, 3, DATE_SUB(NOW(), INTERVAL 5 DAY), 'Completed');
+
+-- 5. 插入回购订单明细 (替换原 PurchaseOrderLine 12-13 行)
+INSERT INTO BuybackOrderLine (BuybackOrderID, ReleaseID, Quantity, UnitPrice, ConditionGrade) VALUES
+(1, 12, 3, 12.00, 'VG+'),
+(1, 13, 2, 15.00, 'NM')
 -- ==========================================
 -- 7. 库存项 (更完整的数据)
 -- ==========================================

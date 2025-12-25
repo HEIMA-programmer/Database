@@ -29,20 +29,20 @@ WHERE co.OrderStatus IN ('Paid', 'Completed')
 GROUP BY c.CustomerID, c.Name, c.Email, mt.TierName
 LIMIT 10;
 
--- Query 3: Profit Margin Analysis by Artist (按艺术家分析利润率)
--- Technique: Subquery, Calculated Fields
--- Business Value: Shows which artists are most profitable
+-- Query 3: 按艺术家分析利润率 (修改后)
 SELECT 
     r.ArtistName,
     SUM(ol.PriceAtSale) as TotalRevenue,
-    (SELECT SUM(pol.UnitCost) 
-     FROM PurchaseOrderLine pol 
-     WHERE pol.ReleaseID IN (SELECT ReleaseID FROM ReleaseAlbum WHERE ArtistName = r.ArtistName)
+    -- 从供应商订单明细中获取成本
+    (SELECT SUM(sol.Quantity * sol.UnitCost) 
+     FROM SupplierOrderLine sol 
+     WHERE sol.ReleaseID IN (SELECT ReleaseID FROM ReleaseAlbum WHERE ArtistName = r.ArtistName)
     ) as ApproximateCost,
+    -- 计算毛利
     (SUM(ol.PriceAtSale) - 
-        (SELECT SUM(pol.UnitCost) 
-         FROM PurchaseOrderLine pol 
-         WHERE pol.ReleaseID IN (SELECT ReleaseID FROM ReleaseAlbum WHERE ArtistName = r.ArtistName))
+        (SELECT SUM(sol.Quantity * sol.UnitCost) 
+         FROM SupplierOrderLine sol 
+         WHERE sol.ReleaseID IN (SELECT ReleaseID FROM ReleaseAlbum WHERE ArtistName = r.ArtistName))
     ) as GrossProfit
 FROM OrderLine ol
 JOIN StockItem s ON ol.StockItemID = s.StockItemID

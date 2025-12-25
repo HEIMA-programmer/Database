@@ -972,38 +972,6 @@ class DBProcedures {
         }
     }
 
-    // ----------------
-    // 支付验证相关 (Customer)
-    // ----------------
-
-    /**
-     * 获取待支付订单验证
-     */
-    public static function getOrderForPayment($pdo, $orderId, $customerId) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM CustomerOrder WHERE OrderID = ? AND CustomerID = ? AND OrderStatus = 'Pending'");
-            $stmt->execute([$orderId, $customerId]);
-            return $stmt->fetch();
-        } catch (PDOException $e) {
-            error_log("getOrderForPayment Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * 验证订单预留商品状态
-     */
-    public static function validateOrderReservedItems($pdo, $orderId) {
-        try {
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM OrderLine ol JOIN StockItem s ON ol.StockItemID = s.StockItemID WHERE ol.OrderID = ? AND s.Status = 'Reserved'");
-            $stmt->execute([$orderId]);
-            return (int)$stmt->fetchColumn();
-        } catch (PDOException $e) {
-            error_log("validateOrderReservedItems Error: " . $e->getMessage());
-            return 0;
-        }
-    }
-
     /**
      * 获取订单详情（客户端）
      */
@@ -1029,79 +997,6 @@ class DBProcedures {
         } catch (PDOException $e) {
             error_log("getOrderItems Error: " . $e->getMessage());
             return [];
-        }
-    }
-
-    /**
-     * 获取会员升级进度
-     */
-    public static function getNextMembershipTier($pdo, $currentPoints) {
-        try {
-            $stmt = $pdo->prepare("SELECT MinPoints, TierName FROM MembershipTier WHERE MinPoints > ? ORDER BY MinPoints ASC LIMIT 1");
-            $stmt->execute([$currentPoints]);
-            return $stmt->fetch();
-        } catch (PDOException $e) {
-            error_log("getNextMembershipTier Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    // ----------------
-    // 库存和调拨相关
-    // ----------------
-
-    /**
-     * 获取库存项用于调拨验证
-     */
-    public static function getStockItemForTransfer($pdo, $stockId) {
-        try {
-            $stmt = $pdo->prepare("SELECT ShopID, Status FROM StockItem WHERE StockItemID = ? AND Status = 'Available'");
-            $stmt->execute([$stockId]);
-            return $stmt->fetch();
-        } catch (PDOException $e) {
-            error_log("getStockItemForTransfer Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * 获取客户简单列表（用于下拉选择）
-     */
-    public static function getCustomerSimpleList($pdo) {
-        try {
-            return $pdo->query("SELECT CustomerID, Name, Email FROM vw_customer_simple_list")->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getCustomerSimpleList Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 获取回购订单列表
-     */
-    public static function getBuybackOrders($pdo, $shopId, $limit = 10) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_buyback_orders WHERE ShopName = (SELECT Name FROM Shop WHERE ShopID = ?) ORDER BY BuybackDate DESC LIMIT ?");
-            $stmt->execute([$shopId, $limit]);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getBuybackOrders Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 处理回购
-     */
-    public static function processBuyback($pdo, $customerId, $empId, $shopId, $releaseId, $quantity, $buyPrice, $condition, $resalePrice) {
-        try {
-            $stmt = $pdo->prepare("CALL sp_process_buyback(?, ?, ?, ?, ?, ?, ?, ?, @buyback_id)");
-            $stmt->execute([$customerId, $empId, $shopId, $releaseId, $quantity, $buyPrice, $condition, $resalePrice]);
-            $result = $pdo->query("SELECT @buyback_id AS buyback_id")->fetch();
-            return $result['buyback_id'] > 0 ? $result['buyback_id'] : false;
-        } catch (PDOException $e) {
-            error_log("processBuyback Error: " . $e->getMessage());
-            return false;
         }
     }
 

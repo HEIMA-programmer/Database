@@ -386,7 +386,7 @@ DROP PROCEDURE IF EXISTS sp_complete_order$$
 -- 【注意】p_points_earned 参数为向后兼容保留，实际积分由触发器 trg_after_order_complete 自动计算
 -- 调用方传递的值不会被使用
 CREATE PROCEDURE sp_complete_order(
-    IN p_order_id INT,
+    IN p_order_id INT
 )
 BEGIN
     DECLARE v_customer_id INT;

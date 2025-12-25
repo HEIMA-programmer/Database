@@ -14,9 +14,16 @@ $topVipName = !empty($vips) ? $vips[0]['Name'] : 'No Data';
 // 使用视图查询死库存预警（超过60天未售出）
 $deadStock = $pdo->query("SELECT * FROM vw_dead_stock_alert LIMIT 10")->fetchAll();
 
+// 【新增】使用视图查询低库存预警（库存少于3件）
+$lowStock = $pdo->query("SELECT * FROM vw_low_stock_alert LIMIT 10")->fetchAll();
+
+// 【新增】使用视图查询店铺业绩
+$shopPerformance = $pdo->query("SELECT * FROM vw_manager_shop_performance ORDER BY Revenue DESC")->fetchAll();
+
 // --- KPI Stats ---
 $totalSales = $pdo->query("SELECT SUM(TotalAmount) FROM CustomerOrder WHERE OrderStatus != 'Cancelled'")->fetchColumn() ?: 0.00;
 $activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE OrderStatus IN ('Pending', 'Paid', 'Shipped')")->fetchColumn();
+$lowStockCount = count($lowStock);
 ?>
 
 <div class="row mb-4">
@@ -48,6 +55,14 @@ $activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE OrderStatu
             <div class="card-body">
                 <h6 class="text-warning text-uppercase mb-2">Top VIP</h6>
                 <h3 class="text-white fw-bold"><?= h($topVipName) ?></h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card bg-dark border-danger h-100">
+            <div class="card-body">
+                <h6 class="text-danger text-uppercase mb-2">Low Stock Items</h6>
+                <h3 class="text-white fw-bold"><?= $lowStockCount ?> Types</h3>
             </div>
         </div>
     </div>
@@ -114,6 +129,76 @@ $activeOrders = $pdo->query("SELECT COUNT(*) FROM CustomerOrder WHERE OrderStatu
                         <?php endforeach; ?>
                         <?php if(empty($deadStock)): ?>
                             <tr><td colspan="3" class="text-center text-success py-3">No stagnant inventory found! Excellent work.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 【新增】低库存预警和店铺业绩 -->
+<div class="row g-4 mt-4">
+    <div class="col-lg-6">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-header border-secondary bg-transparent">
+                <h5 class="card-title text-danger mb-0"><i class="fa-solid fa-boxes-stacked me-2"></i>Low Stock Alert (< 3 Units)</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Album</th>
+                            <th>Shop</th>
+                            <th class="text-center">Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($lowStock as $ls): ?>
+                        <tr>
+                            <td>
+                                <div><?= h($ls['Title']) ?></div>
+                                <small class="text-muted"><?= h($ls['ArtistName']) ?></small>
+                            </td>
+                            <td><?= h($ls['ShopName']) ?></td>
+                            <td class="text-center"><span class="badge bg-danger"><?= $ls['AvailableQuantity'] ?></span></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if(empty($lowStock)): ?>
+                            <tr><td colspan="3" class="text-center text-success py-3">All items well stocked!</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-header border-secondary bg-transparent">
+                <h5 class="card-title text-info mb-0"><i class="fa-solid fa-store me-2"></i>Shop Performance</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Shop</th>
+                            <th>Type</th>
+                            <th class="text-center">Orders</th>
+                            <th class="text-end">Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($shopPerformance as $sp): ?>
+                        <tr>
+                            <td class="fw-bold"><?= h($sp['ShopName']) ?></td>
+                            <td><span class="badge bg-secondary"><?= h($sp['Type']) ?></span></td>
+                            <td class="text-center"><?= $sp['TotalOrders'] ?></td>
+                            <td class="text-end text-success fw-bold"><?= formatPrice($sp['Revenue']) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if(empty($shopPerformance)): ?>
+                            <tr><td colspan="4" class="text-center text-muted py-3">No sales data yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>

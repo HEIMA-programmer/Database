@@ -5,18 +5,14 @@ requireRole('Manager');
 require_once __DIR__ . '/../../includes/header.php';
 
 // --- Report: Inventory Turnover Rate ---
-// 计算已售出商品的平均售出天数 (DateSold - AcquiredDate)
+// 【修复】使用视图 vw_report_sales_by_genre 替代直接表查询
 $turnoverSql = "
     SELECT
-        r.Genre,
-        COUNT(s.StockItemID) as ItemsSold,
-        AVG(DATEDIFF(COALESCE(s.DateSold, NOW()), s.AcquiredDate)) as AvgDaysToSell,
-        SUM(ol.PriceAtSale) as RevenueGenerated
-    FROM StockItem s
-    JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
-    JOIN OrderLine ol ON s.StockItemID = ol.StockItemID
-    WHERE s.Status = 'Sold'
-    GROUP BY r.Genre
+        Genre,
+        ItemsSold,
+        AvgDaysToSell,
+        TotalRevenue as RevenueGenerated
+    FROM vw_report_sales_by_genre
     ORDER BY AvgDaysToSell ASC
 ";
 $turnoverStats = $pdo->query($turnoverSql)->fetchAll();

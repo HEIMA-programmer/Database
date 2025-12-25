@@ -62,35 +62,19 @@ try {
         }
     }
 
-    // 5. 计算积分（暂不完成订单，等待支付）
-    $pointsEarned = floor($totalAmount);
+    // 5. 【修复】在线订单保持 Pending 状态，等待用户支付
+    // 不在此处调用 completeOrder，让用户去支付页面完成
+    // 积分和会员升级由 pay.php 中的 completeOrder 触发器自动处理
 
-    // 6. 使用存储过程完成订单
-    $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
-
-    if (!$success) {
-        throw new Exception("Failed to complete order.");
-    }
-
-    // 7. 使用改进后的函数处理积分和升级（内部使用存储过程）
-    $result = addPointsAndCheckUpgrade($pdo, $customerId, $totalAmount);
-
-    // 8. 提交事务
+    // 6. 提交事务
     $pdo->commit();
 
-    // 构建成功消息
-    $msg = "Order placed successfully! Order ID: #$orderId.";
-    if ($result && $result['points_earned'] > 0) {
-        $msg .= " You earned {$result['points_earned']} points!";
-    }
-    if ($result && $result['upgraded']) {
-        $msg .= " 🌟 Congratulations! You've been upgraded to {$result['new_tier_name']} Tier!";
-    }
-
-    // 清空购物车
+    // 7. 清空购物车
     unset($_SESSION['cart']);
-    flash($msg, 'success');
-    header("Location: orders.php");
+
+    // 8. 重定向到支付页面
+    flash("Order #$orderId created! Please complete your payment.", 'info');
+    header("Location: pay.php?order_id=$orderId");
     exit();
 
 } catch (Exception $e) {

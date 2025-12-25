@@ -1,42 +1,25 @@
 <?php
+/**
+ * 【架构重构】商品目录页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Customer');
-require_once __DIR__ . '/../../includes/header.php';
 
-// 处理筛选参数
+// ========== 数据准备 ==========
 $search = $_GET['q'] ?? '';
 $genre  = $_GET['genre'] ?? '';
-$params = [];
 
-// 使用视图查询
-$sql = "SELECT * FROM vw_customer_catalog WHERE 1=1";
+$pageData = prepareCatalogPageData($pdo, $search, $genre);
+$items = $pageData['items'];
+$genres = $pageData['genres'];
 
-if (!empty($search)) {
-    $sql .= " AND (Title LIKE :search OR ArtistName LIKE :search)";
-    $params[':search'] = "%$search%";
-}
-
-if (!empty($genre)) {
-    $sql .= " AND Genre = :genre";
-    $params[':genre'] = $genre;
-}
-
-$sql .= " ORDER BY Title ASC, ConditionGrade ASC";
-
-try {
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $items = $stmt->fetchAll();
-
-    // 获取流派列表（从视图中获取，确保只显示有库存的流派）
-    $genres = $pdo->query("SELECT DISTINCT Genre FROM vw_customer_catalog ORDER BY Genre")->fetchAll(PDO::FETCH_COLUMN);
-} catch (PDOException $e) {
-    error_log($e->getMessage());
-    $items = [];
-}
+require_once __DIR__ . '/../../includes/header.php';
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="row mb-5 align-items-end">
     <div class="col-md-6">
         <h1 class="display-5 text-warning fw-bold mb-0">Vinyl Catalog</h1>
@@ -81,15 +64,15 @@ try {
                             <?= h($item['Genre']) ?>
                         </span>
                     </div>
-                    
+
                     <div class="card-body text-center">
                         <h5 class="card-title text-white mb-1 text-truncate" title="<?= h($item['Title']) ?>">
                             <?= h($item['Title']) ?>
                         </h5>
                         <p class="card-text text-warning small mb-3"><?= h($item['ArtistName']) ?></p>
-                        
+
                         <div class="d-flex justify-content-center gap-2 mb-3">
-                            <?php 
+                            <?php
                                 $condClass = match($item['ConditionGrade']) {
                                     'New', 'Mint' => 'bg-success text-white',
                                     'NM', 'VG+'   => 'bg-info text-dark',

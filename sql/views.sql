@@ -530,3 +530,33 @@ SELECT
     DiscountRate
 FROM MembershipTier
 ORDER BY MinPoints ASC;
+
+-- 31. [架构重构] 在线订单履约视图
+-- 替换 fulfillment.php 中的直接查询
+CREATE OR REPLACE VIEW vw_staff_online_orders_pending AS
+SELECT
+    co.OrderID,
+    co.CustomerID,
+    co.OrderDate,
+    co.OrderStatus,
+    co.TotalAmount,
+    co.OrderType,
+    c.Name AS CustomerName,
+    c.Email AS CustomerEmail,
+    (SELECT COUNT(*) FROM OrderLine WHERE OrderID = co.OrderID) AS ItemCount
+FROM CustomerOrder co
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+WHERE co.OrderType = 'Online'
+  AND co.OrderStatus IN ('Paid', 'Shipped');
+
+-- 32. [架构重构] 月度销售报表视图
+-- 替换 reports.php 中的直接聚合查询
+CREATE OR REPLACE VIEW vw_report_monthly_sales AS
+SELECT
+    DATE_FORMAT(OrderDate, '%Y-%m') AS SalesMonth,
+    COUNT(*) AS OrderCount,
+    SUM(TotalAmount) AS MonthlyRevenue
+FROM CustomerOrder
+WHERE OrderStatus != 'Cancelled'
+GROUP BY SalesMonth
+ORDER BY SalesMonth DESC;

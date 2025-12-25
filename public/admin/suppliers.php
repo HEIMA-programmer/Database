@@ -1,63 +1,40 @@
 <?php
+/**
+ * 【架构重构】供应商管理页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Admin');
+
+// ========== POST 请求处理 ==========
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = isset($_POST['add_supplier']) ? 'add' :
+             (isset($_POST['edit_supplier']) ? 'edit' :
+             (isset($_POST['delete_supplier']) ? 'delete' : ''));
+
+    $data = [
+        'supplier_id' => $_POST['supplier_id'] ?? null,
+        'name'        => trim($_POST['name'] ?? ''),
+        'email'       => trim($_POST['email'] ?? '')
+    ];
+
+    $result = handleSupplierAction($pdo, $action, $data);
+    flash($result['message'], $result['success'] ? ($result['type'] ?? 'success') : 'danger');
+
+    header("Location: suppliers.php");
+    exit();
+}
+
+// ========== 数据准备 ==========
+$pageData = prepareSuppliersPageData($pdo);
+$suppliers = $pageData['suppliers'];
+
 require_once __DIR__ . '/../../includes/header.php';
-
-// --- 处理表单提交 ---
-
-// 1. 添加供应商
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_supplier'])) {
-    try {
-        $stmt = $pdo->prepare("INSERT INTO Supplier (Name, Email) VALUES (?, ?)");
-        $stmt->execute([trim($_POST['name']), trim($_POST['email'])]);
-        flash("Supplier added successfully.", 'success');
-    } catch (PDOException $e) {
-        flash("Error adding supplier: " . $e->getMessage(), 'danger');
-    }
-    header("Location: suppliers.php");
-    exit();
-}
-
-// 2. 编辑供应商
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_supplier'])) {
-    try {
-        $stmt = $pdo->prepare("UPDATE Supplier SET Name = ?, Email = ? WHERE SupplierID = ?");
-        $stmt->execute([trim($_POST['name']), trim($_POST['email']), $_POST['supplier_id']]);
-        flash("Supplier details updated.", 'success');
-    } catch (PDOException $e) {
-        flash("Error updating supplier: " . $e->getMessage(), 'danger');
-    }
-    header("Location: suppliers.php");
-    exit();
-}
-
-// 3. 删除供应商 (工业级：先检查依赖)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_supplier'])) {
-    $id = $_POST['supplier_id'];
-
-    // 检查是否有关联的供应商订单
-    $check = $pdo->prepare("SELECT COUNT(*) FROM SupplierOrder WHERE SupplierID = ?");
-    $check->execute([$id]);
-
-    if ($check->fetchColumn() > 0) {
-        flash("Cannot delete supplier: There are existing Supplier Orders linked to this supplier.", 'danger');
-    } else {
-        try {
-            $pdo->prepare("DELETE FROM Supplier WHERE SupplierID = ?")->execute([$id]);
-            flash("Supplier deleted successfully.", 'warning');
-        } catch (PDOException $e) {
-            flash("Delete failed: " . $e->getMessage(), 'danger');
-        }
-    }
-    header("Location: suppliers.php");
-    exit();
-}
-
-// --- 数据查询 ---
-$suppliers = $pdo->query("SELECT * FROM Supplier ORDER BY Name ASC")->fetchAll();
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="text-warning"><i class="fa-solid fa-truck-field me-2"></i>Supplier Management</h2>
     <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addModal">
@@ -83,15 +60,15 @@ $suppliers = $pdo->query("SELECT * FROM Supplier ORDER BY Name ASC")->fetchAll()
                     <td class="fw-bold text-white"><?= h($s['Name']) ?></td>
                     <td class="text-info"><?= h($s['Email']) ?></td>
                     <td>
-                        <button class="btn btn-sm btn-outline-info me-2 edit-btn" 
-                                data-bs-toggle="modal" 
+                        <button class="btn btn-sm btn-outline-info me-2 edit-btn"
+                                data-bs-toggle="modal"
                                 data-bs-target="#editModal"
                                 data-id="<?= $s['SupplierID'] ?>"
                                 data-name="<?= h($s['Name']) ?>"
                                 data-email="<?= h($s['Email']) ?>">
                             <i class="fa-solid fa-pen-to-square"></i> Edit
                         </button>
-                        
+
                         <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure? This action cannot be undone.');">
                             <input type="hidden" name="delete_supplier" value="1">
                             <input type="hidden" name="supplier_id" value="<?= $s['SupplierID'] ?>">
@@ -166,7 +143,6 @@ $suppliers = $pdo->query("SELECT * FROM Supplier ORDER BY Name ASC")->fetchAll()
 </div>
 
 <script>
-    // JS Logic to populate Edit Modal
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             document.getElementById('edit_id').value = this.dataset.id;

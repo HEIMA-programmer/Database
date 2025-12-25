@@ -1,34 +1,25 @@
 <?php
+/**
+ * 【架构重构】库存管理页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole(['Staff', 'Manager']);
-require_once __DIR__ . '/../../includes/header.php';
 
+// ========== 数据准备 ==========
 $shopId = $_SESSION['shop_id'];
-$viewMode = $_GET['view'] ?? 'detail'; // 'detail' 或 'summary'
+$viewMode = $_GET['view'] ?? 'detail';
 
-// 【修复】根据视图模式使用不同的查询
-if ($viewMode === 'summary') {
-    // 使用 vw_inventory_summary 视图获取库存汇总
-    $sql = "SELECT * FROM vw_inventory_summary WHERE ShopID = :shop ORDER BY Title, ConditionGrade";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([':shop' => $shopId]);
-    $inventory = $stmt->fetchAll();
-    $totalItems = array_sum(array_column($inventory, 'AvailableQuantity'));
-} else {
-    // 详细列表：查询本店库存单品
-    $sql = "SELECT s.*, r.Title, r.ArtistName
-            FROM StockItem s
-            JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
-            WHERE s.ShopID = :shop AND s.Status = 'Available'
-            ORDER BY s.AcquiredDate DESC";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([':shop' => $shopId]);
-    $inventory = $stmt->fetchAll();
-    $totalItems = count($inventory);
-}
+$pageData = prepareInventoryPageData($pdo, $shopId, $viewMode);
+$inventory = $pageData['inventory'];
+$totalItems = $pageData['total_items'];
+
+require_once __DIR__ . '/../../includes/header.php';
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="text-warning"><i class="fa-solid fa-boxes-stacked me-2"></i>Local Inventory</h2>
     <div class="d-flex gap-2 align-items-center">
@@ -45,7 +36,6 @@ if ($viewMode === 'summary') {
 </div>
 
 <?php if ($viewMode === 'summary'): ?>
-<!-- 汇总视图 - 使用 vw_inventory_summary 视图 -->
 <div class="card bg-dark border-secondary">
     <div class="table-responsive">
         <table class="table table-dark table-hover align-middle mb-0">
@@ -96,7 +86,6 @@ if ($viewMode === 'summary') {
 </div>
 
 <?php else: ?>
-<!-- 详细视图 - 原始单品列表 -->
 <div class="card bg-dark border-secondary">
     <div class="table-responsive">
         <table class="table table-dark table-hover align-middle mb-0">
@@ -122,9 +111,8 @@ if ($viewMode === 'summary') {
                     <td class="text-warning"><?= formatPrice($item['UnitPrice']) ?></td>
                     <td>
                         <?php
-                        $days = floor((time() - strtotime($item['AcquiredDate'])) / (60 * 60 * 24));
+                        $days = $item['DaysInStock'] ?? floor((time() - strtotime($item['AcquiredDate'])) / (60 * 60 * 24));
                         echo $days;
-                        // Assignment 1.3.2: 60-day turnover target
                         if ($days > 60) echo ' <span class="badge bg-danger ms-1">Slow</span>';
                         ?>
                     </td>

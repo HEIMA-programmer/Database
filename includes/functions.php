@@ -626,4 +626,644 @@ function prepareDashboardData($pdo) {
         'shop_performance' => $shopPerformance
     ];
 }
+
+// =============================================
+// 【架构重构】Admin 模块 - 数据准备函数
+// =============================================
+
+/**
+ * 准备用户管理页面数据
+ */
+function prepareUsersPageData($pdo) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    return [
+        'employees' => DBProcedures::getEmployeeList($pdo),
+        'customers' => DBProcedures::getCustomerList($pdo),
+        'shops'     => DBProcedures::getShopList($pdo),
+        'roles'     => ['Admin', 'Manager', 'Staff']
+    ];
+}
+
+/**
+ * 准备供应商管理页面数据
+ */
+function prepareSuppliersPageData($pdo) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    return [
+        'suppliers' => DBProcedures::getSupplierList($pdo)
+    ];
+}
+
+/**
+ * 准备产品管理页面数据
+ */
+function prepareProductsPageData($pdo) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    // 使用视图获取专辑列表
+    try {
+        $releases = $pdo->query("SELECT * FROM vw_admin_release_list ORDER BY ReleaseID DESC")->fetchAll();
+    } catch (PDOException $e) {
+        error_log("prepareProductsPageData Error: " . $e->getMessage());
+        $releases = [];
+    }
+
+    return [
+        'releases' => $releases
+    ];
+}
+
+/**
+ * 准备采购管理页面数据
+ */
+function prepareProcurementPageData($pdo) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $warehouseId = getShopIdByType($pdo, 'Warehouse');
+
+    return [
+        'warehouse_id'  => $warehouseId,
+        'suppliers'     => DBProcedures::getSupplierList($pdo),
+        'releases'      => DBProcedures::getReleaseList($pdo),
+        'pending_orders'=> DBProcedures::getPendingSupplierOrders($pdo)
+    ];
+}
+
+// =============================================
+// 【架构重构】Staff 模块 - 数据准备函数
+// =============================================
+
+/**
+ * 准备库存管理页面数据
+ */
+function prepareInventoryPageData($pdo, $shopId, $viewMode = 'detail') {
+    require_once __DIR__ . '/db_procedures.php';
+
+    if ($viewMode === 'summary') {
+        $inventory = DBProcedures::getInventorySummary($pdo, $shopId);
+        $totalItems = array_sum(array_column($inventory, 'AvailableQuantity'));
+    } else {
+        $inventory = DBProcedures::getInventoryDetail($pdo, $shopId);
+        $totalItems = count($inventory);
+    }
+
+    return [
+        'inventory'    => $inventory,
+        'total_items'  => $totalItems,
+        'view_mode'    => $viewMode
+    ];
+}
+
+/**
+ * 准备取货页面数据
+ */
+function preparePickupPageData($pdo, $shopId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    return [
+        'orders' => DBProcedures::getBopisPendingOrders($pdo, $shopId)
+    ];
+}
+
+/**
+ * 准备履约页面数据
+ */
+function prepareFulfillmentPageData($pdo) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    return [
+        'paid_orders'    => DBProcedures::getOnlineOrdersAwaitingShipment($pdo),
+        'shipped_orders' => DBProcedures::getOnlineOrdersShipped($pdo)
+    ];
+}
+
+/**
+ * 准备回购页面数据
+ */
+function prepareBuybackPageData($pdo, $shopId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    return [
+        'releases'        => DBProcedures::getReleaseList($pdo),
+        'customers'       => DBProcedures::getCustomerSimpleList($pdo),
+        'recent_buybacks' => DBProcedures::getBuybackOrders($pdo, $shopId, 10)
+    ];
+}
+
+// =============================================
+// 【架构重构】Manager 模块 - 数据准备函数
+// =============================================
+
+/**
+ * 准备调拨页面数据
+ */
+function prepareTransferPageData($pdo) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    return [
+        'shops'   => DBProcedures::getShopList($pdo),
+        'pending' => DBProcedures::getPendingTransfers($pdo)
+    ];
+}
+
+/**
+ * 准备报表页面数据
+ */
+function prepareReportsPageData($pdo) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    return [
+        'turnover_stats' => DBProcedures::getSalesByGenre($pdo),
+        'sales_trend'    => DBProcedures::getMonthlySalesTrend($pdo, 12)
+    ];
+}
+
+// =============================================
+// 【架构重构】Customer 模块 - 数据准备函数
+// =============================================
+
+/**
+ * 准备商品目录页面数据
+ */
+function prepareCatalogPageData($pdo, $search = '', $genre = '') {
+    require_once __DIR__ . '/db_procedures.php';
+
+    return [
+        'items'  => DBProcedures::getCatalogItems($pdo, $search, $genre),
+        'genres' => DBProcedures::getCatalogGenres($pdo)
+    ];
+}
+
+/**
+ * 准备商品详情页面数据
+ */
+function prepareProductDetailData($pdo, $stockId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $item = DBProcedures::getProductDetail($pdo, $stockId);
+
+    if (!$item) {
+        return ['found' => false];
+    }
+
+    return [
+        'found'        => true,
+        'item'         => $item,
+        'alternatives' => DBProcedures::getProductAlternatives($pdo, $item['ReleaseID'], $stockId, 5)
+    ];
+}
+
+/**
+ * 准备个人资料页面数据
+ */
+function prepareProfilePageData($pdo, $customerId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $user = DBProcedures::getCustomerProfile($pdo, $customerId);
+
+    if (!$user) {
+        return null;
+    }
+
+    $currentPoints = $user['Points'];
+    $nextTierInfo = DBProcedures::getNextMembershipTier($pdo, $currentPoints);
+
+    $nextTarget = $nextTierInfo['MinPoints'] ?? 0;
+    $nextTierName = $nextTierInfo['TierName'] ?? 'Max Level';
+    $progress = 0;
+
+    if ($nextTarget > 0) {
+        $progress = min(100, ($currentPoints / $nextTarget) * 100);
+    } else {
+        $progress = 100;
+    }
+
+    return [
+        'user'           => $user,
+        'current_points' => $currentPoints,
+        'next_target'    => $nextTarget,
+        'next_tier_name' => $nextTierName,
+        'progress'       => $progress
+    ];
+}
+
+/**
+ * 准备支付页面数据
+ */
+function preparePayPageData($pdo, $orderId, $customerId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $order = DBProcedures::getOrderForPayment($pdo, $orderId, $customerId);
+
+    if (!$order) {
+        return ['found' => false];
+    }
+
+    return [
+        'found' => true,
+        'order' => $order
+    ];
+}
+
+/**
+ * 准备订单详情页面数据
+ */
+function prepareOrderDetailPageData($pdo, $orderId, $customerId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $order = DBProcedures::getCustomerOrderDetail($pdo, $orderId, $customerId);
+
+    if (!$order) {
+        return ['found' => false];
+    }
+
+    // 计算状态样式
+    $statusClass = match($order['OrderStatus']) {
+        'Paid' => 'bg-success',
+        'Completed' => 'bg-success',
+        'Shipped' => 'bg-info',
+        'Pending' => 'bg-warning text-dark',
+        'Cancelled' => 'bg-danger',
+        default => 'bg-secondary'
+    };
+
+    return [
+        'found'        => true,
+        'order'        => $order,
+        'items'        => DBProcedures::getOrderItems($pdo, $orderId, $customerId),
+        'status_class' => $statusClass
+    ];
+}
+
+/**
+ * 准备订单列表页面数据
+ */
+function prepareOrdersPageData($pdo, $customerId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    return [
+        'orders' => DBProcedures::getCustomerOrders($pdo, $customerId)
+    ];
+}
+
+// =============================================
+// 【架构重构】业务处理函数 - POST 请求处理
+// =============================================
+
+/**
+ * 处理员工操作（增删改）
+ */
+function handleEmployeeAction($pdo, $action, $data) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    switch ($action) {
+        case 'add':
+            $hash = password_hash($data['password'], PASSWORD_DEFAULT);
+            $result = DBProcedures::addEmployee($pdo, $data['name'], $data['username'], $hash, $data['role'], $data['shop_id']);
+            if ($result) {
+                return ['success' => true, 'message' => "Employee '{$data['name']}' added successfully."];
+            }
+            return ['success' => false, 'message' => 'Failed to add employee.'];
+
+        case 'edit':
+            $hash = !empty($data['password']) ? password_hash($data['password'], PASSWORD_DEFAULT) : null;
+            $result = DBProcedures::updateEmployee($pdo, $data['employee_id'], $data['name'], $data['role'], $data['shop_id'], $hash);
+            if ($result) {
+                return ['success' => true, 'message' => 'Employee details updated.'];
+            }
+            return ['success' => false, 'message' => 'Failed to update employee.'];
+
+        case 'delete':
+            if ($data['employee_id'] == $data['current_user_id']) {
+                return ['success' => false, 'message' => 'You cannot delete your own account.'];
+            }
+            try {
+                $result = DBProcedures::deleteEmployee($pdo, $data['employee_id'], $data['current_user_id']);
+                return ['success' => true, 'message' => 'Employee record deleted.'];
+            } catch (Exception $e) {
+                return ['success' => false, 'message' => 'Cannot delete employee. They may be linked to transaction records.'];
+            }
+
+        default:
+            return ['success' => false, 'message' => 'Unknown action.'];
+    }
+}
+
+/**
+ * 处理供应商操作（增删改）
+ */
+function handleSupplierAction($pdo, $action, $data) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    switch ($action) {
+        case 'add':
+            $result = DBProcedures::addSupplier($pdo, $data['name'], $data['email']);
+            if ($result) {
+                return ['success' => true, 'message' => 'Supplier added successfully.'];
+            }
+            return ['success' => false, 'message' => 'Failed to add supplier.'];
+
+        case 'edit':
+            $result = DBProcedures::updateSupplier($pdo, $data['supplier_id'], $data['name'], $data['email']);
+            if ($result) {
+                return ['success' => true, 'message' => 'Supplier details updated.'];
+            }
+            return ['success' => false, 'message' => 'Failed to update supplier.'];
+
+        case 'delete':
+            $result = DBProcedures::deleteSupplier($pdo, $data['supplier_id']);
+            if ($result === 1) {
+                return ['success' => true, 'message' => 'Supplier deleted successfully.', 'type' => 'warning'];
+            } elseif ($result === -1) {
+                return ['success' => false, 'message' => 'Cannot delete supplier: There are existing Supplier Orders linked to this supplier.'];
+            }
+            return ['success' => false, 'message' => 'Delete failed.'];
+
+        default:
+            return ['success' => false, 'message' => 'Unknown action.'];
+    }
+}
+
+/**
+ * 处理专辑操作（增改）
+ */
+function handleReleaseAction($pdo, $action, $data) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    switch ($action) {
+        case 'add':
+            $result = DBProcedures::addRelease($pdo, $data['title'], $data['artist'], $data['label'], $data['year'], $data['genre'], $data['desc']);
+            if ($result) {
+                return ['success' => true, 'message' => 'New release added to catalog.'];
+            }
+            return ['success' => false, 'message' => 'Failed to add release.'];
+
+        case 'edit':
+            $result = DBProcedures::updateRelease($pdo, $data['release_id'], $data['title'], $data['artist'], $data['label'], $data['year'], $data['genre'], $data['desc']);
+            if ($result) {
+                return ['success' => true, 'message' => 'Release updated successfully.'];
+            }
+            return ['success' => false, 'message' => 'Failed to update release.'];
+
+        default:
+            return ['success' => false, 'message' => 'Unknown action.'];
+    }
+}
+
+/**
+ * 处理取货确认
+ */
+function handlePickupConfirmation($pdo, $orderId, $shopId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $order = DBProcedures::getOrderForPickupValidation($pdo, $orderId, $shopId);
+
+    if (!$order) {
+        return ['success' => false, 'message' => 'Order not found or not ready for pickup.'];
+    }
+
+    if ($order['OrderStatus'] !== 'Paid') {
+        return ['success' => false, 'message' => "Invalid order status: {$order['OrderStatus']}"];
+    }
+
+    $pointsEarned = floor($order['TotalAmount']);
+    $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+
+    if ($success) {
+        return ['success' => true, 'message' => "Order #$orderId marked as collected."];
+    }
+
+    return ['success' => false, 'message' => 'Failed to complete order.'];
+}
+
+/**
+ * 处理订单发货
+ */
+function handleShipOrder($pdo, $orderId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $success = DBProcedures::shipOrder($pdo, $orderId);
+
+    if ($success) {
+        return ['success' => true, 'message' => "Order #$orderId has been shipped!"];
+    }
+
+    return ['success' => false, 'message' => 'Failed to ship order. Invalid order status.'];
+}
+
+/**
+ * 处理订单送达确认
+ */
+function handleDeliveryConfirmation($pdo, $orderId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    // 先验证订单状态
+    try {
+        $stmt = $pdo->prepare("SELECT TotalAmount, OrderStatus FROM CustomerOrder WHERE OrderID = ? AND OrderType = 'Online' AND OrderStatus = 'Shipped'");
+        $stmt->execute([$orderId]);
+        $order = $stmt->fetch();
+
+        if (!$order) {
+            return ['success' => false, 'message' => 'Order not found or not shipped.'];
+        }
+
+        $pointsEarned = floor($order['TotalAmount']);
+        $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+
+        if ($success) {
+            return ['success' => true, 'message' => "Order #$orderId delivery confirmed!"];
+        }
+
+        return ['success' => false, 'message' => 'Failed to complete order.'];
+    } catch (Exception $e) {
+        return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * 处理库存调拨发起
+ */
+function handleTransferInitiation($pdo, $stockId, $toShopId, $employeeId, $shops) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    // 验证目标店铺
+    $targetValid = false;
+    foreach ($shops as $s) {
+        if ($s['ShopID'] == $toShopId) {
+            $targetValid = true;
+            break;
+        }
+    }
+
+    if (!$targetValid) {
+        return ['success' => false, 'message' => 'Invalid destination shop.'];
+    }
+
+    // 获取当前库存信息
+    $stockInfo = DBProcedures::getStockItemForTransfer($pdo, $stockId);
+
+    if (!$stockInfo) {
+        return ['success' => false, 'message' => 'Invalid Item ID or item not available.'];
+    }
+
+    if ($stockInfo['ShopID'] == $toShopId) {
+        return ['success' => false, 'message' => 'Item already at destination.'];
+    }
+
+    $transferId = DBProcedures::initiateTransfer($pdo, $stockId, $stockInfo['ShopID'], $toShopId, $employeeId);
+
+    if ($transferId) {
+        return ['success' => true, 'message' => "Transfer #$transferId initiated. Item #$stockId is now InTransit."];
+    }
+
+    return ['success' => false, 'message' => 'Transfer failed. Please check item availability.'];
+}
+
+/**
+ * 处理调拨接收确认
+ */
+function handleTransferReceipt($pdo, $transferId, $employeeId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $success = DBProcedures::completeTransfer($pdo, $transferId, $employeeId);
+
+    if ($success) {
+        return ['success' => true, 'message' => "Transfer #$transferId confirmed. Item received."];
+    }
+
+    return ['success' => false, 'message' => 'Receipt confirmation failed.'];
+}
+
+/**
+ * 处理客户资料更新
+ */
+function handleProfileUpdate($pdo, $customerId, $name, $password = null) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $hash = !empty($password) ? password_hash($password, PASSWORD_DEFAULT) : null;
+    $success = DBProcedures::updateCustomerProfile($pdo, $customerId, $name, $hash);
+
+    if ($success) {
+        $_SESSION['username'] = $name;
+        return ['success' => true, 'message' => 'Profile updated successfully.'];
+    }
+
+    return ['success' => false, 'message' => 'Failed to update profile.'];
+}
+
+/**
+ * 处理支付完成
+ */
+function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    if (!in_array($paymentMethod, ['alipay', 'wechat', 'card'])) {
+        return ['success' => false, 'message' => 'Invalid payment method.'];
+    }
+
+    // 验证订单
+    $order = DBProcedures::getOrderForPayment($pdo, $orderId, $customerId);
+    if (!$order) {
+        return ['success' => false, 'message' => 'Order not found or already paid.'];
+    }
+
+    // 验证库存仍然预留
+    $reservedCount = DBProcedures::validateOrderReservedItems($pdo, $orderId);
+    if ($reservedCount == 0) {
+        return ['success' => false, 'message' => 'Order items expired. Please create a new order.'];
+    }
+
+    // 完成订单
+    $pointsEarned = floor($order['TotalAmount']);
+    $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+
+    if ($success) {
+        return ['success' => true, 'message' => 'Payment successful!', 'order_id' => $orderId];
+    }
+
+    return ['success' => false, 'message' => 'Payment failed. Please contact support.'];
+}
+
+/**
+ * 处理回购提交
+ */
+function handleBuybackSubmission($pdo, $data) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $buybackId = DBProcedures::processBuyback(
+        $pdo,
+        $data['customer_id'] ?: null,
+        $data['employee_id'],
+        $data['shop_id'],
+        $data['release_id'],
+        1, // 数量固定为1
+        $data['buy_price'],
+        $data['condition'],
+        $data['resale_price']
+    );
+
+    if ($buybackId) {
+        return ['success' => true, 'message' => "Buyback processed successfully. Buyback Order #$buybackId created.", 'buyback_id' => $buybackId];
+    }
+
+    return ['success' => false, 'message' => 'Failed to process buyback.'];
+}
+
+/**
+ * 处理采购订单创建
+ */
+function handleProcurementCreatePO($pdo, $data, $warehouseId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    if (!$warehouseId) {
+        return ['success' => false, 'message' => 'Warehouse not configured.'];
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $orderId = DBProcedures::createSupplierOrder($pdo, $data['supplier_id'], $data['employee_id'], $warehouseId);
+
+        if (!$orderId) {
+            throw new Exception('Failed to create supplier order.');
+        }
+
+        $lineSuccess = DBProcedures::addSupplierOrderLine($pdo, $orderId, $data['release_id'], $data['quantity'], $data['unit_cost']);
+
+        if (!$lineSuccess) {
+            throw new Exception('Failed to add order line.');
+        }
+
+        $pdo->commit();
+        return ['success' => true, 'message' => "Supplier Order #$orderId created successfully.", 'order_id' => $orderId];
+
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * 处理采购订单接收
+ */
+function handleProcurementReceivePO($pdo, $orderId, $warehouseId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    if (!$warehouseId) {
+        return ['success' => false, 'message' => 'Warehouse not configured.'];
+    }
+
+    $batchNo = "BATCH-" . date('Ymd') . "-" . $orderId;
+    $success = DBProcedures::receiveSupplierOrder($pdo, $orderId, $batchNo, 'New', 0.5);
+
+    if ($success) {
+        return ['success' => true, 'message' => "Supplier Order #$orderId received. Items added to Warehouse inventory."];
+    }
+
+    return ['success' => false, 'message' => 'Failed to receive order.'];
+}
 ?>

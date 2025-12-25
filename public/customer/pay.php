@@ -1,8 +1,12 @@
 <?php
+/**
+ * 【架构重构】支付页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Customer');
-require_once __DIR__ . '/../../includes/header.php';
 
 $customerId = $_SESSION['user_id'];
 $orderId = isset($_GET['order_id']) ? (int)$_GET['order_id'] : 0;
@@ -13,66 +17,36 @@ if (!$orderId) {
     exit();
 }
 
-// 获取待支付订单
-$sql = "SELECT * FROM CustomerOrder WHERE OrderID = ? AND CustomerID = ? AND OrderStatus = 'Pending'";
-$stmt = $pdo->prepare($sql);
-$stmt->execute([$orderId, $customerId]);
-$order = $stmt->fetch();
+// ========== 数据准备 ==========
+$pageData = preparePayPageData($pdo, $orderId, $customerId);
 
-if (!$order) {
+if (!$pageData['found']) {
     flash("Order not found or already paid.", 'warning');
     header("Location: orders.php");
     exit();
 }
 
-// 处理支付请求 (模拟支付)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    require_once __DIR__ . '/../../includes/db_procedures.php';
+$order = $pageData['order'];
 
+// ========== POST 请求处理 ==========
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $paymentMethod = $_POST['payment_method'] ?? '';
 
-    if (!in_array($paymentMethod, ['alipay', 'wechat', 'card'])) {
-        flash("Invalid payment method.", 'danger');
+    $result = handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod);
+
+    if ($result['success']) {
+        flash("Payment successful! Your order is now being processed.", 'success');
+        header("Location: order_detail.php?id=$orderId");
+        exit();
     } else {
-        try {
-            $pdo->beginTransaction();
-
-            // 验证库存仍然Reserved（防止超时释放或被其他人购买）
-            $stmt = $pdo->prepare("
-                SELECT COUNT(*) as cnt FROM OrderLine ol
-                JOIN StockItem s ON ol.StockItemID = s.StockItemID
-                WHERE ol.OrderID = ? AND s.Status = 'Reserved'
-            ");
-            $stmt->execute([$orderId]);
-            $reservedCount = $stmt->fetchColumn();
-
-            if ($reservedCount == 0) {
-                throw new Exception("订单商品已失效，请重新下单");
-            }
-
-            // 使用存储过程完成订单（自动更新库存状态、增加积分、升级会员）
-            $pointsEarned = floor($order['TotalAmount']);
-            $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
-
-            if (!$success) {
-                throw new Exception("订单完成失败，请联系客服");
-            }
-
-            $pdo->commit();
-
-            flash("Payment successful! Your order is now being processed.", 'success');
-            header("Location: order_detail.php?id=$orderId");
-            exit();
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            flash("Payment failed: " . $e->getMessage(), 'danger');
-        }
+        flash("Payment failed: " . $result['message'], 'danger');
     }
 }
+
+require_once __DIR__ . '/../../includes/header.php';
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="row justify-content-center">
     <div class="col-lg-6">
         <div class="card bg-dark border-warning">

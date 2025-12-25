@@ -1,81 +1,48 @@
 <?php
+/**
+ * 【架构重构】用户管理页面
+ * 表现层 - 仅负责数据展示和用户交互
+ * 业务逻辑已下沉到 functions.php 和 db_procedures.php
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Admin');
+
+// ========== POST 请求处理 ==========
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = isset($_POST['add_employee']) ? 'add' :
+             (isset($_POST['edit_employee']) ? 'edit' :
+             (isset($_POST['delete_employee']) ? 'delete' : ''));
+
+    $data = [
+        'employee_id'     => $_POST['employee_id'] ?? null,
+        'name'            => trim($_POST['name'] ?? ''),
+        'username'        => trim($_POST['username'] ?? ''),
+        'password'        => $_POST['password'] ?? '',
+        'role'            => $_POST['role'] ?? 'Staff',
+        'shop_id'         => $_POST['shop_id'] ?? null,
+        'current_user_id' => $_SESSION['user_id']
+    ];
+
+    $result = handleEmployeeAction($pdo, $action, $data);
+    flash($result['message'], $result['success'] ? 'success' : 'danger');
+
+    header("Location: users.php");
+    exit();
+}
+
+// ========== 数据准备 ==========
+$pageData = prepareUsersPageData($pdo);
+$employees = $pageData['employees'];
+$customers = $pageData['customers'];
+$shops     = $pageData['shops'];
+$roles     = $pageData['roles'];
+
 require_once __DIR__ . '/../../includes/header.php';
-
-// --- Action: Add Employee ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_employee'])) {
-    try {
-        $sql = "INSERT INTO Employee (Name, Username, PasswordHash, Role, ShopID, HireDate)
-                VALUES (:name, :user, :pass, :role, :shop, CURDATE())";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            ':name' => trim($_POST['name']),
-            ':user' => trim($_POST['username']),
-            ':pass' => password_hash($_POST['password'], PASSWORD_DEFAULT),
-            ':role' => $_POST['role'],
-            ':shop' => $_POST['shop_id']
-        ]);
-        flash("Employee '{$_POST['name']}' added successfully.", 'success');
-    } catch (PDOException $e) {
-        flash("Error adding employee: " . $e->getMessage(), 'danger');
-    }
-    header("Location: users.php");
-    exit();
-}
-
-// --- Action: Edit Employee (New Feature) ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_employee'])) {
-    try {
-        $id = $_POST['employee_id'];
-        $name = trim($_POST['name']);
-        $role = $_POST['role'];
-        $shop = $_POST['shop_id'];
-
-        // 检查是否在修改密码
-        if (!empty($_POST['password'])) {
-            $passHash = password_hash($_POST['password'], PASSWORD_DEFAULT);
-            $sql = "UPDATE Employee SET Name = ?, Role = ?, ShopID = ?, PasswordHash = ? WHERE EmployeeID = ?";
-            $pdo->prepare($sql)->execute([$name, $role, $shop, $passHash, $id]);
-        } else {
-            $sql = "UPDATE Employee SET Name = ?, Role = ?, ShopID = ? WHERE EmployeeID = ?";
-            $pdo->prepare($sql)->execute([$name, $role, $shop, $id]);
-        }
-
-        flash("Employee details updated.", 'success');
-    } catch (PDOException $e) {
-        flash("Error updating employee: " . $e->getMessage(), 'danger');
-    }
-    header("Location: users.php");
-    exit();
-}
-
-// --- Action: Delete Employee ---
-if (isset($_POST['delete_employee'])) {
-    $empId = $_POST['employee_id'];
-    if ($empId != $_SESSION['user_id']) { // 防止删除自己
-        try {
-            $pdo->prepare("DELETE FROM Employee WHERE EmployeeID = ?")->execute([$empId]);
-            flash("Employee record deleted.", 'warning');
-        } catch (PDOException $e) {
-            flash("Cannot delete employee. They may be linked to transaction records.", 'danger');
-        }
-    } else {
-        flash("You cannot delete your own account.", 'danger');
-    }
-    header("Location: users.php");
-    exit();
-}
-
-// --- Data Queries ---
-$employees = $pdo->query("SELECT * FROM vw_admin_employee_list ORDER BY Role ASC, Name ASC")->fetchAll();
-$customers = $pdo->query("SELECT * FROM vw_admin_customer_list ORDER BY Points DESC")->fetchAll();
-$shops = $pdo->query("SELECT * FROM Shop")->fetchAll();
-// UserRole table removed; Role is now ENUM in Employee table
-$roles = ['Admin', 'Manager', 'Staff'];
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="text-warning"><i class="fa-solid fa-users-gear me-2"></i>User Management</h2>
     <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addEmpModal">
@@ -135,7 +102,7 @@ $roles = ['Admin', 'Manager', 'Staff'];
                                         data-shop="<?= $e['ShopID'] ?>">
                                     <i class="fa-solid fa-pen-to-square"></i>
                                 </button>
-                                
+
                                 <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure?');">
                                     <input type="hidden" name="delete_employee" value="1">
                                     <input type="hidden" name="employee_id" value="<?= $e['EmployeeID'] ?>">
@@ -290,7 +257,6 @@ $roles = ['Admin', 'Manager', 'Staff'];
 </div>
 
 <script>
-    // JS Logic to populate Edit Modal
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             document.getElementById('edit_emp_id').value = this.dataset.id;

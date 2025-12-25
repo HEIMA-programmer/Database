@@ -1,56 +1,47 @@
 <?php
+/**
+ * 【架构重构】个人资料页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Customer');
-require_once __DIR__ . '/../../includes/header.php';
 
 $userId = $_SESSION['user_id'];
-$message = '';
 
-// 处理个人信息更新
+// ========== POST 请求处理 ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $newName = trim($_POST['name']);
     $newPass = trim($_POST['password']);
-    
+
     if ($newName) {
-        if (!empty($newPass)) {
-            $hash = password_hash($newPass, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("UPDATE Customer SET Name = ?, PasswordHash = ? WHERE CustomerID = ?");
-            $stmt->execute([$newName, $hash, $userId]);
-        } else {
-            $stmt = $pdo->prepare("UPDATE Customer SET Name = ? WHERE CustomerID = ?");
-            $stmt->execute([$newName, $userId]);
-        }
-        $_SESSION['username'] = $newName; // 更新 Session 显示
-        flash("Profile updated successfully.", 'success');
+        $result = handleProfileUpdate($pdo, $userId, $newName, $newPass ?: null);
+        flash($result['message'], $result['success'] ? 'success' : 'danger');
         header("Location: profile.php");
         exit();
     }
 }
 
-// [Phase 2 Fix] 使用视图获取个人信息
-// 视图: vw_customer_profile_info
-$sql = "SELECT * FROM vw_customer_profile_info WHERE CustomerID = ?";
-$stmt = $pdo->prepare($sql);
-$stmt->execute([$userId]);
-$user = $stmt->fetch();
+// ========== 数据准备 ==========
+$pageData = prepareProfilePageData($pdo, $userId);
 
-// 计算升级进度
-// 注意：查找下一级规则需要查规则表，这不是直接获取用户信息，允许使用Base Table查询配置数据
-$currentPoints = $user['Points'];
-$nextTargetRow = $pdo->query("SELECT MinPoints, TierName FROM MembershipTier WHERE MinPoints > $currentPoints ORDER BY MinPoints ASC LIMIT 1")->fetch();
-
-$nextTarget = $nextTargetRow['MinPoints'] ?? 0;
-$nextTierName = $nextTargetRow['TierName'] ?? 'Max Level';
-$progress = 0;
-
-if ($nextTarget > 0) {
-    $progress = min(100, ($currentPoints / $nextTarget) * 100);
-} else {
-    $progress = 100; // 已是最高等级
+if (!$pageData) {
+    flash("User not found.", 'danger');
+    header("Location: catalog.php");
+    exit();
 }
+
+$user = $pageData['user'];
+$currentPoints = $pageData['current_points'];
+$nextTarget = $pageData['next_target'];
+$nextTierName = $pageData['next_tier_name'];
+$progress = $pageData['progress'];
+
+require_once __DIR__ . '/../../includes/header.php';
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="row justify-content-center">
     <div class="col-lg-8">
         <h2 class="text-warning mb-4"><i class="fa-solid fa-id-card me-2"></i>My Membership Profile</h2>

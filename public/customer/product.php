@@ -1,38 +1,30 @@
 <?php
+/**
+ * 【架构重构】商品详情页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Customer');
-require_once __DIR__ . '/../../includes/header.php';
 
+// ========== 数据准备 ==========
 $stockId = $_GET['id'] ?? 0;
+$pageData = prepareProductDetailData($pdo, $stockId);
 
-// 1. 获取商品详情 (联表查询 Release 信息)
-$sql = "SELECT s.*, r.Title, r.ArtistName, r.LabelName, r.ReleaseYear, r.Genre, r.Description, sh.Name as ShopName
-        FROM StockItem s
-        JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
-        JOIN Shop sh ON s.ShopID = sh.ShopID
-        WHERE s.StockItemID = ?";
-$stmt = $pdo->prepare($sql);
-$stmt->execute([$stockId]);
-$item = $stmt->fetch();
-
-if (!$item) {
+if (!$pageData['found']) {
     flash("Item not found.", 'danger');
     header("Location: catalog.php");
     exit();
 }
 
-// 2. 检查是否有同款专辑在其他店铺 (展示库存分布 - 这是一个很棒的功能点)
-$otherStockSql = "SELECT s.StockItemID, s.ConditionGrade, s.UnitPrice, sh.Name as ShopName
-                  FROM StockItem s
-                  JOIN Shop sh ON s.ShopID = sh.ShopID
-                  WHERE s.ReleaseID = ? AND s.Status = 'Available' AND s.StockItemID != ?
-                  LIMIT 5";
-$otherStmt = $pdo->prepare($otherStockSql);
-$otherStmt->execute([$item['ReleaseID'], $stockId]);
-$otherItems = $otherStmt->fetchAll();
+$item = $pageData['item'];
+$otherItems = $pageData['alternatives'];
+
+require_once __DIR__ . '/../../includes/header.php';
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="row g-5">
     <div class="col-md-5">
         <div class="card bg-dark border-secondary p-4">
@@ -49,7 +41,7 @@ $otherItems = $otherStmt->fetchAll();
             <span class="badge bg-warning text-dark me-2"><?= h($item['Genre']) ?></span>
             <span class="text-secondary"><?= h($item['LabelName']) ?>, <?= $item['ReleaseYear'] ?></span>
         </div>
-        
+
         <h1 class="display-4 text-white fw-bold mb-2"><?= h($item['Title']) ?></h1>
         <h3 class="text-warning mb-4"><?= h($item['ArtistName']) ?></h3>
 

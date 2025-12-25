@@ -769,4 +769,194 @@ BEGIN
     COMMIT;
 END$$
 
+-- ------------------------------------------------
+-- 13. 添加供应商存储过程
+-- 替换 suppliers.php 中的直接 INSERT
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_add_supplier$$
+CREATE PROCEDURE sp_add_supplier(
+    IN p_name VARCHAR(100),
+    IN p_email VARCHAR(100),
+    OUT p_supplier_id INT
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_supplier_id = -1;
+    END;
+
+    START TRANSACTION;
+
+    INSERT INTO Supplier (Name, Email)
+    VALUES (p_name, p_email);
+
+    SET p_supplier_id = LAST_INSERT_ID();
+
+    COMMIT;
+END$$
+
+-- ------------------------------------------------
+-- 14. 更新供应商存储过程
+-- 替换 suppliers.php 中的直接 UPDATE
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_update_supplier$$
+CREATE PROCEDURE sp_update_supplier(
+    IN p_supplier_id INT,
+    IN p_name VARCHAR(100),
+    IN p_email VARCHAR(100)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to update supplier';
+    END;
+
+    START TRANSACTION;
+
+    UPDATE Supplier
+    SET Name = p_name, Email = p_email
+    WHERE SupplierID = p_supplier_id;
+
+    COMMIT;
+END$$
+
+-- ------------------------------------------------
+-- 15. 删除供应商存储过程（带依赖检查）
+-- 替换 suppliers.php 中的直接 DELETE
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_delete_supplier$$
+CREATE PROCEDURE sp_delete_supplier(
+    IN p_supplier_id INT,
+    OUT p_result INT -- 1=成功, -1=有依赖不能删除
+)
+BEGIN
+    DECLARE v_order_count INT DEFAULT 0;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_result = 0;
+    END;
+
+    -- 检查是否有关联的供应商订单
+    SELECT COUNT(*) INTO v_order_count
+    FROM SupplierOrder
+    WHERE SupplierID = p_supplier_id;
+
+    IF v_order_count > 0 THEN
+        SET p_result = -1;
+    ELSE
+        START TRANSACTION;
+        DELETE FROM Supplier WHERE SupplierID = p_supplier_id;
+        SET p_result = 1;
+        COMMIT;
+    END IF;
+END$$
+
+-- ------------------------------------------------
+-- 16. 添加专辑存储过程
+-- 替换 products.php 中的直接 INSERT
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_add_release$$
+CREATE PROCEDURE sp_add_release(
+    IN p_title VARCHAR(255),
+    IN p_artist VARCHAR(255),
+    IN p_label VARCHAR(255),
+    IN p_year INT,
+    IN p_genre VARCHAR(50),
+    IN p_description TEXT,
+    OUT p_release_id INT
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_release_id = -1;
+    END;
+
+    START TRANSACTION;
+
+    INSERT INTO ReleaseAlbum (Title, ArtistName, LabelName, ReleaseYear, Genre, Format, Description)
+    VALUES (p_title, p_artist, p_label, p_year, p_genre, 'Vinyl', p_description);
+
+    SET p_release_id = LAST_INSERT_ID();
+
+    COMMIT;
+END$$
+
+-- ------------------------------------------------
+-- 17. 更新专辑存储过程
+-- 替换 products.php 中的直接 UPDATE
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_update_release$$
+CREATE PROCEDURE sp_update_release(
+    IN p_release_id INT,
+    IN p_title VARCHAR(255),
+    IN p_artist VARCHAR(255),
+    IN p_label VARCHAR(255),
+    IN p_year INT,
+    IN p_genre VARCHAR(50),
+    IN p_description TEXT
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to update release';
+    END;
+
+    START TRANSACTION;
+
+    UPDATE ReleaseAlbum
+    SET Title = p_title,
+        ArtistName = p_artist,
+        LabelName = p_label,
+        ReleaseYear = p_year,
+        Genre = p_genre,
+        Description = p_description
+    WHERE ReleaseID = p_release_id;
+
+    COMMIT;
+END$$
+
+-- ------------------------------------------------
+-- 18. 发货订单存储过程
+-- 替换 fulfillment.php 中的直接 UPDATE
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_ship_order$$
+CREATE PROCEDURE sp_ship_order(
+    IN p_order_id INT,
+    OUT p_result INT -- 1=成功, 0=失败
+)
+BEGIN
+    DECLARE v_status VARCHAR(20);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_result = 0;
+    END;
+
+    START TRANSACTION;
+
+    -- 验证订单状态
+    SELECT OrderStatus INTO v_status
+    FROM CustomerOrder
+    WHERE OrderID = p_order_id AND OrderType = 'Online'
+    FOR UPDATE;
+
+    IF v_status = 'Paid' THEN
+        UPDATE CustomerOrder
+        SET OrderStatus = 'Shipped'
+        WHERE OrderID = p_order_id;
+        SET p_result = 1;
+    ELSE
+        SET p_result = 0;
+    END IF;
+
+    COMMIT;
+END$$
+
 DELIMITER ;

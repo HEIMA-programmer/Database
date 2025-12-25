@@ -1,82 +1,40 @@
 <?php
+/**
+ * 【架构重构】订单履约页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Staff');
-require_once __DIR__ . '/../../includes/header.php';
 
-// 处理发货动作
+// ========== POST 请求处理 ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    require_once __DIR__ . '/../../includes/db_procedures.php';
-
     $orderId = $_POST['order_id'] ?? 0;
     $action = $_POST['action'] ?? '';
 
-    try {
-        if ($action === 'ship') {
-            // 标记为已发货（这个可以保留直接UPDATE，因为只是物流状态）
-            $stmt = $pdo->prepare("UPDATE CustomerOrder SET OrderStatus = 'Shipped' WHERE OrderID = ? AND OrderType = 'Online' AND OrderStatus = 'Paid'");
-            $stmt->execute([$orderId]);
-
-            if ($stmt->rowCount() === 0) {
-                throw new Exception("订单不存在或状态不正确");
-            }
-
-            flash("Order #$orderId has been shipped!", 'success');
-
-        } elseif ($action === 'complete') {
-            // 使用存储过程完成订单（标记为已送达）
-            $pdo->beginTransaction();
-
-            $stmt = $pdo->prepare("
-                SELECT TotalAmount, OrderStatus FROM CustomerOrder
-                WHERE OrderID = ? AND OrderType = 'Online' AND OrderStatus = 'Shipped'
-            ");
-            $stmt->execute([$orderId]);
-            $order = $stmt->fetch();
-
-            if (!$order) {
-                throw new Exception("订单不存在或状态不正确");
-            }
-
-            // 使用存储过程完成订单（自动更新库存、增加积分、升级会员）
-            $pointsEarned = floor($order['TotalAmount']);
-            $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
-
-            if (!$success) {
-                throw new Exception("订单完成失败");
-            }
-
-            $pdo->commit();
-            flash("Order #$orderId delivery confirmed!", 'success');
-        }
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        flash("Error updating order: " . $e->getMessage(), 'danger');
+    if ($action === 'ship') {
+        $result = handleShipOrder($pdo, $orderId);
+    } elseif ($action === 'complete') {
+        $result = handleDeliveryConfirmation($pdo, $orderId);
+    } else {
+        $result = ['success' => false, 'message' => 'Unknown action.'];
     }
+
+    flash($result['message'], $result['success'] ? 'success' : 'danger');
     header("Location: fulfillment.php");
     exit();
 }
 
-// 查询待发货订单 (Paid) 和待确认订单 (Shipped)
-$paidSql = "SELECT co.*, c.Name as CustomerName, c.Email,
-               (SELECT COUNT(*) FROM OrderLine WHERE OrderID = co.OrderID) as ItemCount
-        FROM CustomerOrder co
-        LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-        WHERE co.OrderType = 'Online' AND co.OrderStatus = 'Paid'
-        ORDER BY co.OrderDate ASC";
-$paidOrders = $pdo->query($paidSql)->fetchAll();
+// ========== 数据准备 ==========
+$pageData = prepareFulfillmentPageData($pdo);
+$paidOrders = $pageData['paid_orders'];
+$shippedOrders = $pageData['shipped_orders'];
 
-$shippedSql = "SELECT co.*, c.Name as CustomerName, c.Email,
-               (SELECT COUNT(*) FROM OrderLine WHERE OrderID = co.OrderID) as ItemCount
-        FROM CustomerOrder co
-        LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-        WHERE co.OrderType = 'Online' AND co.OrderStatus = 'Shipped'
-        ORDER BY co.OrderDate ASC";
-$shippedOrders = $pdo->query($shippedSql)->fetchAll();
+require_once __DIR__ . '/../../includes/header.php';
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="text-warning"><i class="fa-solid fa-truck-fast me-2"></i>Online Order Fulfillment</h2>
     <div>
@@ -85,7 +43,6 @@ $shippedOrders = $pdo->query($shippedSql)->fetchAll();
     </div>
 </div>
 
-<!-- 待发货订单 -->
 <div class="card bg-dark border-info mb-4">
     <div class="card-header border-info bg-transparent">
         <h5 class="mb-0 text-info"><i class="fa-solid fa-box me-2"></i>Awaiting Shipment (Paid)</h5>
@@ -113,7 +70,7 @@ $shippedOrders = $pdo->query($shippedSql)->fetchAll();
                             <td><?= formatDate($o['OrderDate']) ?></td>
                             <td>
                                 <div><?= h($o['CustomerName'] ?? 'Guest') ?></div>
-                                <small class="text-muted"><?= h($o['Email'] ?? '-') ?></small>
+                                <small class="text-muted"><?= h($o['CustomerEmail'] ?? '-') ?></small>
                             </td>
                             <td><?= $o['ItemCount'] ?> items</td>
                             <td class="text-warning"><?= formatPrice($o['TotalAmount']) ?></td>
@@ -135,7 +92,6 @@ $shippedOrders = $pdo->query($shippedSql)->fetchAll();
     </div>
 </div>
 
-<!-- 已发货待确认订单 -->
 <div class="card bg-dark border-warning">
     <div class="card-header border-warning bg-transparent">
         <h5 class="mb-0 text-warning"><i class="fa-solid fa-truck-loading me-2"></i>In Transit (Shipped)</h5>
@@ -163,7 +119,7 @@ $shippedOrders = $pdo->query($shippedSql)->fetchAll();
                             <td><?= formatDate($o['OrderDate']) ?></td>
                             <td>
                                 <div><?= h($o['CustomerName'] ?? 'Guest') ?></div>
-                                <small class="text-muted"><?= h($o['Email'] ?? '-') ?></small>
+                                <small class="text-muted"><?= h($o['CustomerEmail'] ?? '-') ?></small>
                             </td>
                             <td><?= $o['ItemCount'] ?> items</td>
                             <td class="text-warning"><?= formatPrice($o['TotalAmount']) ?></td>

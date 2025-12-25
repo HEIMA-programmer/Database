@@ -1,37 +1,22 @@
 <?php
+/**
+ * 【架构重构】报表页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Manager');
+
+// ========== 数据准备 ==========
+$pageData = prepareReportsPageData($pdo);
+$turnoverStats = $pageData['turnover_stats'];
+$salesTrend = $pageData['sales_trend'];
+
 require_once __DIR__ . '/../../includes/header.php';
-
-// --- Report: Inventory Turnover Rate ---
-// 【修复】使用视图 vw_report_sales_by_genre 替代直接表查询
-$turnoverSql = "
-    SELECT
-        Genre,
-        ItemsSold,
-        AvgDaysToSell,
-        TotalRevenue as RevenueGenerated
-    FROM vw_report_sales_by_genre
-    ORDER BY AvgDaysToSell ASC
-";
-$turnoverStats = $pdo->query($turnoverSql)->fetchAll();
-
-// --- Report: Monthly Sales Trend ---
-$trendSql = "
-    SELECT
-        DATE_FORMAT(OrderDate, '%Y-%m') as SalesMonth,
-        COUNT(*) as OrderCount,
-        SUM(TotalAmount) as MonthlyRevenue
-    FROM CustomerOrder
-    WHERE OrderStatus != 'Cancelled'
-    GROUP BY SalesMonth
-    ORDER BY SalesMonth DESC
-    LIMIT 12
-";
-$salesTrend = $pdo->query($trendSql)->fetchAll();
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="mb-4">
     <h2 class="text-info"><i class="fa-solid fa-file-invoice-dollar me-2"></i>Performance Reports</h2>
 </div>
@@ -55,7 +40,7 @@ $salesTrend = $pdo->query($trendSql)->fetchAll();
                 </thead>
                 <tbody>
                     <?php foreach ($turnoverStats as $stat): ?>
-                    <?php 
+                    <?php
                         $days = round($stat['AvgDaysToSell'], 1);
                         $speedClass = $days < 30 ? 'text-success' : ($days < 90 ? 'text-warning' : 'text-danger');
                         $speedLabel = $days < 30 ? 'Fast' : ($days < 90 ? 'Moderate' : 'Slow');
@@ -65,7 +50,7 @@ $salesTrend = $pdo->query($trendSql)->fetchAll();
                         <td><?= $stat['ItemsSold'] ?></td>
                         <td><?= $days ?> days</td>
                         <td class="<?= $speedClass ?> fw-bold"><?= $speedLabel ?></td>
-                        <td class="text-end"><?= formatPrice($stat['RevenueGenerated']) ?></td>
+                        <td class="text-end"><?= formatPrice($stat['TotalRevenue']) ?></td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -89,11 +74,11 @@ $salesTrend = $pdo->query($trendSql)->fetchAll();
                 </tr>
             </thead>
             <tbody>
-                <?php 
+                <?php
                 $maxRev = 1;
-                foreach($salesTrend as $t) $maxRev = max($maxRev, $t['MonthlyRevenue']);
-                
-                foreach ($salesTrend as $trend): 
+                foreach($salesTrend as $t) $maxRev = max($maxRev, $t['MonthlyRevenue'] ?? 0);
+
+                foreach ($salesTrend as $trend):
                     $percent = ($trend['MonthlyRevenue'] / $maxRev) * 100;
                 ?>
                 <tr>

@@ -1,70 +1,42 @@
 <?php
+/**
+ * 【架构重构】库存调拨页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Manager');
-require_once __DIR__ . '/../../includes/db_procedures.php';
+
+// ========== 数据准备（先获取用于验证） ==========
+$pageData = prepareTransferPageData($pdo);
+$shops = $pageData['shops'];
+$pending = $pageData['pending'];
+
+// ========== POST 请求处理 ==========
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['initiate_transfer'])) {
+        $result = handleTransferInitiation(
+            $pdo,
+            $_POST['stock_id'],
+            $_POST['to_shop_id'],
+            $_SESSION['user_id'],
+            $shops
+        );
+        flash($result['message'], $result['success'] ? 'success' : 'danger');
+    } elseif (isset($_POST['confirm_receipt'])) {
+        $result = handleTransferReceipt($pdo, $_POST['transfer_id'], $_SESSION['user_id']);
+        flash($result['message'], $result['success'] ? 'success' : 'danger');
+    }
+
+    header("Location: transfer.php");
+    exit();
+}
+
 require_once __DIR__ . '/../../includes/header.php';
-
-// 获取所有店铺
-$shops = $pdo->query("SELECT * FROM Shop")->fetchAll();
-
-// 处理调拨发起
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initiate_transfer'])) {
-    $stockId = $_POST['stock_id'];
-    $toShopId = $_POST['to_shop_id'];
-    $empId = $_SESSION['user_id'];
-
-    // 简单验证目标店铺是否存在
-    $targetShopValid = false;
-    foreach ($shops as $s) {
-        if ($s['ShopID'] == $toShopId) {
-            $targetShopValid = true;
-            break;
-        }
-    }
-
-    if (!$targetShopValid) {
-        flash("Invalid destination shop.", 'danger');
-    } else {
-        // 获取当前库存信息，验证所有权
-        $stmt = $pdo->prepare("SELECT ShopID FROM StockItem WHERE StockItemID = ? AND Status = 'Available'");
-        $stmt->execute([$stockId]);
-        $currentItem = $stmt->fetch();
-
-        if ($currentItem && $currentItem['ShopID'] != $toShopId) {
-            // 使用存储过程发起调拨
-            $transferId = DBProcedures::initiateTransfer($pdo, $stockId, $currentItem['ShopID'], $toShopId, $empId);
-
-            if ($transferId) {
-                flash("Transfer #$transferId initiated. Item #$stockId is now InTransit. Awaiting receipt confirmation at destination.", 'success');
-            } else {
-                flash("Transfer failed. Please check item availability.", 'danger');
-            }
-        } else {
-            flash("Invalid Item ID or Item already at destination.", 'danger');
-        }
-    }
-}
-
-// 处理接收确认
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
-    $transferId = $_POST['transfer_id'];
-    $empId = $_SESSION['user_id'];
-
-    // 使用存储过程完成调拨
-    $success = DBProcedures::completeTransfer($pdo, $transferId, $empId);
-
-    if ($success) {
-        flash("Transfer #$transferId confirmed. Item received and added to local inventory.", 'success');
-    } else {
-        flash("Receipt confirmation failed. Please verify transfer status.", 'danger');
-    }
-}
-
-// 使用视图查询待接收的转运
-$pending = $pdo->query("SELECT * FROM vw_manager_pending_transfers ORDER BY TransferDate DESC")->fetchAll();
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="row">
     <div class="col-md-6">
         <h2 class="text-warning mb-4"><i class="fa-solid fa-truck-ramp-box me-2"></i>Stock Transfer</h2>

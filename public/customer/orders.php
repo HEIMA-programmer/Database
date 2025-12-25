@@ -1,19 +1,23 @@
 <?php
+/**
+ * 【架构重构】订单列表页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Customer');
-require_once __DIR__ . '/../../includes/header.php';
 
 $customerId = $_SESSION['user_id'];
 
-// [Phase 2 Fix] 使用视图替代直接表查询
-// 视图: vw_customer_my_orders_list
-$sql = "SELECT * FROM vw_customer_my_orders_list WHERE CustomerID = ? ORDER BY OrderDate DESC";
-$orders = $pdo->prepare($sql);
-$orders->execute([$customerId]);
-$orders = $orders->fetchAll();
+// ========== 数据准备 ==========
+$pageData = prepareOrdersPageData($pdo, $customerId);
+$orders = $pageData['orders'];
+
+require_once __DIR__ . '/../../includes/header.php';
 ?>
 
+<!-- ========== 表现层 ========== -->
 <h2 class="text-warning mb-4">My Orders</h2>
 
 <div class="card bg-secondary text-light">
@@ -43,7 +47,7 @@ $orders = $orders->fetchAll();
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?php 
+                            <?php
                             $statusClass = match($o['OrderStatus']) {
                                 'Paid' => 'text-success',
                                 'Completed' => 'text-success',

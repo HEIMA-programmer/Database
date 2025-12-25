@@ -778,6 +778,334 @@ class DBProcedures {
     }
 
     // ----------------
+    // 供应商相关 (Admin)
+    // ----------------
+
+    /**
+     * 获取供应商列表
+     */
+    public static function getSupplierList($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM Supplier ORDER BY Name ASC")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getSupplierList Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 添加供应商
+     */
+    public static function addSupplier($pdo, $name, $email) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_add_supplier(?, ?, @supplier_id)");
+            $stmt->execute([$name, $email]);
+            $result = $pdo->query("SELECT @supplier_id AS supplier_id")->fetch();
+            return $result['supplier_id'] > 0 ? $result['supplier_id'] : false;
+        } catch (PDOException $e) {
+            error_log("addSupplier Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 更新供应商
+     */
+    public static function updateSupplier($pdo, $supplierId, $name, $email) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_update_supplier(?, ?, ?)");
+            return $stmt->execute([$supplierId, $name, $email]);
+        } catch (PDOException $e) {
+            error_log("updateSupplier Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 删除供应商
+     * @return int 1=成功, -1=有依赖不能删除, 0=失败
+     */
+    public static function deleteSupplier($pdo, $supplierId) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_delete_supplier(?, @result)");
+            $stmt->execute([$supplierId]);
+            $result = $pdo->query("SELECT @result AS result")->fetch();
+            return (int)$result['result'];
+        } catch (PDOException $e) {
+            error_log("deleteSupplier Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    // ----------------
+    // 专辑/产品相关 (Admin)
+    // ----------------
+
+    /**
+     * 添加专辑
+     */
+    public static function addRelease($pdo, $title, $artist, $label, $year, $genre, $desc) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_add_release(?, ?, ?, ?, ?, ?, @release_id)");
+            $stmt->execute([$title, $artist, $label, $year, $genre, $desc]);
+            $result = $pdo->query("SELECT @release_id AS release_id")->fetch();
+            return $result['release_id'] > 0 ? $result['release_id'] : false;
+        } catch (PDOException $e) {
+            error_log("addRelease Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 更新专辑
+     */
+    public static function updateRelease($pdo, $releaseId, $title, $artist, $label, $year, $genre, $desc) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_update_release(?, ?, ?, ?, ?, ?, ?)");
+            return $stmt->execute([$releaseId, $title, $artist, $label, $year, $genre, $desc]);
+        } catch (PDOException $e) {
+            error_log("updateRelease Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ----------------
+    // 采购相关 (Admin)
+    // ----------------
+
+    /**
+     * 获取待处理供应商订单
+     */
+    public static function getPendingSupplierOrders($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM vw_admin_supplier_orders WHERE Status = 'Pending' ORDER BY OrderDate DESC")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getPendingSupplierOrders Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // ----------------
+    // 订单履约相关 (Staff)
+    // ----------------
+
+    /**
+     * 获取待发货在线订单
+     */
+    public static function getOnlineOrdersAwaitingShipment($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM vw_staff_online_orders_pending WHERE OrderStatus = 'Paid'")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getOnlineOrdersAwaitingShipment Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取已发货在线订单
+     */
+    public static function getOnlineOrdersShipped($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM vw_staff_online_orders_pending WHERE OrderStatus = 'Shipped'")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getOnlineOrdersShipped Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 发货订单
+     */
+    public static function shipOrder($pdo, $orderId) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_ship_order(?, @result)");
+            $stmt->execute([$orderId]);
+            $result = $pdo->query("SELECT @result AS result")->fetch();
+            return (int)$result['result'] === 1;
+        } catch (PDOException $e) {
+            error_log("shipOrder Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 获取订单用于取货验证
+     */
+    public static function getOrderForPickupValidation($pdo, $orderId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT OrderID, TotalAmount, OrderStatus FROM CustomerOrder WHERE OrderID = ? AND FulfilledByShopID = ? AND OrderStatus = 'Paid'");
+            $stmt->execute([$orderId, $shopId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getOrderForPickupValidation Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ----------------
+    // 报表相关 (Manager)
+    // ----------------
+
+    /**
+     * 获取按流派销售报表
+     */
+    public static function getSalesByGenre($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM vw_report_sales_by_genre ORDER BY AvgDaysToSell ASC")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getSalesByGenre Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取月度销售趋势
+     */
+    public static function getMonthlySalesTrend($pdo, $limit = 12) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_report_monthly_sales ORDER BY SalesMonth DESC LIMIT ?");
+            $stmt->execute([$limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getMonthlySalesTrend Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // ----------------
+    // 支付验证相关 (Customer)
+    // ----------------
+
+    /**
+     * 获取待支付订单验证
+     */
+    public static function getOrderForPayment($pdo, $orderId, $customerId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM CustomerOrder WHERE OrderID = ? AND CustomerID = ? AND OrderStatus = 'Pending'");
+            $stmt->execute([$orderId, $customerId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getOrderForPayment Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 验证订单预留商品状态
+     */
+    public static function validateOrderReservedItems($pdo, $orderId) {
+        try {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM OrderLine ol JOIN StockItem s ON ol.StockItemID = s.StockItemID WHERE ol.OrderID = ? AND s.Status = 'Reserved'");
+            $stmt->execute([$orderId]);
+            return (int)$stmt->fetchColumn();
+        } catch (PDOException $e) {
+            error_log("validateOrderReservedItems Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * 获取订单详情（客户端）
+     */
+    public static function getCustomerOrderDetail($pdo, $orderId, $customerId) {
+        try {
+            $stmt = $pdo->prepare("SELECT co.*, s.Name as ShopName FROM CustomerOrder co LEFT JOIN Shop s ON co.FulfilledByShopID = s.ShopID WHERE co.OrderID = ? AND co.CustomerID = ?");
+            $stmt->execute([$orderId, $customerId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getCustomerOrderDetail Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 获取订单商品明细
+     */
+    public static function getOrderItems($pdo, $orderId, $customerId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_customer_order_history WHERE OrderID = ? AND CustomerID = ?");
+            $stmt->execute([$orderId, $customerId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getOrderItems Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取会员升级进度
+     */
+    public static function getNextMembershipTier($pdo, $currentPoints) {
+        try {
+            $stmt = $pdo->prepare("SELECT MinPoints, TierName FROM MembershipTier WHERE MinPoints > ? ORDER BY MinPoints ASC LIMIT 1");
+            $stmt->execute([$currentPoints]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getNextMembershipTier Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ----------------
+    // 库存和调拨相关
+    // ----------------
+
+    /**
+     * 获取库存项用于调拨验证
+     */
+    public static function getStockItemForTransfer($pdo, $stockId) {
+        try {
+            $stmt = $pdo->prepare("SELECT ShopID, Status FROM StockItem WHERE StockItemID = ? AND Status = 'Available'");
+            $stmt->execute([$stockId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getStockItemForTransfer Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 获取客户简单列表（用于下拉选择）
+     */
+    public static function getCustomerSimpleList($pdo) {
+        try {
+            return $pdo->query("SELECT CustomerID, Name, Email FROM vw_customer_simple_list")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getCustomerSimpleList Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取回购订单列表
+     */
+    public static function getBuybackOrders($pdo, $shopId, $limit = 10) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_buyback_orders WHERE ShopName = (SELECT Name FROM Shop WHERE ShopID = ?) ORDER BY BuybackDate DESC LIMIT ?");
+            $stmt->execute([$shopId, $limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getBuybackOrders Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 处理回购
+     */
+    public static function processBuyback($pdo, $customerId, $empId, $shopId, $releaseId, $quantity, $buyPrice, $condition, $resalePrice) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_process_buyback(?, ?, ?, ?, ?, ?, ?, ?, @buyback_id)");
+            $stmt->execute([$customerId, $empId, $shopId, $releaseId, $quantity, $buyPrice, $condition, $resalePrice]);
+            $result = $pdo->query("SELECT @buyback_id AS buyback_id")->fetch();
+            return $result['buyback_id'] > 0 ? $result['buyback_id'] : false;
+        } catch (PDOException $e) {
+            error_log("processBuyback Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ----------------
     // 辅助函数
     // ----------------
 

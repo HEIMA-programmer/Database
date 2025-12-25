@@ -1,59 +1,45 @@
 <?php
+/**
+ * 【架构重构】回购页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Staff');
-require_once __DIR__ . '/../../includes/header.php';
 
 $shopId = $_SESSION['shop_id'] ?? 1;
+$empId = $_SESSION['user_id'];
 
-// 处理回购提交
+// ========== POST 请求处理 ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    try {
-        $releaseId = $_POST['release_id'];
-        $condition = $_POST['condition'];
-        $buyPrice = $_POST['buy_price'];
-        $resalePrice = $_POST['resale_price'];
-        $customerId = !empty($_POST['customer_id']) ? $_POST['customer_id'] : null;
-        $empId = $_SESSION['user_id'];
+    $data = [
+        'customer_id'   => !empty($_POST['customer_id']) ? (int)$_POST['customer_id'] : null,
+        'employee_id'   => $empId,
+        'shop_id'       => $shopId,
+        'release_id'    => (int)$_POST['release_id'],
+        'condition'     => $_POST['condition'],
+        'buy_price'     => (float)$_POST['buy_price'],
+        'resale_price'  => (float)$_POST['resale_price']
+    ];
 
-        // 使用存储过程处理回购（一站式处理）
-        $stmt = $pdo->prepare("CALL sp_process_buyback(?, ?, ?, ?, 1, ?, ?, ?, @buyback_id)");
-        $stmt->execute([
-            $customerId,
-            $empId,
-            $shopId,
-            $releaseId,
-            $buyPrice,      // 回购单价（支付给客户）
-            $condition,     // 品相
-            $resalePrice    // 转售价格
-        ]);
+    $result = handleBuybackSubmission($pdo, $data);
+    flash($result['message'], $result['success'] ? 'success' : 'danger');
 
-        // 获取创建的回购订单ID
-        $result = $pdo->query("SELECT @buyback_id AS buyback_id")->fetch();
-        $buybackId = $result['buyback_id'];
-
-        if ($buybackId > 0) {
-            flash("Buyback processed successfully. Buyback Order #$buybackId created. Item added to inventory.", 'success');
-        } else {
-            throw new Exception("Failed to process buyback.");
-        }
-    } catch (Exception $e) {
-        error_log($e->getMessage());
-        flash("Error processing buyback: " . $e->getMessage(), 'danger');
-    }
     header("Location: buyback.php");
     exit();
 }
 
-$releases = $pdo->query("SELECT ReleaseID, Title, ArtistName FROM ReleaseAlbum ORDER BY Title")->fetchAll();
-$customers = $pdo->query("SELECT CustomerID, Name, Email FROM Customer ORDER BY Name")->fetchAll();
+// ========== 数据准备 ==========
+$pageData = prepareBuybackPageData($pdo, $shopId);
+$releases = $pageData['releases'];
+$customers = $pageData['customers'];
+$recentBuybacks = $pageData['recent_buybacks'];
 
-// 【新增】使用 vw_buyback_orders 视图获取本店回购历史
-$recentBuybacks = $pdo->prepare("SELECT * FROM vw_buyback_orders WHERE ShopName = (SELECT Name FROM Shop WHERE ShopID = ?) ORDER BY BuybackDate DESC LIMIT 10");
-$recentBuybacks->execute([$shopId]);
-$recentBuybacks = $recentBuybacks->fetchAll();
+require_once __DIR__ . '/../../includes/header.php';
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="row">
     <div class="col-lg-6">
         <div class="text-center mb-4">
@@ -122,7 +108,7 @@ $recentBuybacks = $recentBuybacks->fetchAll();
         </div>
     </div>
 
-    <!-- 【新增】回购历史列表，使用 vw_buyback_orders 视图 -->
+    <!-- 回购历史列表 -->
     <div class="col-lg-6">
         <div class="text-center mb-4">
             <h2 class="text-info"><i class="fa-solid fa-history me-2"></i>Recent Buybacks</h2>

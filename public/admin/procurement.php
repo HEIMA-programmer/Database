@@ -1,87 +1,56 @@
 <?php
+/**
+ * 【架构重构】采购管理页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Admin');
-require_once __DIR__ . '/../../includes/header.php';
 
-// [Fix: Robustness] 动态获取仓库ID并检查有效性
-$warehouseId = getShopIdByType($pdo, 'Warehouse');
-if (!$warehouseId) {
-    echo "<div class='alert alert-danger'>Critical Configuration Error: 'Warehouse' shop type not found in database. Procurement functions disabled.</div>";
-    // 停止渲染后续逻辑，或者禁用按钮
-    $warehouseId = 0; // Prevent crash, logic will handle 0
-}
+// ========== 数据准备 ==========
+$pageData = prepareProcurementPageData($pdo);
+$warehouseId = $pageData['warehouse_id'];
+$suppliers = $pageData['suppliers'];
+$releases = $pageData['releases'];
+$pendingPOs = $pageData['pending_orders'];
 
-// --- Action 1: Create New Supplier Order ---
+// ========== POST 请求处理 ==========
+// Action 1: Create New Supplier Order
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_po'])) {
-    try {
-        $pdo->beginTransaction();
+    $data = [
+        'supplier_id'  => (int)$_POST['supplier_id'],
+        'employee_id'  => $_SESSION['user_id'],
+        'release_id'   => (int)$_POST['release_id'],
+        'quantity'     => (int)$_POST['quantity'],
+        'unit_cost'    => (float)$_POST['unit_cost']
+    ];
 
-        $supplierId = $_POST['supplier_id'];
-        $empId = $_SESSION['user_id'];
-        $releaseId = $_POST['release_id'];
-        $qty = $_POST['quantity'];
-        $cost = $_POST['unit_cost'];
+    $result = handleProcurementCreatePO($pdo, $data, $warehouseId);
+    flash($result['message'], $result['success'] ? 'success' : 'danger');
 
-        // 使用存储过程创建供应商订单
-        $stmt = $pdo->prepare("CALL sp_create_supplier_order(?, ?, ?, @order_id)");
-        $stmt->execute([$supplierId, $empId, $warehouseId]);
-
-        // 获取创建的订单ID
-        $result = $pdo->query("SELECT @order_id AS order_id")->fetch();
-        $orderId = $result['order_id'];
-
-        if ($orderId > 0) {
-            // 添加订单行项目
-            $stmt = $pdo->prepare("CALL sp_add_supplier_order_line(?, ?, ?, ?)");
-            $stmt->execute([$orderId, $releaseId, $qty, $cost]);
-
-            $pdo->commit();
-            flash("Supplier Order #$orderId created successfully.", 'success');
-        } else {
-            throw new Exception("Failed to create supplier order.");
-        }
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        flash("Error creating order: " . $e->getMessage(), 'danger');
-    }
     header("Location: procurement.php");
     exit();
 }
 
-// --- Action 2: Receive Supplier Order (The "Put-away" Flow) ---
+// Action 2: Receive Supplier Order
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_po'])) {
-    $orderId = $_POST['po_id'];
+    $orderId = (int)$_POST['po_id'];
 
-    if (!$warehouseId) {
-        flash("Cannot receive items: Warehouse ID not configured.", 'danger');
-        header("Location: procurement.php");
-        exit();
-    }
+    $result = handleProcurementReceivePO($pdo, $orderId, $warehouseId);
+    flash($result['message'], $result['success'] ? 'success' : 'danger');
 
-    try {
-        // 使用存储过程接收供应商订单并生成库存
-        // 【修复】markup_rate = 0.5 表示售价是成本的150%（售价 = 成本 × (1 + 0.5)）
-        $batchNo = "BATCH-" . date('Ymd') . "-" . $orderId;
-        $stmt = $pdo->prepare("CALL sp_receive_supplier_order(?, ?, ?, ?)");
-        $stmt->execute([$orderId, $batchNo, 'New', 0.5]); // 加价率0.5 = 售价为成本的1.5倍
-
-        flash("Supplier Order #$orderId received. Items added to Warehouse inventory.", 'success');
-    } catch (Exception $e) {
-        flash("Error receiving order: " . $e->getMessage(), 'danger');
-    }
     header("Location: procurement.php");
     exit();
 }
 
-// --- Data Queries ---
-$suppliers = $pdo->query("SELECT * FROM Supplier ORDER BY Name")->fetchAll();
-$releases = $pdo->query("SELECT ReleaseID, Title, ArtistName FROM ReleaseAlbum ORDER BY Title")->fetchAll();
-
-// 使用视图查询待处理的供应商订单
-$pendingPOs = $pdo->query("SELECT * FROM vw_admin_supplier_orders WHERE Status = 'Pending' ORDER BY OrderDate DESC")->fetchAll();
-
+require_once __DIR__ . '/../../includes/header.php';
 ?>
+
+<!-- ========== 表现层 ========== -->
+<?php if (!$warehouseId): ?>
+    <div class='alert alert-danger'>Critical Configuration Error: 'Warehouse' shop type not found in database. Procurement functions disabled.</div>
+<?php endif; ?>
 
 <div class="row mb-4">
     <div class="col-12 d-flex justify-content-between align-items-center">
@@ -155,7 +124,7 @@ $pendingPOs = $pdo->query("SELECT * FROM vw_admin_supplier_orders WHERE Status =
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    
+
                     <hr class="border-secondary">
                     <h6 class="text-warning">Order Items</h6>
                     <div class="row g-3">

@@ -1,8 +1,12 @@
 <?php
+/**
+ * 【架构重构】订单详情页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Customer');
-require_once __DIR__ . '/../../includes/header.php';
 
 $customerId = $_SESSION['user_id'];
 $orderId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -13,38 +17,23 @@ if (!$orderId) {
     exit();
 }
 
-// 获取订单头信息
-$orderSql = "SELECT co.*, s.Name as ShopName
-             FROM CustomerOrder co
-             LEFT JOIN Shop s ON co.FulfilledByShopID = s.ShopID
-             WHERE co.OrderID = ? AND co.CustomerID = ?";
-$stmt = $pdo->prepare($orderSql);
-$stmt->execute([$orderId, $customerId]);
-$order = $stmt->fetch();
+// ========== 数据准备 ==========
+$pageData = prepareOrderDetailPageData($pdo, $orderId, $customerId);
 
-if (!$order) {
+if (!$pageData['found']) {
     flash("Order not found or access denied.", 'danger');
     header("Location: orders.php");
     exit();
 }
 
-// 获取订单明细 (使用视图)
-$detailSql = "SELECT * FROM vw_customer_order_history WHERE OrderID = ? AND CustomerID = ?";
-$stmt = $pdo->prepare($detailSql);
-$stmt->execute([$orderId, $customerId]);
-$items = $stmt->fetchAll();
+$order = $pageData['order'];
+$items = $pageData['items'];
+$statusClass = $pageData['status_class'];
 
-// 状态样式映射
-$statusClass = match($order['OrderStatus']) {
-    'Paid' => 'bg-success',
-    'Completed' => 'bg-success',
-    'Shipped' => 'bg-info',
-    'Pending' => 'bg-warning text-dark',
-    'Cancelled' => 'bg-danger',
-    default => 'bg-secondary'
-};
+require_once __DIR__ . '/../../includes/header.php';
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="mb-4">
     <a href="orders.php" class="btn btn-outline-light">
         <i class="fa-solid fa-arrow-left me-2"></i>Back to Orders

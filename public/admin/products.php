@@ -1,60 +1,43 @@
 <?php
+/**
+ * 【架构重构】产品管理页面
+ * 表现层 - 仅负责数据展示和用户交互
+ */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Admin');
+
+// ========== POST 请求处理 ==========
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = isset($_POST['add_release']) ? 'add' :
+             (isset($_POST['edit_release']) ? 'edit' : '');
+
+    $data = [
+        'release_id' => $_POST['release_id'] ?? null,
+        'title'      => trim($_POST['title'] ?? ''),
+        'artist'     => trim($_POST['artist'] ?? ''),
+        'label'      => trim($_POST['label'] ?? ''),
+        'year'       => (int)($_POST['year'] ?? 0),
+        'genre'      => trim($_POST['genre'] ?? ''),
+        'desc'       => trim($_POST['desc'] ?? '')
+    ];
+
+    $result = handleReleaseAction($pdo, $action, $data);
+    flash($result['message'], $result['success'] ? 'success' : 'danger');
+
+    header("Location: products.php");
+    exit();
+}
+
+// ========== 数据准备 ==========
+$pageData = prepareProductsPageData($pdo);
+$releases = $pageData['releases'];
+
 require_once __DIR__ . '/../../includes/header.php';
-
-// --- Action: Add Release ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_release'])) {
-    try {
-        $sql = "INSERT INTO ReleaseAlbum (Title, ArtistName, LabelName, ReleaseYear, Genre, Format, Description) 
-                VALUES (:title, :artist, :label, :year, :genre, 'Vinyl', :desc)";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            ':title' => trim($_POST['title']),
-            ':artist' => trim($_POST['artist']),
-            ':label' => trim($_POST['label']),
-            ':year' => trim($_POST['year']),
-            ':genre' => trim($_POST['genre']),
-            ':desc' => trim($_POST['desc'])
-        ]);
-        flash("New release added to catalog.", 'success');
-        header("Location: products.php");
-        exit();
-    } catch (PDOException $e) {
-        flash("Error adding release: " . $e->getMessage(), 'danger');
-    }
-}
-
-// --- Action: Edit Release (New Feature) ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_release'])) {
-    try {
-        $sql = "UPDATE ReleaseAlbum 
-                SET Title = :title, ArtistName = :artist, LabelName = :label, 
-                    ReleaseYear = :year, Genre = :genre, Description = :desc 
-                WHERE ReleaseID = :id";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            ':title' => trim($_POST['title']),
-            ':artist' => trim($_POST['artist']),
-            ':label' => trim($_POST['label']),
-            ':year' => trim($_POST['year']),
-            ':genre' => trim($_POST['genre']),
-            ':desc' => trim($_POST['desc']),
-            ':id' => $_POST['release_id']
-        ]);
-        flash("Release updated successfully.", 'success');
-        header("Location: products.php");
-        exit();
-    } catch (PDOException $e) {
-        flash("Error updating release: " . $e->getMessage(), 'danger');
-    }
-}
-
-// [Phase 2 Fix] 使用视图查询
-$releases = $pdo->query("SELECT * FROM vw_admin_release_list ORDER BY ReleaseID DESC")->fetchAll();
 ?>
 
+<!-- ========== 表现层 ========== -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="text-warning"><i class="fa-solid fa-compact-disc me-2"></i>Global Product Catalog</h2>
     <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addModal">
@@ -84,8 +67,8 @@ $releases = $pdo->query("SELECT * FROM vw_admin_release_list ORDER BY ReleaseID 
                     <td><?= h($r['LabelName']) ?> <small class="text-muted">(<?= $r['ReleaseYear'] ?>)</small></td>
                     <td><span class="badge bg-secondary"><?= h($r['Genre']) ?></span></td>
                     <td>
-                        <button class="btn btn-sm btn-outline-info edit-btn" 
-                                data-bs-toggle="modal" 
+                        <button class="btn btn-sm btn-outline-info edit-btn"
+                                data-bs-toggle="modal"
                                 data-bs-target="#editModal"
                                 data-id="<?= $r['ReleaseID'] ?>"
                                 data-title="<?= h($r['Title']) ?>"
@@ -162,7 +145,7 @@ $releases = $pdo->query("SELECT * FROM vw_admin_release_list ORDER BY ReleaseID 
                 <div class="modal-body">
                     <input type="hidden" name="edit_release" value="1">
                     <input type="hidden" name="release_id" id="edit_id">
-                    
+
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label>Title</label>
@@ -201,7 +184,6 @@ $releases = $pdo->query("SELECT * FROM vw_admin_release_list ORDER BY ReleaseID 
 </div>
 
 <script>
-    // JS Logic to populate Edit Modal
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             document.getElementById('edit_id').value = this.dataset.id;

@@ -98,6 +98,12 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order is not in Pending status';
     END IF;
 
+    -- 【修复】先更新订单状态为Received，避免触发器循环依赖
+    -- 触发器 trg_before_stock_item_insert 要求订单状态为 Received
+    UPDATE SupplierOrder
+    SET Status = 'Received', ReceivedDate = NOW()
+    WHERE SupplierOrderID = p_order_id;
+
     -- 遍历订单行，生成StockItem
     OPEN cur;
     read_loop: LOOP
@@ -123,11 +129,6 @@ BEGIN
         END WHILE;
     END LOOP;
     CLOSE cur;
-
-    -- 更新订单状态
-    UPDATE SupplierOrder
-    SET Status = 'Received', ReceivedDate = NOW()
-    WHERE SupplierOrderID = p_order_id;
 
     -- 计算总成本
     UPDATE SupplierOrder so

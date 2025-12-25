@@ -247,7 +247,8 @@ SELECT
     so.Status,
     so.ReceivedDate,
     so.TotalCost,
-    COUNT(sol.ReleaseID) AS ItemTypes
+    COUNT(sol.ReleaseID) AS ItemTypes,
+    COALESCE(SUM(sol.Quantity), 0) AS TotalItems
 FROM SupplierOrder so
 JOIN Supplier s ON so.SupplierID = s.SupplierID
 JOIN Employee e ON so.CreatedByEmployeeID = e.EmployeeID
@@ -278,14 +279,15 @@ GROUP BY bo.BuybackOrderID, c.Name, c.Email, e.Name, sh.Name, bo.BuybackDate, bo
 -- 分析报表视图
 -- ================================================
 
--- 14. [Report] Sales by Genre
+-- 14. [Report] Sales by Genre (with turnover metrics)
 CREATE OR REPLACE VIEW vw_report_sales_by_genre AS
 SELECT
     r.Genre,
     COUNT(DISTINCT ol.OrderID) AS TotalOrders,
     COUNT(ol.StockItemID) AS ItemsSold,
     SUM(ol.PriceAtSale) AS TotalRevenue,
-    AVG(ol.PriceAtSale) AS AvgPrice
+    AVG(ol.PriceAtSale) AS AvgPrice,
+    AVG(DATEDIFF(COALESCE(s.DateSold, NOW()), s.AcquiredDate)) AS AvgDaysToSell
 FROM OrderLine ol
 JOIN StockItem s ON ol.StockItemID = s.StockItemID
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
@@ -294,21 +296,33 @@ WHERE co.OrderStatus IN ('Paid', 'Completed')
 GROUP BY r.Genre
 ORDER BY TotalRevenue DESC;
 
--- 15. [Report] Top Customers
+-- 15. [Report] Top Customers (with RankPosition using window function)
 CREATE OR REPLACE VIEW vw_report_top_customers AS
 SELECT
-    c.CustomerID,
-    c.Name,
-    c.Email,
-    mt.TierName,
-    c.Points,
-    COUNT(DISTINCT co.OrderID) AS OrderCount,
-    SUM(co.TotalAmount) AS TotalSpent,
-    MAX(co.OrderDate) AS LastOrderDate
-FROM Customer c
-JOIN MembershipTier mt ON c.TierID = mt.TierID
-LEFT JOIN CustomerOrder co ON c.CustomerID = co.CustomerID
-WHERE co.OrderStatus IN ('Paid', 'Completed')
-GROUP BY c.CustomerID, c.Name, c.Email, mt.TierName, c.Points
+    CustomerID,
+    Name,
+    Email,
+    TierName,
+    Points,
+    OrderCount,
+    TotalSpent,
+    LastOrderDate,
+    RANK() OVER (ORDER BY TotalSpent DESC) AS RankPosition
+FROM (
+    SELECT
+        c.CustomerID,
+        c.Name,
+        c.Email,
+        mt.TierName,
+        c.Points,
+        COUNT(DISTINCT co.OrderID) AS OrderCount,
+        COALESCE(SUM(co.TotalAmount), 0) AS TotalSpent,
+        MAX(co.OrderDate) AS LastOrderDate
+    FROM Customer c
+    JOIN MembershipTier mt ON c.TierID = mt.TierID
+    LEFT JOIN CustomerOrder co ON c.CustomerID = co.CustomerID
+        AND co.OrderStatus IN ('Paid', 'Completed')
+    GROUP BY c.CustomerID, c.Name, c.Email, mt.TierName, c.Points
+) AS customer_stats
 ORDER BY TotalSpent DESC
 LIMIT 50;

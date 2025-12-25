@@ -100,7 +100,7 @@ CREATE TABLE SupplierOrderLine (
 -- 【重构】回购订单表 - 专门处理客户回购
 CREATE TABLE BuybackOrder (
     BuybackOrderID INT AUTO_INCREMENT PRIMARY KEY,
-    CustomerID INT NOT NULL,
+    CustomerID INT, -- 【修复】允许NULL以支持Walk-in匿名客户回购
     ProcessedByEmployeeID INT NOT NULL,
     ShopID INT NOT NULL, -- 回购处理门店
     BuybackDate DATETIME DEFAULT CURRENT_TIMESTAMP,

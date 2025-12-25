@@ -61,9 +61,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_po'])) {
 
     try {
         // 使用存储过程接收供应商订单并生成库存
+        // 【修复】markup_rate = 0.5 表示售价是成本的150%（售价 = 成本 × (1 + 0.5)）
         $batchNo = "BATCH-" . date('Ymd') . "-" . $orderId;
         $stmt = $pdo->prepare("CALL sp_receive_supplier_order(?, ?, ?, ?)");
-        $stmt->execute([$orderId, $batchNo, 'New', 1.5]); // 定价倍率1.5
+        $stmt->execute([$orderId, $batchNo, 'New', 0.5]); // 加价率0.5 = 售价为成本的1.5倍
 
         flash("Supplier Order #$orderId received. Items added to Warehouse inventory.", 'success');
     } catch (Exception $e) {

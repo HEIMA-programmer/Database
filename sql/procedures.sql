@@ -292,18 +292,16 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transfer is not in transit';
     END IF;
 
-    -- 更新调拨状态
+    -- 更新调拨状态（触发器 trg_after_transfer_complete 会自动更新库存位置和状态）
     UPDATE InventoryTransfer
     SET Status = 'Completed',
         ReceivedByEmployeeID = p_received_by_employee_id,
         ReceivedDate = NOW()
     WHERE TransferID = p_transfer_id;
 
-    -- 更新库存位置和状态
-    UPDATE StockItem
-    SET ShopID = v_to_shop_id,
-        Status = 'Available'
-    WHERE StockItemID = v_stock_item_id;
+    -- 【修复】移除重复的库存更新代码
+    -- 库存位置和状态的更新由触发器 trg_after_transfer_complete 自动处理
+    -- 保持单一职责原则：存储过程只负责调拨状态变更，触发器负责库存状态同步
 
     COMMIT;
 END$$
@@ -385,9 +383,11 @@ END$$
 
 -- 完成订单（支付成功）
 DROP PROCEDURE IF EXISTS sp_complete_order$$
+-- 【注意】p_points_earned 参数为向后兼容保留，实际积分由触发器 trg_after_order_complete 自动计算
+-- 调用方传递的值不会被使用
 CREATE PROCEDURE sp_complete_order(
     IN p_order_id INT,
-    IN p_points_earned INT
+    IN p_points_earned INT -- 【已废弃】积分由触发器自动计算，此参数仅为API兼容保留
 )
 BEGIN
     DECLARE v_customer_id INT;
@@ -408,7 +408,8 @@ BEGIN
     WHERE OrderID = p_order_id
     FOR UPDATE;
 
-    IF v_order_status NOT IN ('Pending', 'Paid') THEN
+    -- 【修复】支持 Shipped 状态的订单完成（在线订单发货后确认送达）
+    IF v_order_status NOT IN ('Pending', 'Paid', 'Shipped') THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid order status for completion';
     END IF;
 

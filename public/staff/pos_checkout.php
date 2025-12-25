@@ -71,17 +71,24 @@ try {
     // 5. 计算积分
     $pointsEarned = floor($total);
 
-    // 6. 使用存储过程完成订单
+    // 6. 【修复】在完成订单前保存原始会员等级（用于检测升级）
+    $oldTierInfo = null;
+    if ($customerId) {
+        $oldTierInfo = getCustomerTierInfo($pdo, $customerId);
+    }
+
+    // 7. 使用存储过程完成订单（触发器会自动更新积分和等级）
     $success = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
 
     if (!$success) {
         throw new Exception("Failed to complete order.");
     }
 
-    // 7. 处理积分和升级（如果有会员）
+    // 8. 【修复】检测会员升级（传入原始等级ID以正确检测升级）
     $upgradeMsg = "";
     if ($customerId) {
-        $res = addPointsAndCheckUpgrade($pdo, $customerId, $total);
+        $oldTierId = $oldTierInfo ? $oldTierInfo['TierID'] : null;
+        $res = checkMembershipUpgrade($pdo, $customerId, $total, $oldTierId);
         if ($res && $res['upgraded']) {
             $upgradeMsg = " Customer upgraded to {$res['new_tier_name']}!";
         }

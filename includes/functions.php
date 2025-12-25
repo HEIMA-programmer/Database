@@ -100,26 +100,50 @@ function getShopIdByType($pdo, $type) {
 }
 
 /**
- * [Refactored] 核心业务逻辑：增加积分并检查会员升级
- * 使用存储过程 sp_update_customer_tier 来处理会员等级升级
- * 此函数可在 Online Checkout 和 POS Checkout 中复用
+ * 【新增】获取客户当前的会员等级信息
+ * 在调用 completeOrder 之前调用此函数保存原始等级
  */
-function addPointsAndCheckUpgrade($pdo, $customerId, $amountSpent) {
-    // 1. 计算积分 (假设 1元 = 1分)
+function getCustomerTierInfo($pdo, $customerId) {
+    if (!$customerId) return null;
+
+    try {
+        $stmt = $pdo->prepare("SELECT TierID, TierName, Points FROM vw_customer_profile_info WHERE CustomerID = ?");
+        $stmt->execute([$customerId]);
+        return $stmt->fetch();
+    } catch (Exception $e) {
+        error_log("Error in getCustomerTierInfo: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * 【修复】检查会员升级状态
+ * 在 completeOrder 之后调用，传入升级前的 TierID 来对比
+ *
+ * @param PDO $pdo
+ * @param int $customerId
+ * @param float $amountSpent 消费金额（用于计算积分）
+ * @param int|null $oldTierId 升级前的等级ID（从 getCustomerTierInfo 获取）
+ * @return array|false
+ */
+function checkMembershipUpgrade($pdo, $customerId, $amountSpent, $oldTierId = null) {
+    if (!$customerId) return false;
+
     $pointsEarned = floor($amountSpent);
     if ($pointsEarned <= 0) return false;
 
     try {
-        // 注意：积分更新和会员升级现在由触发器 trg_after_order_complete 自动处理
-        // 此函数仅查询当前状态用于显示
-
-        // 2. 查询当前会员状态（触发器已自动更新积分和等级）
+        // 查询当前会员状态（触发器已自动更新积分和等级）
         $stmt = $pdo->prepare("SELECT TierID, TierName FROM vw_customer_profile_info WHERE CustomerID = ?");
         $stmt->execute([$customerId]);
         $currentStatus = $stmt->fetch();
 
-        // 由于无法知道升级前的等级，这里只返回当前状态
-        $upgraded = false;
+        if (!$currentStatus) {
+            return false;
+        }
+
+        // 对比升级前后的等级
+        $upgraded = ($oldTierId !== null && $currentStatus['TierID'] > $oldTierId);
         $newTierName = $currentStatus['TierName'] ?? 'Unknown';
 
         return [
@@ -128,8 +152,19 @@ function addPointsAndCheckUpgrade($pdo, $customerId, $amountSpent) {
             'new_tier_name' => $newTierName
         ];
     } catch (Exception $e) {
-        error_log("Error in addPointsAndCheckUpgrade: " . $e->getMessage());
+        error_log("Error in checkMembershipUpgrade: " . $e->getMessage());
         return false;
     }
+}
+
+/**
+ * 【已废弃】旧函数保留用于向后兼容
+ * 建议使用 getCustomerTierInfo + checkMembershipUpgrade 组合
+ * @deprecated 使用 checkMembershipUpgrade 替代
+ */
+function addPointsAndCheckUpgrade($pdo, $customerId, $amountSpent) {
+    // 积分更新现在由触发器 trg_after_order_complete 自动处理
+    // 此函数仅用于向后兼容，返回当前状态但无法检测升级
+    return checkMembershipUpgrade($pdo, $customerId, $amountSpent, null);
 }
 ?>

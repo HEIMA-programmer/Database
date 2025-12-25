@@ -258,11 +258,12 @@ LEFT JOIN SupplierOrderLine sol ON so.SupplierOrderID = sol.SupplierOrderID
 GROUP BY so.SupplierOrderID, s.Name, e.Name, sh.Name, so.OrderDate, so.Status, so.ReceivedDate, so.TotalCost;
 
 -- 13. [Admin/Staff View] Buyback Orders
+-- 【修复】使用 LEFT JOIN 支持匿名客户回购（CustomerID 可为 NULL）
 CREATE OR REPLACE VIEW vw_buyback_orders AS
 SELECT
     bo.BuybackOrderID,
-    c.Name AS CustomerName,
-    c.Email AS CustomerEmail,
+    COALESCE(c.Name, 'Walk-in Customer') AS CustomerName,
+    COALESCE(c.Email, '-') AS CustomerEmail,
     e.Name AS ProcessedBy,
     sh.Name AS ShopName,
     bo.BuybackDate,
@@ -270,7 +271,7 @@ SELECT
     bo.TotalPayment,
     COUNT(bol.ReleaseID) AS ItemTypes
 FROM BuybackOrder bo
-JOIN Customer c ON bo.CustomerID = c.CustomerID
+LEFT JOIN Customer c ON bo.CustomerID = c.CustomerID
 JOIN Employee e ON bo.ProcessedByEmployeeID = e.EmployeeID
 JOIN Shop sh ON bo.ShopID = sh.ShopID
 LEFT JOIN BuybackOrderLine bol ON bo.BuybackOrderID = bol.BuybackOrderID

@@ -1070,7 +1070,7 @@ function handleDeliveryConfirmation($pdo, $orderId) {
         }
 
         $pointsEarned = floor($order['TotalAmount']);
-        $success = DBProcedures::completeOrder($pdo, $orderId;
+        $success = DBProcedures::completeOrder($pdo, $orderId);
 
         if ($success) {
             return ['success' => true, 'message' => "Order #$orderId delivery confirmed!"];

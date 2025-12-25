@@ -4,6 +4,8 @@ require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Staff');
 require_once __DIR__ . '/../../includes/header.php';
 
+$shopId = $_SESSION['shop_id'] ?? 1;
+
 // 处理回购提交
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -12,7 +14,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $buyPrice = $_POST['buy_price'];
         $resalePrice = $_POST['resale_price'];
         $customerId = !empty($_POST['customer_id']) ? $_POST['customer_id'] : null;
-        $shopId = $_SESSION['shop_id'] ?? 1;
         $empId = $_SESSION['user_id'];
 
         // 使用存储过程处理回购（一站式处理）
@@ -46,9 +47,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $releases = $pdo->query("SELECT ReleaseID, Title, ArtistName FROM ReleaseAlbum ORDER BY Title")->fetchAll();
 $customers = $pdo->query("SELECT CustomerID, Name, Email FROM Customer ORDER BY Name")->fetchAll();
+
+// 【新增】使用 vw_buyback_orders 视图获取本店回购历史
+$recentBuybacks = $pdo->prepare("SELECT * FROM vw_buyback_orders WHERE ShopName = (SELECT Name FROM Shop WHERE ShopID = ?) ORDER BY BuybackDate DESC LIMIT 10");
+$recentBuybacks->execute([$shopId]);
+$recentBuybacks = $recentBuybacks->fetchAll();
 ?>
 
-<div class="row justify-content-center">
+<div class="row">
     <div class="col-lg-6">
         <div class="text-center mb-4">
             <h2 class="text-warning"><i class="fa-solid fa-recycle me-2"></i>Used Record Buyback</h2>
@@ -112,6 +118,62 @@ $customers = $pdo->query("SELECT CustomerID, Name, Email FROM Customer ORDER BY 
                         <i class="fa-solid fa-check me-2"></i>Authorize Payout & Print Label
                     </button>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 【新增】回购历史列表，使用 vw_buyback_orders 视图 -->
+    <div class="col-lg-6">
+        <div class="text-center mb-4">
+            <h2 class="text-info"><i class="fa-solid fa-history me-2"></i>Recent Buybacks</h2>
+            <p class="text-muted">Recent buyback transactions at this location.</p>
+        </div>
+
+        <div class="card bg-dark border-secondary">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Customer</th>
+                            <th>Date</th>
+                            <th>Items</th>
+                            <th>Payout</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($recentBuybacks)): ?>
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">No buyback records found.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($recentBuybacks as $bb): ?>
+                            <tr>
+                                <td>#<?= $bb['BuybackOrderID'] ?></td>
+                                <td>
+                                    <div class="fw-bold"><?= h($bb['CustomerName']) ?></div>
+                                    <small class="text-muted"><?= h($bb['CustomerEmail']) ?></small>
+                                </td>
+                                <td><?= formatDate($bb['BuybackDate']) ?></td>
+                                <td><span class="badge bg-secondary"><?= $bb['ItemTypes'] ?> types</span></td>
+                                <td class="text-warning fw-bold"><?= formatPrice($bb['TotalPayment']) ?></td>
+                                <td>
+                                    <?php
+                                    $statusClass = match($bb['Status']) {
+                                        'Completed' => 'bg-success',
+                                        'Pending' => 'bg-warning text-dark',
+                                        'Cancelled' => 'bg-danger',
+                                        default => 'bg-secondary'
+                                    };
+                                    ?>
+                                    <span class="badge <?= $statusClass ?>"><?= h($bb['Status']) ?></span>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>

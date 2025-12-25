@@ -133,7 +133,7 @@ INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, BuybackDate
 -- 5. 插入回购订单明细 (替换原 PurchaseOrderLine 12-13 行)
 INSERT INTO BuybackOrderLine (BuybackOrderID, ReleaseID, Quantity, UnitPrice, ConditionGrade) VALUES
 (1, 12, 3, 12.00, 'VG+'),
-(1, 13, 2, 15.00, 'NM')
+(1, 13, 2, 15.00, 'NM');
 -- ==========================================
 -- 7. 库存项 (修正后的数据，确保 ID 对应)
 -- ==========================================

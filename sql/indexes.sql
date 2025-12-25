@@ -85,8 +85,11 @@ CREATE INDEX idx_customer_tier ON Customer(TierID);
 -- 按积分排序（用于排行榜）
 CREATE INDEX idx_customer_points ON Customer(Points DESC);
 
--- 按生日月份查找（生日优惠）
-CREATE INDEX idx_customer_birthday_month ON Customer((MONTH(Birthday)));
+-- 1. 先在 Customer 表中添加一个虚拟列，计算生日月份
+ALTER TABLE Customer ADD COLUMN b_month INT AS (MONTH(Birthday)) VIRTUAL;
+
+-- 2. 对这个虚拟列创建普通索引
+CREATE INDEX idx_customer_birthday_month ON Customer(b_month);
 
 -- ================================================
 -- 5. Employee 表索引

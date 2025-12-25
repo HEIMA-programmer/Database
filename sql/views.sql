@@ -516,8 +516,7 @@ SELECT
     ShopID,
     Name,
     Type,
-    Address,
-    Phone
+    Address
 FROM Shop;
 
 -- 30. [架构重构] 会员等级规则视图

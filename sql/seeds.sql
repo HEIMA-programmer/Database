@@ -141,7 +141,7 @@ INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, BuybackDate
 
 INSERT INTO BuybackOrderLine (BuybackOrderID, ReleaseID, Quantity, UnitPrice, ConditionGrade) VALUES
 (1, 9, 3, 12.00, 'VG+'),
-(1, 9, 2, 15.00, 'VG');
+(2, 9, 2, 15.00, 'VG');
 
 -- ==========================================
 -- 8. 库存项 - 【修复】确保状态正确

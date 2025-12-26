@@ -1,7 +1,7 @@
 <?php
 /**
  * 【架构重构】商品目录页面
- * 表现层 - 仅负责数据展示和用户交互
+ * 表现层 - 按专辑分组显示，点击查看详情和各条件库存
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
@@ -53,58 +53,72 @@ require_once __DIR__ . '/../../includes/header.php';
     <?php else: ?>
         <?php foreach ($items as $item): ?>
             <div class="col">
-                <div class="card h-100 border-0">
-                    <div class="position-relative pt-3">
-                        <div class="vinyl-placeholder">
-                            <div class="vinyl-center">
-                                <div>Retro<br>Echo</div>
+                <a href="release.php?id=<?= $item['ReleaseID'] ?>" class="text-decoration-none">
+                    <div class="card h-100 border-0 catalog-card">
+                        <div class="position-relative pt-3">
+                            <div class="vinyl-placeholder">
+                                <div class="vinyl-center">
+                                    <div>Retro<br>Echo</div>
+                                </div>
                             </div>
-                        </div>
-                        <span class="position-absolute top-0 end-0 m-2 badge bg-dark border border-secondary text-warning">
-                            <?= h($item['Genre']) ?>
-                        </span>
-                    </div>
-
-                    <div class="card-body text-center">
-                        <h5 class="card-title text-white mb-1 text-truncate" title="<?= h($item['Title']) ?>">
-                            <?= h($item['Title']) ?>
-                        </h5>
-                        <p class="card-text text-warning small mb-3"><?= h($item['ArtistName']) ?></p>
-
-                        <div class="d-flex justify-content-center gap-2 mb-3">
-                            <?php
-                                $condClass = match($item['ConditionGrade']) {
-                                    'New', 'Mint' => 'bg-success text-white',
-                                    'NM', 'VG+'   => 'bg-info text-dark',
-                                    default       => 'bg-secondary text-light'
-                                };
-                            ?>
-                            <span class="badge <?= $condClass ?> border border-dark rounded-pill">
-                                <?= h($item['ConditionGrade']) ?>
+                            <span class="position-absolute top-0 end-0 m-2 badge bg-dark border border-secondary text-warning">
+                                <?= h($item['Genre']) ?>
                             </span>
                         </div>
 
-                        <h4 class="fw-bold mb-3"><?= formatPrice($item['UnitPrice']) ?></h4>
+                        <div class="card-body text-center">
+                            <h5 class="card-title text-white mb-1 text-truncate" title="<?= h($item['Title']) ?>">
+                                <?= h($item['Title']) ?>
+                            </h5>
+                            <p class="card-text text-warning small mb-3"><?= h($item['ArtistName']) ?></p>
 
-                        <div class="d-grid">
-                            <form action="cart_action.php" method="POST">
-                                <input type="hidden" name="action" value="add">
-                                <input type="hidden" name="stock_id" value="<?= $item['StockItemID'] ?>">
-                                <button type="submit" class="btn btn-warning w-100 btn-sm">
-                                    <i class="fa-solid fa-cart-plus me-1"></i> Add to Cart
-                                </button>
-                            </form>
+                            <div class="d-flex justify-content-center gap-1 mb-3 flex-wrap">
+                                <?php
+                                    $conditions = explode(', ', $item['AvailableConditions']);
+                                    foreach ($conditions as $cond):
+                                        $condClass = match($cond) {
+                                            'New', 'Mint' => 'bg-success text-white',
+                                            'NM', 'VG+'   => 'bg-info text-dark',
+                                            default       => 'bg-secondary text-light'
+                                        };
+                                ?>
+                                    <span class="badge <?= $condClass ?> border border-dark rounded-pill" style="font-size: 0.65rem;">
+                                        <?= h($cond) ?>
+                                    </span>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <?php if ($item['MinPrice'] == $item['MaxPrice']): ?>
+                                <h4 class="fw-bold mb-2"><?= formatPrice($item['MinPrice']) ?></h4>
+                            <?php else: ?>
+                                <h4 class="fw-bold mb-2"><?= formatPrice($item['MinPrice']) ?> - <?= formatPrice($item['MaxPrice']) ?></h4>
+                            <?php endif; ?>
+
+                            <div class="text-muted small mb-2">
+                                <i class="fa-solid fa-box me-1"></i><?= $item['TotalAvailable'] ?> in stock
+                            </div>
+
+                            <div class="d-grid">
+                                <span class="btn btn-outline-warning btn-sm">
+                                    <i class="fa-solid fa-eye me-1"></i> View Details
+                                </span>
+                            </div>
                         </div>
                     </div>
-                    <div class="card-footer text-center">
-                        <small class="text-muted" style="font-size: 0.75rem;">
-                            <i class="fa-solid fa-location-dot me-1"></i><?= h($item['LocationName']) ?>
-                        </small>
-                    </div>
-                </div>
+                </a>
             </div>
         <?php endforeach; ?>
     <?php endif; ?>
 </div>
+
+<style>
+.catalog-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.catalog-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(255, 193, 7, 0.15);
+}
+</style>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

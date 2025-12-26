@@ -25,6 +25,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             break;
 
+        case 'add_multiple':
+            // 【新增】支持从专辑详情页按条件和数量添加
+            $releaseId = $_POST['release_id'] ?? null;
+            $condition = $_POST['condition'] ?? null;
+            $quantity = $_POST['quantity'] ?? 1;
+
+            if ($releaseId && $condition) {
+                $result = addMultipleToCart($pdo, $releaseId, $condition, $quantity);
+                flash($result['message'], $result['success'] ? 'success' : 'warning');
+            }
+            break;
+
         case 'remove':
             if ($stockId) {
                 if (removeFromCart($stockId)) {

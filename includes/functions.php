@@ -785,19 +785,19 @@ function prepareReportsPageData($pdo) {
 // =============================================
 
 /**
- * 准备商品目录页面数据
+ * 准备商品目录页面数据（分组显示）
  */
 function prepareCatalogPageData($pdo, $search = '', $genre = '') {
     require_once __DIR__ . '/db_procedures.php';
 
     return [
-        'items'  => DBProcedures::getCatalogItems($pdo, $search, $genre),
-        'genres' => DBProcedures::getCatalogGenres($pdo)
+        'items'  => DBProcedures::getCatalogItemsGrouped($pdo, $search, $genre),
+        'genres' => DBProcedures::getCatalogGenresGrouped($pdo)
     ];
 }
 
 /**
- * 准备商品详情页面数据
+ * 准备商品详情页面数据（原有方法，保留兼容性）
  */
 function prepareProductDetailData($pdo, $stockId) {
     require_once __DIR__ . '/db_procedures.php';
@@ -813,6 +813,59 @@ function prepareProductDetailData($pdo, $stockId) {
         'item'         => $item,
         'alternatives' => DBProcedures::getProductAlternatives($pdo, $item['ReleaseID'], $stockId, 5)
     ];
+}
+
+/**
+ * 【新增】准备专辑详情页面数据（按条件分组显示库存）
+ */
+function prepareReleaseDetailData($pdo, $releaseId) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    $release = DBProcedures::getReleaseInfo($pdo, $releaseId);
+
+    if (!$release) {
+        return ['found' => false];
+    }
+
+    return [
+        'found'      => true,
+        'release'    => $release,
+        'stockItems' => DBProcedures::getReleaseStockByCondition($pdo, $releaseId)
+    ];
+}
+
+/**
+ * 【新增】添加多个库存到购物车
+ */
+function addMultipleToCart($pdo, $releaseId, $conditionGrade, $quantity) {
+    require_once __DIR__ . '/db_procedures.php';
+
+    if (!isset($_SESSION['cart'])) {
+        $_SESSION['cart'] = [];
+    }
+
+    $quantity = max(1, min(10, (int)$quantity)); // 限制1-10
+
+    // 获取可用库存ID
+    $stockIds = DBProcedures::getAvailableStockIds($pdo, $releaseId, $conditionGrade, $quantity);
+
+    if (empty($stockIds)) {
+        return ['success' => false, 'message' => 'No available stock for this item.'];
+    }
+
+    $addedCount = 0;
+    foreach ($stockIds as $stockId) {
+        if (!in_array($stockId, $_SESSION['cart'])) {
+            $_SESSION['cart'][] = $stockId;
+            $addedCount++;
+        }
+    }
+
+    if ($addedCount > 0) {
+        return ['success' => true, 'message' => "$addedCount item(s) added to cart."];
+    } else {
+        return ['success' => false, 'message' => 'Items already in cart.'];
+    }
 }
 
 /**

@@ -19,6 +19,12 @@ if (empty($_SESSION['cart'])) {
 $customerId = $_SESSION['user_id'];
 $cart = $_SESSION['cart'];
 
+// 【修复】获取用户选择的订单类型
+$orderType = $_POST['order_type'] ?? 'Online';
+if (!in_array($orderType, ['Online', 'InStore'])) {
+    $orderType = 'Online';
+}
+
 // 动态获取线上仓库ID
 $warehouseId = getShopIdByType($pdo, 'Warehouse');
 if (!$warehouseId) {
@@ -46,8 +52,8 @@ try {
         $totalAmount += $item['UnitPrice'];
     }
 
-    // 3. 使用存储过程创建客户订单
-    $orderId = DBProcedures::createCustomerOrder($pdo, $customerId, $warehouseId, null, 'Online');
+    // 3. 使用存储过程创建客户订单（使用用户选择的订单类型）
+    $orderId = DBProcedures::createCustomerOrder($pdo, $customerId, $warehouseId, null, $orderType);
 
     if (!$orderId) {
         throw new Exception("Failed to create order.");

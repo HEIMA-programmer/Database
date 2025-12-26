@@ -559,3 +559,56 @@ FROM CustomerOrder
 WHERE OrderStatus != 'Cancelled'
 GROUP BY SalesMonth
 ORDER BY SalesMonth DESC;
+
+-- ================================================
+-- 33. [新增] 客户目录分组视图 - 按专辑分组显示
+-- 解决问题：同一专辑多库存显示多个卡片的问题
+-- ================================================
+CREATE OR REPLACE VIEW vw_customer_catalog_grouped AS
+SELECT
+    r.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    r.Genre,
+    r.Format,
+    r.ReleaseYear,
+    r.Description,
+    MIN(s.UnitPrice) AS MinPrice,
+    MAX(s.UnitPrice) AS MaxPrice,
+    COUNT(*) AS TotalAvailable,
+    GROUP_CONCAT(DISTINCT s.ConditionGrade ORDER BY
+        FIELD(s.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G', 'Fair', 'Poor')
+        SEPARATOR ', ') AS AvailableConditions
+FROM StockItem s
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+JOIN Shop sh ON s.ShopID = sh.ShopID
+WHERE s.Status = 'Available'
+  AND sh.Type = 'Warehouse'
+GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, r.Format, r.ReleaseYear, r.Description;
+
+-- ================================================
+-- 34. [新增] 专辑库存详情视图 - 按条件分组
+-- 用于商品详情页显示各条件的库存数量
+-- ================================================
+CREATE OR REPLACE VIEW vw_release_stock_by_condition AS
+SELECT
+    r.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    r.Genre,
+    r.LabelName,
+    r.ReleaseYear,
+    r.Description,
+    s.ConditionGrade,
+    COUNT(*) AS AvailableQuantity,
+    MIN(s.UnitPrice) AS UnitPrice,
+    sh.Name AS LocationName,
+    sh.ShopID
+FROM StockItem s
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+JOIN Shop sh ON s.ShopID = sh.ShopID
+WHERE s.Status = 'Available'
+  AND sh.Type = 'Warehouse'
+GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, r.LabelName, r.ReleaseYear, r.Description,
+         s.ConditionGrade, sh.Name, sh.ShopID
+ORDER BY FIELD(s.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G', 'Fair', 'Poor');

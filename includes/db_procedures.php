@@ -58,7 +58,7 @@ class DBProcedures {
     // ----------------
 
     /**
-     * 获取商品目录（支持搜索和筛选）
+     * 获取商品目录（支持搜索和筛选）- 原始方法保留兼容性
      */
     public static function getCatalogItems($pdo, $search = '', $genre = '') {
         try {
@@ -80,6 +80,97 @@ class DBProcedures {
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             error_log("getCatalogItems Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【新增】获取分组后的商品目录（按专辑分组）
+     */
+    public static function getCatalogItemsGrouped($pdo, $search = '', $genre = '') {
+        try {
+            $sql = "SELECT * FROM vw_customer_catalog_grouped WHERE 1=1";
+            $params = [];
+
+            if (!empty($search)) {
+                $sql .= " AND (Title LIKE :search OR ArtistName LIKE :search)";
+                $params[':search'] = "%$search%";
+            }
+            if (!empty($genre)) {
+                $sql .= " AND Genre = :genre";
+                $params[':genre'] = $genre;
+            }
+
+            $sql .= " ORDER BY Title ASC";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getCatalogItemsGrouped Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【新增】获取分组后目录中的流派列表
+     */
+    public static function getCatalogGenresGrouped($pdo) {
+        try {
+            return $pdo->query("SELECT DISTINCT Genre FROM vw_customer_catalog_grouped ORDER BY Genre")->fetchAll(PDO::FETCH_COLUMN);
+        } catch (PDOException $e) {
+            error_log("getCatalogGenresGrouped Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【新增】获取专辑按条件分组的库存详情
+     */
+    public static function getReleaseStockByCondition($pdo, $releaseId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_release_stock_by_condition WHERE ReleaseID = ?");
+            $stmt->execute([$releaseId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getReleaseStockByCondition Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【新增】获取专辑基本信息
+     */
+    public static function getReleaseInfo($pdo, $releaseId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_customer_catalog_grouped WHERE ReleaseID = ?");
+            $stmt->execute([$releaseId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getReleaseInfo Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 【新增】获取指定条件的可用库存ID列表
+     */
+    public static function getAvailableStockIds($pdo, $releaseId, $conditionGrade, $quantity) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT s.StockItemID
+                FROM StockItem s
+                JOIN Shop sh ON s.ShopID = sh.ShopID
+                WHERE s.ReleaseID = ?
+                  AND s.ConditionGrade = ?
+                  AND s.Status = 'Available'
+                  AND sh.Type = 'Warehouse'
+                ORDER BY s.StockItemID
+                LIMIT ?
+            ");
+            $stmt->execute([$releaseId, $conditionGrade, $quantity]);
+            return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } catch (PDOException $e) {
+            error_log("getAvailableStockIds Error: " . $e->getMessage());
             return [];
         }
     }

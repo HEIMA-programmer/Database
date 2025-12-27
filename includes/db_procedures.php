@@ -152,22 +152,31 @@ class DBProcedures {
     }
 
     /**
-     * 【新增】获取指定条件的可用库存ID列表
+     * 【修复】获取指定条件的可用库存ID列表
+     * @param int|null $shopId 店铺ID，如果为null则查询所有店铺
      */
-    public static function getAvailableStockIds($pdo, $releaseId, $conditionGrade, $quantity) {
+    public static function getAvailableStockIds($pdo, $releaseId, $conditionGrade, $quantity, $shopId = null) {
         try {
-            $stmt = $pdo->prepare("
+            $sql = "
                 SELECT s.StockItemID
                 FROM StockItem s
-                JOIN Shop sh ON s.ShopID = sh.ShopID
                 WHERE s.ReleaseID = ?
                   AND s.ConditionGrade = ?
                   AND s.Status = 'Available'
-                  AND sh.Type = 'Warehouse'
-                ORDER BY s.StockItemID
-                LIMIT ?
-            ");
-            $stmt->execute([$releaseId, $conditionGrade, $quantity]);
+            ";
+            $params = [$releaseId, $conditionGrade];
+
+            // 如果指定了店铺ID，则过滤店铺
+            if ($shopId !== null) {
+                $sql .= " AND s.ShopID = ?";
+                $params[] = $shopId;
+            }
+
+            $sql .= " ORDER BY s.StockItemID LIMIT ?";
+            $params[] = $quantity;
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
             return $stmt->fetchAll(PDO::FETCH_COLUMN);
         } catch (PDOException $e) {
             error_log("getAvailableStockIds Error: " . $e->getMessage());

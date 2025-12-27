@@ -140,9 +140,10 @@ INSERT INTO SupplierOrderLine (SupplierOrderID, ReleaseID, Quantity, UnitCost) V
 INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, BuybackDate, Status, TotalPayment) VALUES
 (2, 6, 3, DATE_SUB(NOW(), INTERVAL 15 DAY), 'Completed', 66.00);
 
+-- 【修复】BuybackOrderID 都改为 1，因为只有一个回购订单
 INSERT INTO BuybackOrderLine (BuybackOrderID, ReleaseID, Quantity, UnitPrice, ConditionGrade) VALUES
 (1, 9, 3, 12.00, 'VG+'),
-(2, 9, 2, 15.00, 'VG');
+(1, 9, 2, 15.00, 'VG');
 
 -- ==========================================
 -- 8. 库存项 - 【修复】确保状态正确

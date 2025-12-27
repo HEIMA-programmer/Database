@@ -34,12 +34,16 @@ if (!in_array($orderType, ['Online', 'InStore'])) {
     $orderType = 'Online';
 }
 
-// 动态获取线上仓库ID
-$warehouseId = getShopIdByType($pdo, 'Warehouse');
-if (!$warehouseId) {
-    flash("System Error: Warehouse configuration missing. Please contact support.", 'danger');
-    header("Location: cart.php");
-    exit();
+// 【修复】使用用户选择的店铺ID，如果没有选择则使用仓库
+$selectedShopId = $_SESSION['selected_shop_id'] ?? null;
+if (!$selectedShopId) {
+    // 如果没有选择店铺，使用仓库
+    $selectedShopId = getShopIdByType($pdo, 'Warehouse');
+    if (!$selectedShopId) {
+        flash("System Error: Warehouse configuration missing. Please contact support.", 'danger');
+        header("Location: cart.php");
+        exit();
+    }
 }
 
 try {
@@ -61,8 +65,8 @@ try {
         $totalAmount += $item['UnitPrice'];
     }
 
-    // 3. 使用存储过程创建客户订单（使用用户选择的订单类型）
-    $orderId = DBProcedures::createCustomerOrder($pdo, $customerId, $warehouseId, null, $orderType);
+    // 【修复】3. 使用存储过程创建客户订单（使用用户选择的店铺）
+    $orderId = DBProcedures::createCustomerOrder($pdo, $customerId, $selectedShopId, null, $orderType);
 
     if (!$orderId) {
         throw new Exception("Failed to create order.");

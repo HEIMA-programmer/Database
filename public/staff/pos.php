@@ -10,8 +10,9 @@ require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Staff');
 
-// 获取员工信息
-$employeeId = $_SESSION['user']['EmployeeID'];
+// 【修复】使用正确的Session结构
+$employeeId = $_SESSION['user_id'];
+$shopId = $_SESSION['shop_id'];
 $stmt = $pdo->prepare("
     SELECT e.*, s.Name as ShopName, s.Type as ShopType
     FROM Employee e
@@ -20,7 +21,6 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute([$employeeId]);
 $employee = $stmt->fetch(PDO::FETCH_ASSOC);
-$shopId = $employee['ShopID'];
 
 // 仓库员工不能使用POS
 if ($employee['ShopType'] == 'Warehouse') {
@@ -89,18 +89,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             try {
                 $pdo->beginTransaction();
-                
-                // 创建门店订单
+
+                // 【修复】使用正确的字段名 FulfilledByShopID，移除不存在的 FulfillmentType
                 $stmt = $pdo->prepare("
-                    INSERT INTO CustomerOrder (CustomerID, ShopID, OrderType, OrderStatus, FulfillmentType)
-                    VALUES (?, ?, 'InStore', 'Pending', 'Pickup')
+                    INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, ProcessedByEmployeeID, OrderType, OrderStatus)
+                    VALUES (?, ?, ?, 'InStore', 'Pending')
                 ");
-                $stmt->execute([$customerId ?: null, $shopId]);
+                $stmt->execute([$customerId ?: null, $shopId, $employeeId]);
                 $orderId = $pdo->lastInsertId();
-                
-                // 添加订单行
+
+                // 【修复】添加订单行 - 需要先获取商品价格
                 foreach ($_SESSION['pos_cart'] as $stockItemId) {
-                    DBProcedures::addOrderItem($pdo, $orderId, $stockItemId);
+                    // 获取库存商品价格
+                    $priceStmt = $pdo->prepare("SELECT UnitPrice FROM StockItem WHERE StockItemID = ?");
+                    $priceStmt->execute([$stockItemId]);
+                    $priceAtSale = $priceStmt->fetchColumn();
+                    DBProcedures::addOrderItem($pdo, $orderId, $stockItemId, $priceAtSale);
                 }
                 
                 // 【修复】直接完成订单 - 现在支持InStore订单从Pending完成
@@ -165,8 +169,8 @@ if ($search) {
     $availableStock = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// 获取客户列表（用于关联会员）
-$stmt = $pdo->prepare("SELECT CustomerID, Name, Email, Phone FROM Customer ORDER BY Name LIMIT 100");
+// 【修复】获取客户列表（移除不存在的Phone字段）
+$stmt = $pdo->prepare("SELECT CustomerID, Name, Email FROM Customer ORDER BY Name LIMIT 100");
 $stmt->execute();
 $customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

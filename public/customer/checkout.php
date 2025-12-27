@@ -50,8 +50,8 @@ $shopInfo = [
 // 计算总价
 $total = array_sum(array_column($cartItems, 'UnitPrice'));
 
-// 获取客户信息
-$customerId = $_SESSION['user']['CustomerID'];
+// 【修复】使用正确的Session结构获取客户ID
+$customerId = $_SESSION['user_id'];
 $stmt = $pdo->prepare("
     SELECT c.*, mt.TierName, mt.DiscountRate
     FROM Customer c
@@ -90,17 +90,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         try {
             $pdo->beginTransaction();
-            
-            // 创建订单
+
+            // 【修复】创建订单 - 使用正确的字段名 FulfilledByShopID，移除不存在的字段
             $stmt = $pdo->prepare("
-                INSERT INTO CustomerOrder (CustomerID, ShopID, OrderType, OrderStatus, FulfillmentType, ShippingAddress)
-                VALUES (?, ?, 'Online', 'Pending', ?, ?)
+                INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, OrderType, OrderStatus)
+                VALUES (?, ?, 'Online', 'Pending')
             ");
             $stmt->execute([
                 $customerId,
-                $shopInfo['ShopID'],
-                $fulfillmentType,
-                $fulfillmentType == 'Shipping' ? $shippingAddress : null
+                $shopInfo['ShopID']
             ]);
             $orderId = $pdo->lastInsertId();
             

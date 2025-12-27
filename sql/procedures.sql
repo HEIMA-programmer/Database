@@ -132,11 +132,9 @@ BEGIN
 END$$
 
 -- ================================================
--- 2. 客户回购流程
+-- 修复2: sp_process_buyback - 添加回购积分逻辑
+-- 回购给客户积分：每回购1元得0.5积分（可调整）
 -- ================================================
-
--- 创建回购订单并生成库存
--- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_process_buyback$$
 CREATE PROCEDURE sp_process_buyback(
     IN p_customer_id INT,
@@ -152,6 +150,10 @@ CREATE PROCEDURE sp_process_buyback(
 BEGIN
     DECLARE v_batch_no VARCHAR(50);
     DECLARE v_counter INT DEFAULT 0;
+    DECLARE v_total_payment DECIMAL(10,2);
+    DECLARE v_points_earned INT;
+    DECLARE v_current_points INT;
+    DECLARE v_new_tier_id INT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -159,9 +161,12 @@ BEGIN
         RESIGNAL;
     END;
 
+    -- 计算总支付金额
+    SET v_total_payment = p_quantity * p_unit_price;
+
     -- 创建回购订单
-    INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, Status)
-    VALUES (p_customer_id, p_employee_id, p_shop_id, 'Completed');
+    INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, Status, TotalPayment)
+    VALUES (p_customer_id, p_employee_id, p_shop_id, 'Completed', v_total_payment);
 
     SET p_buyback_id = LAST_INSERT_ID();
 
@@ -184,10 +189,35 @@ BEGIN
         SET v_counter = v_counter + 1;
     END WHILE;
 
-    -- 更新总支付金额
-    UPDATE BuybackOrder
-    SET TotalPayment = p_quantity * p_unit_price
-    WHERE BuybackOrderID = p_buyback_id;
+    -- 【新增】给回购客户增加积分（每回购1元得0.5积分）
+    IF p_customer_id IS NOT NULL THEN
+        SET v_points_earned = FLOOR(v_total_payment * 0.5);
+        
+        IF v_points_earned > 0 THEN
+            -- 更新客户积分
+            UPDATE Customer
+            SET Points = Points + v_points_earned
+            WHERE CustomerID = p_customer_id;
+
+            -- 获取更新后的积分
+            SELECT Points INTO v_current_points
+            FROM Customer
+            WHERE CustomerID = p_customer_id;
+
+            -- 自动升级会员等级
+            SELECT TierID INTO v_new_tier_id
+            FROM MembershipTier
+            WHERE v_current_points >= MinPoints
+            ORDER BY MinPoints DESC
+            LIMIT 1;
+
+            IF v_new_tier_id IS NOT NULL THEN
+                UPDATE Customer
+                SET TierID = v_new_tier_id
+                WHERE CustomerID = p_customer_id;
+            END IF;
+        END IF;
+    END IF;
 END$$
 
 -- ================================================
@@ -392,10 +422,10 @@ END$$
 
 
 
--- 完成订单（支付成功）
--- 【修复】移除内部事务控制，由调用方管理事务
+-- ================================================
+-- 修复1: sp_complete_order - 支持门店直接完成订单
+-- ================================================
 DROP PROCEDURE IF EXISTS sp_complete_order$$
--- 【注意】积分由触发器 trg_after_order_complete 自动计算
 CREATE PROCEDURE sp_complete_order(
     IN p_order_id INT
 )
@@ -403,6 +433,7 @@ BEGIN
     DECLARE v_customer_id INT;
     DECLARE v_total_amount DECIMAL(10,2);
     DECLARE v_order_status VARCHAR(20);
+    DECLARE v_order_type VARCHAR(10);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -410,14 +441,20 @@ BEGIN
     END;
 
     -- 获取订单信息
-    SELECT CustomerID, OrderStatus INTO v_customer_id, v_order_status
+    SELECT CustomerID, OrderStatus, OrderType INTO v_customer_id, v_order_status, v_order_type
     FROM CustomerOrder
     WHERE OrderID = p_order_id
     FOR UPDATE;
 
-    -- 改为（保持不变，但确保逻辑正确）：
-    IF v_order_status NOT IN ('Paid', 'Shipped') THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order must be Paid or Shipped to complete';
+    -- 【修复】门店订单(InStore)可以从Pending直接完成，线上订单需要Paid或Shipped
+    IF v_order_type = 'InStore' THEN
+        IF v_order_status NOT IN ('Pending', 'Paid') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'InStore order must be Pending or Paid to complete';
+        END IF;
+    ELSE
+        IF v_order_status NOT IN ('Paid', 'Shipped') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Online order must be Paid or Shipped to complete';
+        END IF;
     END IF;
 
     -- 计算订单总额

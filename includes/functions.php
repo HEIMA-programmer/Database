@@ -62,6 +62,119 @@ function hasRole($role) {
 }
 
 /**
+ * 【修复】按店铺获取目录数据
+ * 
+ * @param PDO $pdo 数据库连接
+ * @param int $shopId 店铺ID
+ * @param string $search 搜索关键词
+ * @param string $genre 音乐类型筛选
+ * @return array 包含items和genres的数组
+ */
+function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') {
+    // 构建查询条件
+    $params = [$shopId];
+    $where = "si.ShopID = ? AND si.Status = 'Available'";
+    
+    if ($search) {
+        $where .= " AND (r.Title LIKE ? OR a.Name LIKE ?)";
+        $searchParam = "%$search%";
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+    }
+    
+    if ($genre) {
+        $where .= " AND r.Genre = ?";
+        $params[] = $genre;
+    }
+    
+    // 获取按Release分组的库存统计
+    $sql = "
+        SELECT 
+            r.ReleaseID,
+            r.Title,
+            r.Genre,
+            r.Year,
+            a.Name as ArtistName,
+            COUNT(si.StockItemID) as TotalAvailable,
+            MIN(si.UnitPrice) as MinPrice,
+            MAX(si.UnitPrice) as MaxPrice,
+            GROUP_CONCAT(DISTINCT si.ConditionGrade ORDER BY 
+                FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P')
+            ) as AvailableConditions
+        FROM StockItem si
+        JOIN `Release` r ON si.ReleaseID = r.ReleaseID
+        JOIN Artist a ON r.ArtistID = a.ArtistID
+        WHERE $where
+        GROUP BY r.ReleaseID
+        ORDER BY r.Title
+    ";
+    
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // 获取该店铺可用的所有音乐类型
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT r.Genre
+        FROM StockItem si
+        JOIN `Release` r ON si.ReleaseID = r.ReleaseID
+        WHERE si.ShopID = ? AND si.Status = 'Available'
+        ORDER BY r.Genre
+    ");
+    $stmt->execute([$shopId]);
+    $genres = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    return [
+        'items' => $items,
+        'genres' => $genres
+    ];
+}
+
+/**
+ * 【修复】按店铺获取Release详情和可用库存
+ * 
+ * @param PDO $pdo 数据库连接
+ * @param int $releaseId Release ID
+ * @param int $shopId 店铺ID
+ * @return array|null Release信息和库存列表
+ */
+function getReleaseDetailsByShop($pdo, $releaseId, $shopId) {
+    // 获取Release基本信息
+    $stmt = $pdo->prepare("
+        SELECT r.*, a.Name as ArtistName, l.Name as LabelName
+        FROM `Release` r
+        JOIN Artist a ON r.ArtistID = a.ArtistID
+        LEFT JOIN RecordLabel l ON r.LabelID = l.LabelID
+        WHERE r.ReleaseID = ?
+    ");
+    $stmt->execute([$releaseId]);
+    $release = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$release) {
+        return null;
+    }
+    
+    // 获取该店铺的可用库存
+    $stmt = $pdo->prepare("
+        SELECT si.*, s.Name as ShopName, s.Type as ShopType
+        FROM StockItem si
+        JOIN Shop s ON si.ShopID = s.ShopID
+        WHERE si.ReleaseID = ? AND si.ShopID = ? AND si.Status = 'Available'
+        ORDER BY 
+            FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'),
+            si.UnitPrice
+    ");
+    $stmt->execute([$releaseId, $shopId]);
+    $stockItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    return [
+        'release' => $release,
+        'stockItems' => $stockItems
+    ];
+}
+
+
+/**
  * 获取购物车商品数量（用于导航栏显示）
  */
 function getCartCount() {

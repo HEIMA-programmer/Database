@@ -306,6 +306,7 @@ require_once __DIR__ . '/../../includes/header.php';
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
     // Edit modal
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -319,8 +320,17 @@ require_once __DIR__ . '/../../includes/header.php';
         });
     });
 
-    // Price modal
-    const priceModal = new bootstrap.Modal(document.getElementById('priceModal'));
+    // Price modal - 使用getOrCreateInstance避免重复实例化
+    const priceModalEl = document.getElementById('priceModal');
+
+    // 重置modal状态
+    priceModalEl.addEventListener('hidden.bs.modal', function() {
+        document.getElementById('priceLoading').classList.remove('d-none');
+        document.getElementById('priceContent').classList.add('d-none');
+        document.getElementById('priceEmpty').classList.add('d-none');
+        document.getElementById('priceTableBody').innerHTML = '';
+        document.getElementById('priceSubmitBtn').disabled = true;
+    });
 
     document.querySelectorAll('.price-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -334,6 +344,8 @@ require_once __DIR__ . '/../../includes/header.php';
             document.getElementById('priceEmpty').classList.add('d-none');
             document.getElementById('priceSubmitBtn').disabled = true;
 
+            // 使用getOrCreateInstance确保不重复创建实例
+            const priceModal = bootstrap.Modal.getOrCreateInstance(priceModalEl);
             priceModal.show();
 
             fetch(`products.php?ajax=stock_prices&release_id=${releaseId}`)
@@ -405,6 +417,7 @@ require_once __DIR__ . '/../../includes/header.php';
         div.textContent = text || '';
         return div.innerHTML;
     }
+});
 </script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

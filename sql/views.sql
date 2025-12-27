@@ -908,6 +908,7 @@ WHERE bo.Status = 'Completed';
 
 -- 47. 店铺在特定类型的订单明细视图
 -- 【修复】处理FulfillmentType为NULL的旧订单
+-- 【修复】使用LEFT JOIN确保即使缺少明细数据也能显示订单
 CREATE OR REPLACE VIEW vw_shop_order_details AS
 SELECT
     co.OrderID,
@@ -928,15 +929,15 @@ SELECT
         ELSE 'Other'
     END AS OrderCategory,
     ol.StockItemID,
-    ol.PriceAtSale,
-    r.Title,
-    r.ArtistName,
-    si.ConditionGrade
+    COALESCE(ol.PriceAtSale, 0) AS PriceAtSale,
+    COALESCE(r.Title, 'Unknown Album') AS Title,
+    COALESCE(r.ArtistName, 'Unknown Artist') AS ArtistName,
+    COALESCE(si.ConditionGrade, 'N/A') AS ConditionGrade
 FROM CustomerOrder co
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-JOIN OrderLine ol ON co.OrderID = ol.OrderID
-JOIN StockItem si ON ol.StockItemID = si.StockItemID
-JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+LEFT JOIN OrderLine ol ON co.OrderID = ol.OrderID
+LEFT JOIN StockItem si ON ol.StockItemID = si.StockItemID
+LEFT JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 WHERE co.OrderStatus IN ('Paid', 'Completed');
 
 -- 48. 店铺Top消费者视图

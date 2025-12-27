@@ -167,8 +167,11 @@ CREATE TABLE CustomerOrder (
     ProcessedByEmployeeID INT, -- 处理员工（店内销售时）
     OrderDate DATETIME DEFAULT CURRENT_TIMESTAMP,
     TotalAmount DECIMAL(10,2),
-    OrderStatus ENUM('Pending', 'Paid', 'Shipped', 'Completed', 'Cancelled') DEFAULT 'Pending',
+    OrderStatus ENUM('Pending', 'Paid', 'Shipped', 'ReadyForPickup', 'Completed', 'Cancelled') DEFAULT 'Pending',
     OrderType ENUM('InStore', 'Online') NOT NULL,
+    FulfillmentType ENUM('Shipping', 'Pickup') DEFAULT NULL, -- 【新增】履行方式：运输或自提
+    ShippingAddress TEXT DEFAULT NULL, -- 【新增】送货地址
+    ShippingCost DECIMAL(10,2) DEFAULT 0.00, -- 【新增】运费
     FOREIGN KEY (CustomerID) REFERENCES Customer(CustomerID),
     FOREIGN KEY (FulfilledByShopID) REFERENCES Shop(ShopID),
     FOREIGN KEY (ProcessedByEmployeeID) REFERENCES Employee(EmployeeID)

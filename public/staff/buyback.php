@@ -99,8 +99,8 @@ $stmt = $pdo->query("
 ");
 $releases = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 获取客户列表
-$stmt = $pdo->query("SELECT CustomerID, Name, Email, Phone, Points FROM Customer ORDER BY Name");
+// 【修复】获取客户列表（移除不存在的Phone字段）
+$stmt = $pdo->query("SELECT CustomerID, Name, Email, Points FROM Customer ORDER BY Name");
 $customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // 条件等级选项

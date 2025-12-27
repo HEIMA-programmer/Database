@@ -2,11 +2,19 @@
 /**
  * 【架构重构】库存管理页面
  * 表现层 - 仅负责数据展示和用户交互
+ * 【修复】仓库员工无权访问此页面
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
 requireRole(['Staff', 'Manager']);
+
+// 仓库员工不能访问库存管理
+if (($_SESSION['user']['ShopType'] ?? '') === 'Warehouse') {
+    flash('Inventory management is only available at retail locations.', 'warning');
+    header('Location: fulfillment.php');
+    exit;
+}
 
 // ========== 数据准备 ==========
 $shopId = $_SESSION['shop_id'];

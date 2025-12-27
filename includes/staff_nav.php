@@ -33,37 +33,58 @@ $isWarehouse = ($staffShopType == 'Warehouse');
 // 定义菜单项
 $menuItems = [];
 
-// 仓库和门店都有的菜单
-$menuItems[] = [
-    'url' => '/staff/fulfillment.php',
-    'icon' => 'fa-boxes-stacked',
-    'label' => 'Fulfillment',
-    'description' => 'Process and ship orders'
-];
+// 【修复】仓库员工只显示 Fulfillment 和 Pickups
+if ($isWarehouse) {
+    // 仓库员工菜单
+    $menuItems[] = [
+        'url' => '/staff/fulfillment.php',
+        'icon' => 'fa-boxes-stacked',
+        'label' => 'Fulfillment',
+        'description' => 'Process and ship orders'
+    ];
 
-$menuItems[] = [
-    'url' => '/staff/inventory.php',
-    'icon' => 'fa-warehouse',
-    'label' => 'Inventory',
-    'description' => 'Manage stock items'
-];
-
-// 只有门店才有的菜单
-if (!$isWarehouse) {
-    // 插入到开头
-    array_unshift($menuItems, [
+    $menuItems[] = [
+        'url' => '/staff/pickup.php',
+        'icon' => 'fa-box-open',
+        'label' => 'Pickups',
+        'description' => 'Handle customer pickups'
+    ];
+} else {
+    // 门店员工完整菜单
+    $menuItems[] = [
         'url' => '/staff/pos.php',
         'icon' => 'fa-cash-register',
         'label' => 'POS',
         'description' => 'In-store sales'
-    ]);
-    
-    array_unshift($menuItems, [
+    ];
+
+    $menuItems[] = [
         'url' => '/staff/buyback.php',
         'icon' => 'fa-rotate-left',
         'label' => 'Buyback',
         'description' => 'Purchase records from customers'
-    ]);
+    ];
+
+    $menuItems[] = [
+        'url' => '/staff/fulfillment.php',
+        'icon' => 'fa-boxes-stacked',
+        'label' => 'Fulfillment',
+        'description' => 'Process and ship orders'
+    ];
+
+    $menuItems[] = [
+        'url' => '/staff/pickup.php',
+        'icon' => 'fa-box-open',
+        'label' => 'Pickups',
+        'description' => 'Handle customer pickups'
+    ];
+
+    $menuItems[] = [
+        'url' => '/staff/inventory.php',
+        'icon' => 'fa-warehouse',
+        'label' => 'Inventory',
+        'description' => 'Manage stock items'
+    ];
 }
 
 // 获取当前页面路径
@@ -111,7 +132,7 @@ $currentPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 <?php if ($isWarehouse): ?>
 <div class="alert alert-info bg-dark border-info mb-4">
-    <i class="fa-solid fa-info-circle me-2"></i>
-    <strong>Warehouse Mode:</strong> You can manage fulfillment and inventory. POS and Buyback are available at retail locations only.
+    <i class="fa-solid fa-warehouse me-2"></i>
+    <strong>Warehouse Mode:</strong> You can manage fulfillment and pickups. Other features are available at retail locations only.
 </div>
 <?php endif; ?>

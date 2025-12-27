@@ -788,6 +788,7 @@ WHERE bo.Status = 'Completed'
 GROUP BY bo.ShopID, sh.Name;
 
 -- 42. 店铺收入明细视图 - 按类型分组（在线售卖/线下取货/POS/Buyback）
+-- 【修复】处理FulfillmentType为NULL的旧订单，默认按OrderType推断
 CREATE OR REPLACE VIEW vw_shop_revenue_by_type AS
 SELECT
     co.FulfilledByShopID AS ShopID,
@@ -795,6 +796,7 @@ SELECT
     CASE
         WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
         WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
+        WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
         WHEN co.OrderType = 'InStore' THEN 'POS'
         ELSE 'Other'
     END AS RevenueType,
@@ -808,6 +810,7 @@ GROUP BY co.FulfilledByShopID, sh.Name,
     CASE
         WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
         WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
+        WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
         WHEN co.OrderType = 'InStore' THEN 'POS'
         ELSE 'Other'
     END;
@@ -853,6 +856,7 @@ HAVING COUNT(*) < 3
 ORDER BY AvailableQuantity ASC;
 
 -- 45. 客户在特定店铺的消费历史视图
+-- 【修复】处理FulfillmentType为NULL的旧订单
 CREATE OR REPLACE VIEW vw_customer_shop_orders AS
 SELECT
     co.OrderID,
@@ -870,6 +874,7 @@ SELECT
     CASE
         WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
         WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
+        WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
         WHEN co.OrderType = 'InStore' THEN 'POS'
         ELSE 'Other'
     END AS OrderCategory
@@ -902,6 +907,7 @@ JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
 WHERE bo.Status = 'Completed';
 
 -- 47. 店铺在特定类型的订单明细视图
+-- 【修复】处理FulfillmentType为NULL的旧订单
 CREATE OR REPLACE VIEW vw_shop_order_details AS
 SELECT
     co.OrderID,
@@ -917,6 +923,7 @@ SELECT
     CASE
         WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
         WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
+        WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
         WHEN co.OrderType = 'InStore' THEN 'POS'
         ELSE 'Other'
     END AS OrderCategory,
@@ -978,6 +985,7 @@ LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 WHERE co.OrderStatus IN ('Paid', 'Completed');
 
 -- 50. 月度销售明细视图
+-- 【修复】处理FulfillmentType为NULL的旧订单
 CREATE OR REPLACE VIEW vw_monthly_sales_detail AS
 SELECT
     DATE_FORMAT(co.OrderDate, '%Y-%m') AS SalesMonth,
@@ -990,6 +998,13 @@ SELECT
     co.TotalAmount,
     co.OrderType,
     co.FulfillmentType,
+    CASE
+        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
+        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
+        WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
+        WHEN co.OrderType = 'InStore' THEN 'POS'
+        ELSE 'Other'
+    END AS OrderCategory,
     r.ReleaseID,
     r.Title,
     r.ArtistName,

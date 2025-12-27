@@ -350,7 +350,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         data.data.forEach(row => {
                             const cond = row.ConditionGrade;
                             if (!byCondition[cond]) {
-                                byCondition[cond] = { price: row.UnitPrice, rows: [] };
+                                byCondition[cond] = { price: row.MinPrice, rows: [] };
                             }
                             byCondition[cond].rows.push(row);
                         });
@@ -369,8 +369,8 @@ require_once __DIR__ . '/../../includes/header.php';
                             }
                             html += `
                                 <td>${escapeHtml(row.ShopName)}</td>
-                                <td class="text-center"><span class="badge bg-info">${row.AvailableQty}</span></td>
-                                <td class="text-success">¥${parseFloat(row.UnitPrice).toFixed(2)}</td>
+                                <td class="text-center"><span class="badge bg-info">${row.Quantity}</span></td>
+                                <td class="text-success">¥${parseFloat(row.MinPrice).toFixed(2)}</td>
                             `;
                             if (isFirst) {
                                 html += `<td rowspan="${rowCount}" class="align-middle">
@@ -378,7 +378,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                         <span class="input-group-text bg-dark border-secondary text-light">¥</span>
                                         <input type="number" step="0.01" min="0" name="prices[${cond}]"
                                                class="form-control bg-dark text-white border-secondary"
-                                               placeholder="${parseFloat(row.UnitPrice).toFixed(2)}">
+                                               placeholder="${parseFloat(row.MinPrice).toFixed(2)}">
                                     </div>
                                 </td>`;
                             }

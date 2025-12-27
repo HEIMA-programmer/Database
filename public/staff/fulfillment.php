@@ -114,7 +114,7 @@ $stmt = $pdo->prepare("
            (SELECT GROUP_CONCAT(DISTINCT r.Title SEPARATOR ', ') 
             FROM OrderLine ol2 
             JOIN StockItem si ON ol2.StockItemID = si.StockItemID
-            JOIN `Release` r ON si.ReleaseID = r.ReleaseID
+            JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
             WHERE ol2.OrderID = co.OrderID
             LIMIT 3) as ItemTitles
     FROM CustomerOrder co

@@ -44,10 +44,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stockItemId > 0) {
                 // 验证库存属于本店铺且可用
                 $stmt = $pdo->prepare("
-                    SELECT si.*, r.Title, a.Name as ArtistName
+                    SELECT si.*, r.Title, r.ArtistName -- 直接使用 r.ArtistName
                     FROM StockItem si
-                    JOIN `Release` r ON si.ReleaseID = r.ReleaseID
-                    JOIN Artist a ON r.ArtistID = a.ArtistID
+                    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+                    -- 删除 Artist JOIN
                     WHERE si.StockItemID = ? AND si.ShopID = ? AND si.Status = 'Available'
                 ");
                 $stmt->execute([$stockItemId, $shopId]);
@@ -130,10 +130,9 @@ $total = 0;
 if (!empty($_SESSION['pos_cart'])) {
     $placeholders = implode(',', array_fill(0, count($_SESSION['pos_cart']), '?'));
     $stmt = $pdo->prepare("
-        SELECT si.*, r.Title, a.Name as ArtistName
+        SELECT si.*, r.Title, r.ArtistName
         FROM StockItem si
-        JOIN `Release` r ON si.ReleaseID = r.ReleaseID
-        JOIN Artist a ON r.ArtistID = a.ArtistID
+        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
         WHERE si.StockItemID IN ($placeholders) AND si.Status = 'Available'
     ");
     $stmt->execute($_SESSION['pos_cart']);
@@ -153,12 +152,11 @@ $search = $_GET['q'] ?? '';
 $availableStock = [];
 if ($search) {
     $stmt = $pdo->prepare("
-        SELECT si.*, r.Title, a.Name as ArtistName
+        SELECT si.*, r.Title, r.ArtistName
         FROM StockItem si
-        JOIN `Release` r ON si.ReleaseID = r.ReleaseID
-        JOIN Artist a ON r.ArtistID = a.ArtistID
+        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
         WHERE si.ShopID = ? AND si.Status = 'Available'
-        AND (r.Title LIKE ? OR a.Name LIKE ?)
+        AND (r.Title LIKE ? OR r.ArtistName LIKE ?) -- 使用 r.ArtistName 搜索
         ORDER BY r.Title
         LIMIT 20
     ");

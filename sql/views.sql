@@ -584,7 +584,6 @@ FROM StockItem s
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 JOIN Shop sh ON s.ShopID = sh.ShopID
 WHERE s.Status = 'Available'
-  AND sh.Type = 'Warehouse'
 GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, r.Format, r.ReleaseYear, r.Description;
 
 -- ================================================
@@ -609,7 +608,6 @@ FROM StockItem s
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 JOIN Shop sh ON s.ShopID = sh.ShopID
 WHERE s.Status = 'Available'
-  AND sh.Type = 'Warehouse'
 GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, r.LabelName, r.ReleaseYear, r.Description,
          s.ConditionGrade, sh.Name, sh.ShopID
 ORDER BY FIELD(s.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G', 'Fair', 'Poor');

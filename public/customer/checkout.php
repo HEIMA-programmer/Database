@@ -22,10 +22,10 @@ if (empty($_SESSION['cart'])) {
 $placeholders = implode(',', array_fill(0, count($_SESSION['cart']), '?'));
 $stmt = $pdo->prepare("
     SELECT si.StockItemID, si.ReleaseID, si.UnitPrice, si.ConditionGrade, si.ShopID,
-           r.Title, a.Name as ArtistName, s.Name as ShopName, s.Type as ShopType, s.Address as ShopAddress
-    FROM StockItem si
-    JOIN `Release` r ON si.ReleaseID = r.ReleaseID
-    JOIN Artist a ON r.ArtistID = a.ArtistID
+           r.Title, r.ArtistName, s.Name as ShopName, s.Type as ShopType, s.Address as ShopAddress
+	FROM StockItem si
+    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+    -- 删除 Artist JOIN
     JOIN Shop s ON si.ShopID = s.ShopID
     WHERE si.StockItemID IN ($placeholders) AND si.Status = 'Available'
 ");

@@ -93,9 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // 获取Release列表
 $stmt = $pdo->query("
-    SELECT r.ReleaseID, r.Title, a.Name as ArtistName, r.Genre
-    FROM `Release` r
-    JOIN Artist a ON r.ArtistID = a.ArtistID
+    SELECT r.ReleaseID, r.Title, r.ArtistName, r.Genre
+    FROM ReleaseAlbum r
     ORDER BY r.Title
 ");
 $releases = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -236,7 +235,7 @@ require_once __DIR__ . '/../../includes/staff_nav.php';
                     SELECT bo.*, c.Name as CustomerName,
                            (SELECT GROUP_CONCAT(r.Title SEPARATOR ', ')
                             FROM BuybackOrderLine bol
-                            JOIN `Release` r ON bol.ReleaseID = r.ReleaseID
+                            JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
                             WHERE bol.BuybackOrderID = bo.BuybackOrderID) as Items
                     FROM BuybackOrder bo
                     LEFT JOIN Customer c ON bo.CustomerID = c.CustomerID

@@ -40,10 +40,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // 检查商品是否可用
                 $stmt = $pdo->prepare("
                     SELECT si.StockItemID, si.ReleaseID, si.UnitPrice, si.ConditionGrade,
-                           r.Title, a.Name as ArtistName
+                        r.Title, r.ArtistName
                     FROM StockItem si
-                    JOIN `Release` r ON si.ReleaseID = r.ReleaseID
-                    JOIN Artist a ON r.ArtistID = a.ArtistID
+                    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+                    -- 删除 JOIN Artist 行，因为 Artist 表不存在
                     WHERE si.StockItemID = ? AND si.ShopID = ? AND si.Status = 'Available'
                 ");
                 $stmt->execute([$stockItemId, $shopId]);
@@ -92,10 +92,10 @@ if (!empty($_SESSION['cart'])) {
     $placeholders = implode(',', array_fill(0, count($_SESSION['cart']), '?'));
     $stmt = $pdo->prepare("
         SELECT si.StockItemID, si.ReleaseID, si.UnitPrice, si.ConditionGrade, si.ShopID,
-               r.Title, a.Name as ArtistName, s.Name as ShopName, s.Type as ShopType
+            r.Title, r.ArtistName, s.Name as ShopName, s.Type as ShopType
         FROM StockItem si
-        JOIN `Release` r ON si.ReleaseID = r.ReleaseID
-        JOIN Artist a ON r.ArtistID = a.ArtistID
+        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+        -- 删除 JOIN Artist 行
         JOIN Shop s ON si.ShopID = s.ShopID
         WHERE si.StockItemID IN ($placeholders) AND si.Status = 'Available'
     ");

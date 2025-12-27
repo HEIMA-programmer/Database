@@ -1,6 +1,7 @@
 @startuml
-' E-R Diagram v5 - Retro Echo Records (REFACTORED)
+' E-R Diagram v6 - Retro Echo Records (REFACTORED)
 ' 重构版：PurchaseOrder拆分为SupplierOrder和BuybackOrder
+' 新增：ManagerRequest表、CustomerOrder履约字段
 ' 优化了业务流程清晰度和数据一致性
 
 skinparam linetype ortho
@@ -12,7 +13,7 @@ hide empty members
 ' 区域 1: 商品资料 (Product Catalog)
 ' ==========================================
 package "1. Product Catalog" <<Rectangle>> {
-    class "Release" as RELEASE {
+    class "ReleaseAlbum" as RELEASE {
         +ReleaseID : int <<PK>>
         --
         +Title : varchar(255) {NN}
@@ -115,7 +116,7 @@ package "4. Procurement (Refactored)" <<Rectangle>> {
 
     class "BuybackOrder" as BUYORDER {
         +BuybackOrderID : int <<PK>>
-        +CustomerID : int <<FK>>
+        +CustomerID : int <<FK, Nullable>>
         +ProcessedByEmployeeID : int <<FK>>
         +ShopID : int <<FK>>
         --
@@ -180,8 +181,12 @@ package "6. Sales" <<Rectangle>> {
         --
         +OrderDate : datetime
         +TotalAmount : decimal(10,2)
-        +OrderStatus : enum('Pending', 'Paid', 'Shipped', 'Completed', 'Cancelled')
+        +OrderStatus : enum('Pending', 'Paid', 'Shipped',
+        .. 'ReadyForPickup', 'Completed', 'Cancelled')
         +OrderType : enum('InStore', 'Online')
+        +FulfillmentType : enum('Shipping', 'Pickup')
+        +ShippingAddress : text
+        +ShippingCost : decimal(10,2)
     }
 
     class "OrderLine" as ORDERLINE {
@@ -189,6 +194,31 @@ package "6. Sales" <<Rectangle>> {
         +StockItemID : int <<PK, FK>>
         --
         +PriceAtSale : decimal(10,2)
+    }
+}
+
+' ==========================================
+' 区域 7: Manager申请系统 (Request System)
+' ==========================================
+package "7. Manager Requests" <<Rectangle>> {
+    class "ManagerRequest" as MGRREQ {
+        +RequestID : int <<PK>>
+        +RequestedByEmployeeID : int <<FK>>
+        +RespondedByEmployeeID : int <<FK, Nullable>>
+        +FromShopID : int <<FK>>
+        +ToShopID : int <<FK, Nullable>>
+        +ReleaseID : int <<FK>>
+        --
+        +RequestType : enum('PriceAdjustment', 'TransferRequest')
+        +ConditionGrade : enum('New','Mint','NM','VG+','VG')
+        +Quantity : int
+        +CurrentPrice : decimal(10,2)
+        +RequestedPrice : decimal(10,2)
+        +Reason : text
+        +Status : enum('Pending', 'Approved', 'Rejected')
+        +AdminResponseNote : text
+        +CreatedAt : datetime
+        +UpdatedAt : datetime
     }
 }
 
@@ -235,6 +265,13 @@ EMPLOYEE "1" -- "0..*" CUSTORDER : processes >
 CUSTORDER "1" -r- "1..*" ORDERLINE : details >
 STOCKITEM "1" -d- "0..*" ORDERLINE : sold as >
 
+' -- Manager申请系统 --
+EMPLOYEE "1" -- "0..*" MGRREQ : requests >
+EMPLOYEE "1" -- "0..*" MGRREQ : responds >
+SHOP "1" -- "0..*" MGRREQ : from shop >
+SHOP "1" -- "0..*" MGRREQ : to shop >
+RELEASE "1" -- "0..*" MGRREQ : references >
+
 ' ==========================================
 ' 布局辅助线 (Hidden Layout Hints)
 ' ==========================================
@@ -243,6 +280,7 @@ SUPPORDER -[hidden]d- STOCKITEM
 STOCKITEM -[hidden]d- CUSTORDER
 RELEASE -[hidden]r- SHOP
 CUSTOMER -[hidden]r- BUYORDER
+MGRREQ -[hidden]l- CUSTORDER
 
 ' ==========================================
 ' 重构说明 (Refactoring Notes)
@@ -261,6 +299,22 @@ note right of STOCKITEM
   - SourceType: 'Supplier' 或 'Buyback'
   - SourceOrderID: 对应订单ID
   - 支持完整的库存来源追踪
+end note
+
+note right of CUSTORDER
+  <b>订单履约：</b>
+  - FulfillmentType: 运输或自提
+  - ShippingAddress: 送货地址
+  - ShippingCost: 运费
+  - 支持BOPIS业务模式
+end note
+
+note right of MGRREQ
+  <b>申请系统：</b>
+  - PriceAdjustment: 调价申请
+  - TransferRequest: 调货申请
+  - Manager发起，Admin审批
+  - 完整的审批追踪
 end note
 
 @enduml

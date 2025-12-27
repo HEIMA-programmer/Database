@@ -249,7 +249,16 @@ require_once __DIR__ . '/../../includes/header.php';
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Genre Detail Modal
-    const genreModal = new bootstrap.Modal(document.getElementById('genreDetailModal'));
+    const genreModalEl = document.getElementById('genreDetailModal');
+    const genreModal = new bootstrap.Modal(genreModalEl);
+
+    // Reset modal state when hidden
+    genreModalEl.addEventListener('hidden.bs.modal', function() {
+        document.getElementById('genreDetailLoading').classList.remove('d-none');
+        document.getElementById('genreDetailContent').classList.add('d-none');
+        document.getElementById('genreDetailEmpty').classList.add('d-none');
+        document.getElementById('genreDetailBody').innerHTML = '';
+    });
 
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -276,7 +285,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <td>${escapeHtml(row.Title)}</td>
                                 <td><small class="text-muted">${escapeHtml(row.ArtistName)}</small></td>
                                 <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
-                                <td class="text-end text-success">¥${parseFloat(row.SalePrice).toFixed(2)}</td>
+                                <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
                             </tr>`;
                         });
                         document.getElementById('genreDetailBody').innerHTML = html;
@@ -294,7 +303,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Month Detail Modal
-    const monthModal = new bootstrap.Modal(document.getElementById('monthDetailModal'));
+    const monthModalEl = document.getElementById('monthDetailModal');
+    const monthModal = new bootstrap.Modal(monthModalEl);
+
+    // Reset modal state when hidden
+    monthModalEl.addEventListener('hidden.bs.modal', function() {
+        document.getElementById('monthDetailLoading').classList.remove('d-none');
+        document.getElementById('monthDetailContent').classList.add('d-none');
+        document.getElementById('monthDetailEmpty').classList.add('d-none');
+        document.getElementById('monthDetailBody').innerHTML = '';
+    });
 
     document.querySelectorAll('.btn-month-detail').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -327,7 +345,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <td>${row.CustomerName || 'Guest'}</td>
                                 <td>${escapeHtml(row.Title)}</td>
                                 <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
-                                <td class="text-end text-success">¥${parseFloat(row.SalePrice).toFixed(2)}</td>
+                                <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
                             </tr>`;
                         });
                         document.getElementById('monthDetailBody').innerHTML = html;

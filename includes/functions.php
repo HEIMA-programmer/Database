@@ -603,7 +603,7 @@ function registerNewCustomer($pdo, $name, $email, $password, $birthday = null) {
  */
 function getLoginRedirectUrl($role) {
     return match($role) {
-        'Admin'    => BASE_URL . '/admin/users.php',
+        'Admin'    => BASE_URL . '/admin/products.php',
         'Manager'  => BASE_URL . '/manager/dashboard.php',
         'Staff'    => BASE_URL . '/staff/pos.php',
         'Customer' => BASE_URL . '/customer/catalog.php',

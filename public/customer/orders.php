@@ -41,11 +41,9 @@ require_once __DIR__ . '/../../includes/header.php';
                         <td><?= formatDate($o['OrderDate']) ?></td>
                         <td>
                             <?php if($o['OrderType'] == 'InStore'): ?>
-                                <span class="badge bg-secondary">In-Store</span>
-                            <?php elseif(($o['FulfillmentType'] ?? '') == 'Pickup'): ?>
-                                <span class="badge bg-info text-dark"><i class="fa-solid fa-store me-1"></i>Pickup</span>
+                                <span class="badge bg-info text-dark">Pick-up</span>
                             <?php else: ?>
-                                <span class="badge bg-primary"><i class="fa-solid fa-truck me-1"></i>Delivery</span>
+                                <span class="badge bg-primary">Delivery</span>
                             <?php endif; ?>
                         </td>
                         <td>

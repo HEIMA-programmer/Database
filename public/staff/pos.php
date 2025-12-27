@@ -175,33 +175,6 @@ $stmt = $pdo->prepare("SELECT CustomerID, Name, Email FROM Customer ORDER BY Nam
 $stmt->execute();
 $customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 【新增】获取本店铺今日和历史POS交易记录
-$stmt = $pdo->prepare("
-    SELECT co.OrderID, co.OrderDate, co.TotalAmount, co.OrderStatus,
-           c.Name as CustomerName, e.Name as EmployeeName,
-           COUNT(ol.StockItemID) as ItemCount
-    FROM CustomerOrder co
-    LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-    LEFT JOIN Employee e ON co.ProcessedByEmployeeID = e.EmployeeID
-    LEFT JOIN OrderLine ol ON co.OrderID = ol.OrderID
-    WHERE co.FulfilledByShopID = ? AND co.OrderType = 'InStore'
-    GROUP BY co.OrderID
-    ORDER BY co.OrderDate DESC
-    LIMIT 20
-");
-$stmt->execute([$shopId]);
-$posHistory = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// 统计今日销售额
-$stmt = $pdo->prepare("
-    SELECT COUNT(*) as TodayCount, COALESCE(SUM(TotalAmount), 0) as TodayTotal
-    FROM CustomerOrder
-    WHERE FulfilledByShopID = ? AND OrderType = 'InStore'
-    AND DATE(OrderDate) = CURDATE() AND OrderStatus = 'Completed'
-");
-$stmt->execute([$shopId]);
-$todayStats = $stmt->fetch(PDO::FETCH_ASSOC);
-
 require_once __DIR__ . '/../../includes/header.php';
 require_once __DIR__ . '/../../includes/staff_nav.php';
 ?>
@@ -338,73 +311,6 @@ require_once __DIR__ . '/../../includes/staff_nav.php';
                             </button>
                         </div>
                     </form>
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 【新增】今日统计和历史交易记录 -->
-<div class="row mt-5">
-    <div class="col-12">
-        <!-- 今日统计 -->
-        <div class="card bg-dark border-success mb-4">
-            <div class="card-body py-3">
-                <div class="row text-center">
-                    <div class="col-md-6">
-                        <div class="text-muted small">Today's Transactions</div>
-                        <div class="text-success fs-3 fw-bold"><?= (int)$todayStats['TodayCount'] ?></div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="text-muted small">Today's Sales</div>
-                        <div class="text-warning fs-3 fw-bold"><?= formatPrice($todayStats['TodayTotal']) ?></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 历史交易记录 -->
-        <div class="card bg-dark border-secondary">
-            <div class="card-header bg-dark border-secondary">
-                <h5 class="mb-0 text-warning"><i class="fa-solid fa-history me-2"></i>Recent POS Transactions</h5>
-            </div>
-            <div class="card-body p-0">
-                <?php if (empty($posHistory)): ?>
-                    <div class="p-4 text-center text-muted">No transaction history yet.</div>
-                <?php else: ?>
-                    <div class="table-responsive">
-                        <table class="table table-dark table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Order #</th>
-                                    <th>Date/Time</th>
-                                    <th>Customer</th>
-                                    <th>Items</th>
-                                    <th>Total</th>
-                                    <th>Staff</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($posHistory as $h): ?>
-                                <tr>
-                                    <td class="text-warning">#<?= $h['OrderID'] ?></td>
-                                    <td><?= date('M d, H:i', strtotime($h['OrderDate'])) ?></td>
-                                    <td><?= h($h['CustomerName'] ?: 'Walk-in') ?></td>
-                                    <td><span class="badge bg-secondary"><?= $h['ItemCount'] ?></span></td>
-                                    <td class="text-warning fw-bold"><?= formatPrice($h['TotalAmount']) ?></td>
-                                    <td class="text-muted"><?= h($h['EmployeeName'] ?: '-') ?></td>
-                                    <td>
-                                        <?php
-                                        $statusClass = $h['OrderStatus'] == 'Completed' ? 'bg-success' : 'bg-secondary';
-                                        ?>
-                                        <span class="badge <?= $statusClass ?>"><?= h($h['OrderStatus']) ?></span>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
                 <?php endif; ?>
             </div>
         </div>

@@ -508,9 +508,10 @@ function authenticateEmployee($pdo, $username, $password) {
         $_SESSION['shop_id']   = $employee['ShopID'];
         $_SESSION['shop_name'] = $employee['ShopName'];
 
-        // 【修复】设置 user 数组，包含 ShopType 用于菜单过滤
+        // 【修复】设置 user 数组，包含 ShopID 和 ShopType 用于菜单过滤和数据筛选
         $_SESSION['user'] = [
             'EmployeeID' => $employee['EmployeeID'],
+            'ShopID'     => $employee['ShopID'],
             'ShopName'   => $employee['ShopName'],
             'ShopType'   => $employee['ShopType'] ?? 'Retail',
             'Role'       => $employee['Role']
@@ -650,9 +651,35 @@ function preparePOSPageData($pdo, $shopId, $searchTerm = null) {
  * @param PDO $pdo
  * @return array
  */
-function prepareDashboardData($pdo) {
+function prepareDashboardData($pdo, $shopId = null) {
     require_once __DIR__ . '/db_procedures.php';
 
+    // 如果提供了shopId，则获取店铺级别的数据
+    if ($shopId !== null) {
+        $kpi = DBProcedures::getShopKpiStats($pdo, $shopId);
+        $topCustomers = DBProcedures::getShopTopCustomers($pdo, $shopId, 5);
+        $deadStock = DBProcedures::getShopDeadStock($pdo, $shopId, 10);
+        $lowStock = DBProcedures::getShopLowStock($pdo, $shopId, 10);
+        $revenueByType = DBProcedures::getShopRevenueByType($pdo, $shopId);
+        $expense = DBProcedures::getShopTotalExpense($pdo, $shopId);
+        $popularItems = DBProcedures::getPopularItems($pdo, $shopId, 1);
+
+        return [
+            'total_sales'      => $kpi['TotalSales'] ?? 0,
+            'active_orders'    => $kpi['ActiveOrders'] ?? 0,
+            'total_expense'    => $expense['TotalExpense'] ?? 0,
+            'buyback_count'    => $expense['BuybackCount'] ?? 0,
+            'popular_item'     => !empty($popularItems) ? $popularItems[0] : null,
+            'top_spender_name' => !empty($topCustomers) ? $topCustomers[0]['CustomerName'] : 'No Data',
+            'top_customers'    => $topCustomers,
+            'dead_stock'       => $deadStock,
+            'low_stock'        => $lowStock,
+            'revenue_by_type'  => $revenueByType,
+            'shop_id'          => $shopId
+        ];
+    }
+
+    // 兼容旧版全局数据
     $kpi = DBProcedures::getKpiStats($pdo);
     $vips = DBProcedures::getTopCustomers($pdo, 5);
     $deadStock = DBProcedures::getDeadStockAlert($pdo, 10);
@@ -814,13 +841,25 @@ function prepareTransferPageData($pdo) {
 
 /**
  * 准备报表页面数据
+ * 支持按店铺筛选（Manager使用）或全局数据（Admin使用）
  */
-function prepareReportsPageData($pdo) {
+function prepareReportsPageData($pdo, $shopId = null) {
     require_once __DIR__ . '/db_procedures.php';
 
+    if ($shopId !== null) {
+        // 店铺级别数据
+        return [
+            'turnover_stats' => DBProcedures::getShopSalesByGenre($pdo, $shopId),
+            'sales_trend'    => DBProcedures::getShopMonthlySalesTrend($pdo, $shopId, 12),
+            'shop_id'        => $shopId
+        ];
+    }
+
+    // 全局数据
     return [
         'turnover_stats' => DBProcedures::getSalesByGenre($pdo),
-        'sales_trend'    => DBProcedures::getMonthlySalesTrend($pdo, 12)
+        'sales_trend'    => DBProcedures::getMonthlySalesTrend($pdo, 12),
+        'shop_id'        => null
     ];
 }
 
@@ -1518,6 +1557,37 @@ function handleProcurementReceivePO($pdo, $orderId, $warehouseId) {
         if ($success) {
             $pdo->commit();
             return ['success' => true, 'message' => "Supplier Order #$orderId received. Items added to Warehouse inventory."];
+        } else {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Failed to receive order.'];
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return ['success' => false, 'message' => 'Failed to receive order.'];
+    }
+}
+
+/**
+ * 处理采购订单接收（支持指定成色）
+ */
+function handleProcurementReceivePOWithCondition($pdo, $orderId, $warehouseId, $condition = 'New') {
+    require_once __DIR__ . '/db_procedures.php';
+
+    if (!$warehouseId) {
+        return ['success' => false, 'message' => 'Warehouse not configured.'];
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $batchNo = "BATCH-" . date('Ymd') . "-" . $orderId;
+        $success = DBProcedures::receiveSupplierOrder($pdo, $orderId, $batchNo, $condition, 0.5);
+
+        if ($success) {
+            $pdo->commit();
+            return ['success' => true, 'message' => "Supplier Order #$orderId received. Items added to Warehouse inventory with condition '$condition'."];
         } else {
             $pdo->rollBack();
             return ['success' => false, 'message' => 'Failed to receive order.'];

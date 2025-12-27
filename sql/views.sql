@@ -659,3 +659,367 @@ WHERE s.Status = 'Available'
 GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, r.LabelName, r.ReleaseYear, r.Description,
          s.ConditionGrade, sh.Name, sh.ShopID
 ORDER BY FIELD(s.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G', 'Fair', 'Poor');
+
+-- ================================================
+-- 【Manager/Admin申请系统视图】
+-- ================================================
+
+-- 37. Manager申请列表视图 - Manager查看自己发出的申请
+CREATE OR REPLACE VIEW vw_manager_requests_sent AS
+SELECT
+    mr.RequestID,
+    mr.RequestType,
+    mr.FromShopID,
+    s1.Name AS FromShopName,
+    mr.ToShopID,
+    s2.Name AS ToShopName,
+    mr.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    mr.ConditionGrade,
+    mr.Quantity,
+    mr.CurrentPrice,
+    mr.RequestedPrice,
+    mr.Reason,
+    mr.Status,
+    mr.AdminResponseNote,
+    e1.Name AS RequestedByName,
+    e2.Name AS RespondedByName,
+    mr.RequestedByEmployeeID,
+    mr.CreatedAt,
+    mr.UpdatedAt
+FROM ManagerRequest mr
+JOIN Shop s1 ON mr.FromShopID = s1.ShopID
+LEFT JOIN Shop s2 ON mr.ToShopID = s2.ShopID
+JOIN ReleaseAlbum r ON mr.ReleaseID = r.ReleaseID
+JOIN Employee e1 ON mr.RequestedByEmployeeID = e1.EmployeeID
+LEFT JOIN Employee e2 ON mr.RespondedByEmployeeID = e2.EmployeeID
+ORDER BY mr.CreatedAt DESC;
+
+-- 38. Admin待处理申请视图 - Admin查看所有待审批的申请
+CREATE OR REPLACE VIEW vw_admin_pending_requests AS
+SELECT
+    mr.RequestID,
+    mr.RequestType,
+    mr.FromShopID,
+    s1.Name AS FromShopName,
+    mr.ToShopID,
+    s2.Name AS ToShopName,
+    mr.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    mr.ConditionGrade,
+    mr.Quantity,
+    mr.CurrentPrice,
+    mr.RequestedPrice,
+    mr.Reason,
+    mr.Status,
+    e1.Name AS RequestedByName,
+    mr.RequestedByEmployeeID,
+    mr.CreatedAt
+FROM ManagerRequest mr
+JOIN Shop s1 ON mr.FromShopID = s1.ShopID
+LEFT JOIN Shop s2 ON mr.ToShopID = s2.ShopID
+JOIN ReleaseAlbum r ON mr.ReleaseID = r.ReleaseID
+JOIN Employee e1 ON mr.RequestedByEmployeeID = e1.EmployeeID
+WHERE mr.Status = 'Pending'
+ORDER BY mr.CreatedAt ASC;
+
+-- 39. Admin所有申请视图 - Admin查看所有申请（包括已处理的）
+CREATE OR REPLACE VIEW vw_admin_all_requests AS
+SELECT
+    mr.RequestID,
+    mr.RequestType,
+    mr.FromShopID,
+    s1.Name AS FromShopName,
+    mr.ToShopID,
+    s2.Name AS ToShopName,
+    mr.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    mr.ConditionGrade,
+    mr.Quantity,
+    mr.CurrentPrice,
+    mr.RequestedPrice,
+    mr.Reason,
+    mr.Status,
+    mr.AdminResponseNote,
+    e1.Name AS RequestedByName,
+    e2.Name AS RespondedByName,
+    mr.RequestedByEmployeeID,
+    mr.RespondedByEmployeeID,
+    mr.CreatedAt,
+    mr.UpdatedAt
+FROM ManagerRequest mr
+JOIN Shop s1 ON mr.FromShopID = s1.ShopID
+LEFT JOIN Shop s2 ON mr.ToShopID = s2.ShopID
+JOIN ReleaseAlbum r ON mr.ReleaseID = r.ReleaseID
+JOIN Employee e1 ON mr.RequestedByEmployeeID = e1.EmployeeID
+LEFT JOIN Employee e2 ON mr.RespondedByEmployeeID = e2.EmployeeID
+ORDER BY mr.CreatedAt DESC;
+
+-- 40. 最受欢迎单品视图 - 统计销量最高的专辑
+CREATE OR REPLACE VIEW vw_popular_items AS
+SELECT
+    r.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    r.Genre,
+    COUNT(ol.StockItemID) AS TotalSold,
+    SUM(ol.PriceAtSale) AS TotalRevenue
+FROM OrderLine ol
+JOIN StockItem s ON ol.StockItemID = s.StockItemID
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+JOIN CustomerOrder co ON ol.OrderID = co.OrderID
+WHERE co.OrderStatus IN ('Paid', 'Completed')
+GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre
+ORDER BY TotalSold DESC;
+
+-- 41. 店铺总支出视图（Buyback支出）
+CREATE OR REPLACE VIEW vw_shop_total_expense AS
+SELECT
+    bo.ShopID,
+    sh.Name AS ShopName,
+    SUM(bo.TotalPayment) AS TotalExpense,
+    COUNT(bo.BuybackOrderID) AS BuybackCount
+FROM BuybackOrder bo
+JOIN Shop sh ON bo.ShopID = sh.ShopID
+WHERE bo.Status = 'Completed'
+GROUP BY bo.ShopID, sh.Name;
+
+-- 42. 店铺收入明细视图 - 按类型分组（在线售卖/线下取货/POS/Buyback）
+CREATE OR REPLACE VIEW vw_shop_revenue_by_type AS
+SELECT
+    co.FulfilledByShopID AS ShopID,
+    sh.Name AS ShopName,
+    CASE
+        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
+        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
+        WHEN co.OrderType = 'InStore' THEN 'POS'
+        ELSE 'Other'
+    END AS RevenueType,
+    COUNT(co.OrderID) AS OrderCount,
+    SUM(co.TotalAmount) AS Revenue,
+    SUM(COALESCE(co.ShippingCost, 0)) AS TotalShipping
+FROM CustomerOrder co
+JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
+WHERE co.OrderStatus IN ('Paid', 'Completed')
+GROUP BY co.FulfilledByShopID, sh.Name,
+    CASE
+        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
+        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
+        WHEN co.OrderType = 'InStore' THEN 'POS'
+        ELSE 'Other'
+    END;
+
+-- 43. 按店铺的死库存视图（带condition和数量合并）
+CREATE OR REPLACE VIEW vw_dead_stock_by_shop AS
+SELECT
+    sh.ShopID,
+    sh.Name AS ShopName,
+    r.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    s.ConditionGrade,
+    COUNT(*) AS Quantity,
+    MIN(s.UnitPrice) AS UnitPrice,
+    MIN(s.AcquiredDate) AS OldestAcquiredDate,
+    MAX(DATEDIFF(NOW(), s.AcquiredDate)) AS MaxDaysInStock
+FROM StockItem s
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+JOIN Shop sh ON s.ShopID = sh.ShopID
+WHERE s.Status = 'Available'
+  AND s.AcquiredDate < DATE_SUB(NOW(), INTERVAL 60 DAY)
+GROUP BY sh.ShopID, sh.Name, r.ReleaseID, r.Title, r.ArtistName, s.ConditionGrade
+ORDER BY MaxDaysInStock DESC;
+
+-- 44. 按店铺的低库存视图（带condition和数量合并）
+CREATE OR REPLACE VIEW vw_low_stock_by_shop AS
+SELECT
+    sh.ShopID,
+    sh.Name AS ShopName,
+    r.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    s.ConditionGrade,
+    COUNT(*) AS AvailableQuantity,
+    MIN(s.UnitPrice) AS UnitPrice
+FROM StockItem s
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+JOIN Shop sh ON s.ShopID = sh.ShopID
+WHERE s.Status = 'Available'
+GROUP BY sh.ShopID, sh.Name, r.ReleaseID, r.Title, r.ArtistName, s.ConditionGrade
+HAVING COUNT(*) < 3
+ORDER BY AvailableQuantity ASC;
+
+-- 45. 客户在特定店铺的消费历史视图
+CREATE OR REPLACE VIEW vw_customer_shop_orders AS
+SELECT
+    co.OrderID,
+    co.CustomerID,
+    c.Name AS CustomerName,
+    c.Email AS CustomerEmail,
+    co.FulfilledByShopID AS ShopID,
+    sh.Name AS ShopName,
+    co.OrderDate,
+    co.TotalAmount,
+    co.OrderStatus,
+    co.OrderType,
+    co.FulfillmentType,
+    co.ShippingCost,
+    CASE
+        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
+        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
+        WHEN co.OrderType = 'InStore' THEN 'POS'
+        ELSE 'Other'
+    END AS OrderCategory
+FROM CustomerOrder co
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
+WHERE co.OrderStatus IN ('Paid', 'Completed');
+
+-- 46. 客户Buyback历史视图
+CREATE OR REPLACE VIEW vw_customer_buyback_history AS
+SELECT
+    bo.BuybackOrderID,
+    bo.CustomerID,
+    COALESCE(c.Name, 'Walk-in Customer') AS CustomerName,
+    bo.ShopID,
+    sh.Name AS ShopName,
+    bo.BuybackDate,
+    bo.TotalPayment,
+    bo.Status,
+    r.Title,
+    r.ArtistName,
+    bol.Quantity,
+    bol.UnitPrice,
+    bol.ConditionGrade
+FROM BuybackOrder bo
+LEFT JOIN Customer c ON bo.CustomerID = c.CustomerID
+JOIN Shop sh ON bo.ShopID = sh.ShopID
+JOIN BuybackOrderLine bol ON bo.BuybackOrderID = bol.BuybackOrderID
+JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
+WHERE bo.Status = 'Completed';
+
+-- 47. 店铺在特定类型的订单明细视图
+CREATE OR REPLACE VIEW vw_shop_order_details AS
+SELECT
+    co.OrderID,
+    co.FulfilledByShopID AS ShopID,
+    co.CustomerID,
+    COALESCE(c.Name, 'Guest') AS CustomerName,
+    co.OrderDate,
+    co.TotalAmount,
+    co.ShippingCost,
+    co.OrderStatus,
+    co.OrderType,
+    co.FulfillmentType,
+    CASE
+        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
+        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
+        WHEN co.OrderType = 'InStore' THEN 'POS'
+        ELSE 'Other'
+    END AS OrderCategory,
+    ol.StockItemID,
+    ol.PriceAtSale,
+    r.Title,
+    r.ArtistName,
+    si.ConditionGrade
+FROM CustomerOrder co
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+JOIN OrderLine ol ON co.OrderID = ol.OrderID
+JOIN StockItem si ON ol.StockItemID = si.StockItemID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+WHERE co.OrderStatus IN ('Paid', 'Completed');
+
+-- 48. 店铺Top消费者视图
+CREATE OR REPLACE VIEW vw_shop_top_customers AS
+SELECT
+    co.FulfilledByShopID AS ShopID,
+    co.CustomerID,
+    c.Name AS CustomerName,
+    c.Email AS CustomerEmail,
+    mt.TierName,
+    c.Points,
+    COUNT(DISTINCT co.OrderID) AS OrderCount,
+    SUM(co.TotalAmount) AS TotalSpent,
+    MAX(co.OrderDate) AS LastOrderDate
+FROM CustomerOrder co
+JOIN Customer c ON co.CustomerID = c.CustomerID
+JOIN MembershipTier mt ON c.TierID = mt.TierID
+WHERE co.OrderStatus IN ('Paid', 'Completed')
+GROUP BY co.FulfilledByShopID, co.CustomerID, c.Name, c.Email, mt.TierName, c.Points
+ORDER BY TotalSpent DESC;
+
+-- 49. 按流派销售明细视图（含店铺信息）
+CREATE OR REPLACE VIEW vw_sales_by_genre_detail AS
+SELECT
+    r.Genre,
+    co.FulfilledByShopID AS ShopID,
+    sh.Name AS ShopName,
+    co.OrderID,
+    co.CustomerID,
+    COALESCE(c.Name, 'Guest') AS CustomerName,
+    co.OrderDate,
+    co.OrderType,
+    co.FulfillmentType,
+    r.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    si.ConditionGrade,
+    ol.PriceAtSale,
+    DATEDIFF(COALESCE(si.DateSold, NOW()), si.AcquiredDate) AS DaysToSell
+FROM OrderLine ol
+JOIN StockItem si ON ol.StockItemID = si.StockItemID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+JOIN CustomerOrder co ON ol.OrderID = co.OrderID
+JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+WHERE co.OrderStatus IN ('Paid', 'Completed');
+
+-- 50. 月度销售明细视图
+CREATE OR REPLACE VIEW vw_monthly_sales_detail AS
+SELECT
+    DATE_FORMAT(co.OrderDate, '%Y-%m') AS SalesMonth,
+    co.FulfilledByShopID AS ShopID,
+    sh.Name AS ShopName,
+    co.OrderID,
+    co.CustomerID,
+    COALESCE(c.Name, 'Guest') AS CustomerName,
+    co.OrderDate,
+    co.TotalAmount,
+    co.OrderType,
+    co.FulfillmentType,
+    r.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    si.ConditionGrade,
+    ol.PriceAtSale
+FROM CustomerOrder co
+JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+JOIN OrderLine ol ON co.OrderID = ol.OrderID
+JOIN StockItem si ON ol.StockItemID = si.StockItemID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+WHERE co.OrderStatus IN ('Paid', 'Completed');
+
+-- 51. 库存售价管理视图（按Release和Condition分组）
+CREATE OR REPLACE VIEW vw_stock_price_by_condition AS
+SELECT
+    r.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    r.Genre,
+    sh.ShopID,
+    sh.Name AS ShopName,
+    s.ConditionGrade,
+    COUNT(*) AS Quantity,
+    MIN(s.UnitPrice) AS MinPrice,
+    MAX(s.UnitPrice) AS MaxPrice,
+    AVG(s.UnitPrice) AS AvgPrice
+FROM StockItem s
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+JOIN Shop sh ON s.ShopID = sh.ShopID
+WHERE s.Status = 'Available'
+GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, sh.ShopID, sh.Name, s.ConditionGrade
+ORDER BY r.Title, sh.Name, FIELD(s.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG');

@@ -186,4 +186,33 @@ CREATE TABLE OrderLine (
     FOREIGN KEY (StockItemID) REFERENCES StockItem(StockItemID)
 );
 
+-- ========================================
+-- 7. Manager Request System
+-- Manager申请系统（调价申请和调货申请）
+-- ========================================
+
+CREATE TABLE ManagerRequest (
+    RequestID INT AUTO_INCREMENT PRIMARY KEY,
+    RequestType ENUM('PriceAdjustment', 'TransferRequest') NOT NULL,
+    RequestedByEmployeeID INT NOT NULL,
+    FromShopID INT NOT NULL,
+    ToShopID INT DEFAULT NULL, -- 仅调货申请使用
+    ReleaseID INT NOT NULL,
+    ConditionGrade ENUM('New', 'Mint', 'NM', 'VG+', 'VG') NOT NULL,
+    Quantity INT NOT NULL DEFAULT 1,
+    CurrentPrice DECIMAL(10,2) DEFAULT NULL, -- 当前价格
+    RequestedPrice DECIMAL(10,2) DEFAULT NULL, -- 申请调整后的价格（仅调价申请）
+    Reason TEXT, -- 申请理由
+    Status ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
+    AdminResponseNote TEXT, -- Admin回复备注
+    RespondedByEmployeeID INT DEFAULT NULL,
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (RequestedByEmployeeID) REFERENCES Employee(EmployeeID),
+    FOREIGN KEY (RespondedByEmployeeID) REFERENCES Employee(EmployeeID),
+    FOREIGN KEY (FromShopID) REFERENCES Shop(ShopID),
+    FOREIGN KEY (ToShopID) REFERENCES Shop(ShopID),
+    FOREIGN KEY (ReleaseID) REFERENCES ReleaseAlbum(ReleaseID)
+);
+
 SET FOREIGN_KEY_CHECKS = 1;

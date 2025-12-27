@@ -91,8 +91,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'transfer.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/transfer.php">
-                    <i class="fa-solid fa-truck-ramp-box me-1"></i>Transfers
+                <a class="nav-link <?= $current_page == 'requests.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/requests.php">
+                    <i class="fa-solid fa-envelope me-1"></i>Requests
                 </a>
             </li>
         <?php endif; ?>
@@ -106,6 +106,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'procurement.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/procurement.php">
                     <i class="fa-solid fa-boxes-packing me-1"></i>Procurement
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'requests.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/requests.php">
+                    <i class="fa-solid fa-clipboard-check me-1"></i>Requests
                 </a>
             </li>
             <li class="nav-item">

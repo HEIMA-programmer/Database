@@ -1172,5 +1172,391 @@ class DBProcedures {
             return false;
         }
     }
+
+    // =============================================
+    // 【Manager/Admin重构】新增数据获取方法
+    // =============================================
+
+    /**
+     * 获取店铺的KPI统计（限定店铺）
+     */
+    public static function getShopKpiStats($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT
+                    COALESCE(SUM(co.TotalAmount), 0) AS TotalSales,
+                    (SELECT COUNT(*) FROM CustomerOrder WHERE FulfilledByShopID = ? AND OrderStatus IN ('Pending', 'Paid', 'Shipped')) AS ActiveOrders
+                FROM CustomerOrder co
+                WHERE co.FulfilledByShopID = ? AND co.OrderStatus != 'Cancelled'
+            ");
+            $stmt->execute([$shopId, $shopId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getShopKpiStats Error: " . $e->getMessage());
+            return ['TotalSales' => 0, 'ActiveOrders' => 0];
+        }
+    }
+
+    /**
+     * 获取最受欢迎单品
+     */
+    public static function getPopularItems($pdo, $shopId = null, $limit = 1) {
+        try {
+            $sql = "SELECT * FROM vw_popular_items";
+            $params = [];
+            // Note: 该视图不包含店铺过滤，这里返回全局数据
+            $sql .= " LIMIT ?";
+            $params[] = $limit;
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getPopularItems Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺总支出（Buyback）
+     */
+    public static function getShopTotalExpense($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_shop_total_expense WHERE ShopID = ?");
+            $stmt->execute([$shopId]);
+            $result = $stmt->fetch();
+            return $result ? $result : ['TotalExpense' => 0, 'BuybackCount' => 0];
+        } catch (PDOException $e) {
+            error_log("getShopTotalExpense Error: " . $e->getMessage());
+            return ['TotalExpense' => 0, 'BuybackCount' => 0];
+        }
+    }
+
+    /**
+     * 获取店铺Top消费者
+     */
+    public static function getShopTopCustomers($pdo, $shopId, $limit = 5) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_shop_top_customers WHERE ShopID = ? ORDER BY TotalSpent DESC LIMIT ?");
+            $stmt->execute([$shopId, $limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopTopCustomers Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺死库存（>60天，按condition分组）
+     */
+    public static function getShopDeadStock($pdo, $shopId, $limit = 10) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_dead_stock_by_shop WHERE ShopID = ? ORDER BY MaxDaysInStock DESC LIMIT ?");
+            $stmt->execute([$shopId, $limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopDeadStock Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺低库存（<3件，按condition分组）
+     */
+    public static function getShopLowStock($pdo, $shopId, $limit = 10) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_low_stock_by_shop WHERE ShopID = ? ORDER BY AvailableQuantity ASC LIMIT ?");
+            $stmt->execute([$shopId, $limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopLowStock Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺收入明细（按类型分组）
+     */
+    public static function getShopRevenueByType($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_shop_revenue_by_type WHERE ShopID = ?");
+            $stmt->execute([$shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopRevenueByType Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取客户在某店铺的订单历史
+     */
+    public static function getCustomerShopOrders($pdo, $customerId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_customer_shop_orders WHERE CustomerID = ? AND ShopID = ? ORDER BY OrderDate DESC");
+            $stmt->execute([$customerId, $shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getCustomerShopOrders Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取客户在某店铺的Buyback历史
+     */
+    public static function getCustomerBuybackHistory($pdo, $customerId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_customer_buyback_history WHERE CustomerID = ? AND ShopID = ? ORDER BY BuybackDate DESC");
+            $stmt->execute([$customerId, $shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getCustomerBuybackHistory Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺某类型的订单明细
+     */
+    public static function getShopOrderDetails($pdo, $shopId, $orderCategory = null) {
+        try {
+            $sql = "SELECT * FROM vw_shop_order_details WHERE ShopID = ?";
+            $params = [$shopId];
+            if ($orderCategory !== null) {
+                $sql .= " AND OrderCategory = ?";
+                $params[] = $orderCategory;
+            }
+            $sql .= " ORDER BY OrderDate DESC";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopOrderDetails Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺Buyback明细
+     */
+    public static function getShopBuybackDetails($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_customer_buyback_history WHERE ShopID = ? ORDER BY BuybackDate DESC");
+            $stmt->execute([$shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopBuybackDetails Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取Manager发出的申请
+     */
+    public static function getManagerRequestsSent($pdo, $employeeId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_manager_requests_sent WHERE RequestedByEmployeeID = ? ORDER BY CreatedAt DESC");
+            $stmt->execute([$employeeId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getManagerRequestsSent Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取Admin待处理的申请
+     */
+    public static function getAdminPendingRequests($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM vw_admin_pending_requests ORDER BY CreatedAt ASC")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getAdminPendingRequests Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取Admin所有申请
+     */
+    public static function getAdminAllRequests($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM vw_admin_all_requests ORDER BY CreatedAt DESC")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getAdminAllRequests Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 创建调价申请
+     */
+    public static function createPriceAdjustmentRequest($pdo, $employeeId, $shopId, $releaseId, $conditionGrade, $quantity, $currentPrice, $requestedPrice, $reason) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_create_price_adjustment_request(?, ?, ?, ?, ?, ?, ?, ?, @request_id)");
+            $stmt->execute([$employeeId, $shopId, $releaseId, $conditionGrade, $quantity, $currentPrice, $requestedPrice, $reason]);
+            $result = $pdo->query("SELECT @request_id AS request_id")->fetch();
+            return $result['request_id'] > 0 ? $result['request_id'] : false;
+        } catch (PDOException $e) {
+            error_log("createPriceAdjustmentRequest Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 创建调货申请
+     */
+    public static function createTransferRequest($pdo, $employeeId, $fromShopId, $toShopId, $releaseId, $conditionGrade, $quantity, $reason) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_create_transfer_request(?, ?, ?, ?, ?, ?, ?, @request_id)");
+            $stmt->execute([$employeeId, $fromShopId, $toShopId, $releaseId, $conditionGrade, $quantity, $reason]);
+            $result = $pdo->query("SELECT @request_id AS request_id")->fetch();
+            return $result['request_id'] > 0 ? $result['request_id'] : false;
+        } catch (PDOException $e) {
+            error_log("createTransferRequest Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Admin审批申请
+     */
+    public static function respondToRequest($pdo, $requestId, $adminId, $approved, $responseNote) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_respond_to_request(?, ?, ?, ?)");
+            return $stmt->execute([$requestId, $adminId, $approved, $responseNote]);
+        } catch (PDOException $e) {
+            error_log("respondToRequest Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 更新库存价格
+     */
+    public static function updateStockPrice($pdo, $shopId, $releaseId, $conditionGrade, $newPrice) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_update_stock_price(?, ?, ?, ?)");
+            return $stmt->execute([$shopId, $releaseId, $conditionGrade, $newPrice]);
+        } catch (PDOException $e) {
+            error_log("updateStockPrice Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 获取库存价格信息（按Release和Condition分组）
+     */
+    public static function getStockPriceByCondition($pdo, $releaseId = null, $shopId = null) {
+        try {
+            $sql = "SELECT * FROM vw_stock_price_by_condition WHERE 1=1";
+            $params = [];
+            if ($releaseId !== null) {
+                $sql .= " AND ReleaseID = ?";
+                $params[] = $releaseId;
+            }
+            if ($shopId !== null) {
+                $sql .= " AND ShopID = ?";
+                $params[] = $shopId;
+            }
+            $sql .= " ORDER BY Title, ShopName, FIELD(ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG')";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getStockPriceByCondition Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取按流派销售明细（店铺级别）
+     */
+    public static function getSalesByGenreDetail($pdo, $shopId, $genre) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_sales_by_genre_detail WHERE ShopID = ? AND Genre = ? ORDER BY OrderDate DESC");
+            $stmt->execute([$shopId, $genre]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getSalesByGenreDetail Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺按流派销售统计
+     */
+    public static function getShopSalesByGenre($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT
+                    Genre,
+                    COUNT(DISTINCT OrderID) AS TotalOrders,
+                    COUNT(*) AS ItemsSold,
+                    SUM(PriceAtSale) AS TotalRevenue,
+                    AVG(PriceAtSale) AS AvgPrice,
+                    AVG(DaysToSell) AS AvgDaysToSell
+                FROM vw_sales_by_genre_detail
+                WHERE ShopID = ?
+                GROUP BY Genre
+                ORDER BY TotalRevenue DESC
+            ");
+            $stmt->execute([$shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopSalesByGenre Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取月度销售明细（店铺级别）
+     */
+    public static function getMonthlySalesDetail($pdo, $shopId, $month) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_monthly_sales_detail WHERE ShopID = ? AND SalesMonth = ? ORDER BY OrderDate DESC");
+            $stmt->execute([$shopId, $month]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getMonthlySalesDetail Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺月度销售趋势
+     */
+    public static function getShopMonthlySalesTrend($pdo, $shopId, $limit = 12) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT
+                    SalesMonth,
+                    COUNT(DISTINCT OrderID) AS OrderCount,
+                    SUM(PriceAtSale) AS MonthlyRevenue
+                FROM vw_monthly_sales_detail
+                WHERE ShopID = ?
+                GROUP BY SalesMonth
+                ORDER BY SalesMonth DESC
+                LIMIT ?
+            ");
+            $stmt->execute([$shopId, $limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopMonthlySalesTrend Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取全部库存的价格信息用于Admin产品页面
+     */
+    public static function getAllStockPrices($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM vw_stock_price_by_condition ORDER BY Title, ShopName, FIELD(ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG')")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getAllStockPrices Error: " . $e->getMessage());
+            return [];
+        }
+    }
 }
 ?>

@@ -175,6 +175,9 @@ $stmt = $pdo->prepare("SELECT CustomerID, Name, Email FROM Customer ORDER BY Nam
 $stmt->execute();
 $customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// 【新增】获取历史交易记录
+$posHistory = DBProcedures::getPosHistory($pdo, $shopId, 10);
+
 require_once __DIR__ . '/../../includes/header.php';
 require_once __DIR__ . '/../../includes/staff_nav.php';
 ?>
@@ -311,6 +314,58 @@ require_once __DIR__ . '/../../includes/staff_nav.php';
                             </button>
                         </div>
                     </form>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 【新增】历史交易记录 -->
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header bg-dark border-secondary">
+                <h5 class="mb-0 text-warning">
+                    <i class="fa-solid fa-history me-2"></i>Recent Sales History
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <?php if (empty($posHistory)): ?>
+                    <div class="p-4 text-center text-muted">
+                        <i class="fa-solid fa-receipt fa-3x mb-3 d-block opacity-50"></i>
+                        No sales history yet.
+                    </div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Date</th>
+                                    <th>Customer</th>
+                                    <th>Items</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($posHistory as $order): ?>
+                                <tr>
+                                    <td>#<?= $order['OrderID'] ?></td>
+                                    <td><?= formatDate($order['OrderDate']) ?></td>
+                                    <td><?= h($order['CustomerName']) ?></td>
+                                    <td><span class="badge bg-secondary"><?= $order['ItemCount'] ?> items</span></td>
+                                    <td class="text-warning fw-bold"><?= formatPrice($order['TotalAmount']) ?></td>
+                                    <td>
+                                        <span class="badge bg-<?= $order['OrderStatus'] == 'Completed' ? 'success' : 'info' ?>">
+                                            <?= h($order['OrderStatus']) ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 <?php endif; ?>
             </div>
         </div>

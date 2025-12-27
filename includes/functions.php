@@ -537,6 +537,14 @@ function authenticateEmployee($pdo, $username, $password) {
         $_SESSION['shop_id']   = $employee['ShopID'];
         $_SESSION['shop_name'] = $employee['ShopName'];
 
+        // 【修复】设置 user 数组，包含 ShopType 用于菜单过滤
+        $_SESSION['user'] = [
+            'EmployeeID' => $employee['EmployeeID'],
+            'ShopName'   => $employee['ShopName'],
+            'ShopType'   => $employee['ShopType'] ?? 'Retail',
+            'Role'       => $employee['Role']
+        ];
+
         return ['success' => true, 'role' => $employee['Role']];
     }
 

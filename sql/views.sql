@@ -104,6 +104,7 @@ JOIN StockItem s ON ol.StockItemID = s.StockItemID
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID;
 
 -- 3. [Customer View] My Orders List
+-- 【修复】添加 FulfillmentType 字段，用于正确区分 Pickup 和 Delivery 订单
 CREATE OR REPLACE VIEW vw_customer_my_orders_list AS
 SELECT
     OrderID,
@@ -111,7 +112,8 @@ SELECT
     OrderDate,
     OrderStatus,
     TotalAmount,
-    OrderType
+    OrderType,
+    FulfillmentType
 FROM CustomerOrder;
 
 -- 4. [Customer View] Profile & Membership Info
@@ -480,6 +482,7 @@ JOIN StockItem s ON ol.StockItemID = s.StockItemID;
 
 -- 26. [架构重构] 员工认证视图
 -- 替换 login.php 中的直接 Employee + Shop 查询
+-- 【修复】添加 ShopType 字段，用于区分仓库和门店员工的菜单显示
 CREATE OR REPLACE VIEW vw_auth_employee AS
 SELECT
     e.EmployeeID,
@@ -488,7 +491,8 @@ SELECT
     e.PasswordHash,
     e.Role,
     e.ShopID,
-    s.Name AS ShopName
+    s.Name AS ShopName,
+    s.Type AS ShopType
 FROM Employee e
 JOIN Shop s ON e.ShopID = s.ShopID;
 
@@ -563,6 +567,47 @@ FROM CustomerOrder
 WHERE OrderStatus != 'Cancelled'
 GROUP BY SalesMonth
 ORDER BY SalesMonth DESC;
+
+-- ================================================
+-- 35. [新增] POS历史交易记录视图 - 门店销售历史
+-- 用于POS界面显示历史交易记录
+-- ================================================
+CREATE OR REPLACE VIEW vw_staff_pos_history AS
+SELECT
+    co.OrderID,
+    co.OrderDate,
+    co.TotalAmount,
+    co.OrderStatus,
+    co.FulfilledByShopID AS ShopID,
+    co.ProcessedByEmployeeID,
+    COALESCE(c.Name, 'Walk-in Customer') AS CustomerName,
+    e.Name AS ProcessedByName,
+    (SELECT COUNT(*) FROM OrderLine WHERE OrderID = co.OrderID) AS ItemCount
+FROM CustomerOrder co
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+LEFT JOIN Employee e ON co.ProcessedByEmployeeID = e.EmployeeID
+WHERE co.OrderType = 'InStore'
+ORDER BY co.OrderDate DESC;
+
+-- ================================================
+-- 36. [新增] Pickup历史记录视图 - 已完成的自提订单
+-- 用于Pickup界面显示历史记录
+-- ================================================
+CREATE OR REPLACE VIEW vw_staff_pickup_history AS
+SELECT
+    co.OrderID,
+    co.OrderDate,
+    co.TotalAmount,
+    co.OrderStatus,
+    co.FulfilledByShopID AS ShopID,
+    COALESCE(c.Name, 'Guest') AS CustomerName,
+    c.Email AS CustomerEmail,
+    (SELECT COUNT(*) FROM OrderLine WHERE OrderID = co.OrderID) AS ItemCount
+FROM CustomerOrder co
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+WHERE co.FulfillmentType = 'Pickup'
+  AND co.OrderStatus = 'Completed'
+ORDER BY co.OrderDate DESC;
 
 -- ================================================
 -- 33. [新增] 客户目录分组视图 - 按专辑分组显示

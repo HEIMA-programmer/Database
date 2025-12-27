@@ -44,7 +44,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </li>
         <?php endif; ?>
 
-        <?php if (hasRole('Staff')): ?>
+        <?php if (hasRole('Staff')):
+            // 【修复】根据店铺类型动态显示菜单
+            // 仓库员工只显示 Fulfillment 和 Inventory
+            $isWarehouseStaff = ($_SESSION['user']['ShopType'] ?? '') === 'Warehouse';
+        ?>
+            <?php if (!$isWarehouseStaff): // 门店员工专有菜单 ?>
             <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'pos.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pos.php">
                     <i class="fa-solid fa-cash-register me-1"></i>POS
@@ -56,13 +61,15 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'fulfillment.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/fulfillment.php">
-                    <i class="fa-solid fa-truck-fast me-1"></i>Fulfillment
-                </a>
-            </li>
-            <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'pickup.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pickup.php">
                     <i class="fa-solid fa-box-open me-1"></i>Pickups
+                </a>
+            </li>
+            <?php endif; ?>
+            <!-- 所有员工通用菜单 -->
+            <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'fulfillment.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/fulfillment.php">
+                    <i class="fa-solid fa-truck-fast me-1"></i>Fulfillment
                 </a>
             </li>
             <li class="nav-item">

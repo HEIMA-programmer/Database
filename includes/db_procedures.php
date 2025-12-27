@@ -407,6 +407,34 @@ class DBProcedures {
         }
     }
 
+    /**
+     * 【新增】获取POS历史交易记录
+     */
+    public static function getPosHistory($pdo, $shopId, $limit = 20) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_staff_pos_history WHERE ShopID = ? LIMIT ?");
+            $stmt->execute([$shopId, $limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getPosHistory Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【新增】获取Pickup历史记录
+     */
+    public static function getPickupHistory($pdo, $shopId, $limit = 20) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_staff_pickup_history WHERE ShopID = ? LIMIT ?");
+            $stmt->execute([$shopId, $limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getPickupHistory Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
     // ----------------
     // 库存相关
     // ----------------

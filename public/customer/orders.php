@@ -40,8 +40,15 @@ require_once __DIR__ . '/../../includes/header.php';
                         <td>#<?= $o['OrderID'] ?></td>
                         <td><?= formatDate($o['OrderDate']) ?></td>
                         <td>
-                            <?php if($o['OrderType'] == 'InStore'): ?>
-                                <span class="badge bg-info text-dark">Pick-up</span>
+                            <?php
+                            // 【修复】正确区分订单类型
+                            // InStore = 店内购买
+                            // Online + Pickup = 线上支付线下取货
+                            // Online + Shipping = 线上配送
+                            if($o['OrderType'] == 'InStore'): ?>
+                                <span class="badge bg-success text-dark">In-Store</span>
+                            <?php elseif(($o['FulfillmentType'] ?? '') == 'Pickup'): ?>
+                                <span class="badge bg-info text-dark">Pickup</span>
                             <?php else: ?>
                                 <span class="badge bg-primary">Delivery</span>
                             <?php endif; ?>

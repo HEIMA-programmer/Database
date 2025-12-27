@@ -66,6 +66,11 @@ $discount = 0;
 if ($customer['DiscountRate'] > 0) {
     $discount = $total * ($customer['DiscountRate'] / 100);
 }
+
+// 【新增】定义运费（选择Shipping时收取，Pickup免运费）
+$shippingCost = 0;
+define('SHIPPING_FEE', 15.00); // 固定运费¥15
+
 $finalTotal = $total - $discount;
 
 // ========== 处理订单提交 ==========
@@ -73,32 +78,39 @@ $errors = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fulfillmentType = $_POST['fulfillment_type'] ?? '';
     $shippingAddress = trim($_POST['shipping_address'] ?? '');
-    
+
     // 验证履行方式
     if ($shopInfo['Type'] == 'Warehouse' && $fulfillmentType != 'Shipping') {
         $errors[] = 'Warehouse orders can only be shipped.';
     }
-    
+
     if (!in_array($fulfillmentType, ['Shipping', 'Pickup'])) {
         $errors[] = 'Please select a valid fulfillment option.';
     }
-    
+
     if ($fulfillmentType == 'Shipping' && empty($shippingAddress)) {
         $errors[] = 'Please enter a shipping address.';
     }
-    
+
+    // 【新增】计算运费
+    $shippingCost = ($fulfillmentType == 'Shipping') ? SHIPPING_FEE : 0;
+    $finalTotalWithShipping = $finalTotal + $shippingCost;
+
     if (empty($errors)) {
         try {
             $pdo->beginTransaction();
 
-            // 【修复】创建订单 - 使用正确的字段名 FulfilledByShopID，移除不存在的字段
+            // 【修复】创建订单 - 保存履行方式、地址和运费
             $stmt = $pdo->prepare("
-                INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, OrderType, OrderStatus)
-                VALUES (?, ?, 'Online', 'Pending')
+                INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, OrderType, OrderStatus, FulfillmentType, ShippingAddress, ShippingCost)
+                VALUES (?, ?, 'Online', 'Pending', ?, ?, ?)
             ");
             $stmt->execute([
                 $customerId,
-                $shopInfo['ShopID']
+                $shopInfo['ShopID'],
+                $fulfillmentType,
+                $fulfillmentType == 'Shipping' ? $shippingAddress : null,
+                $shippingCost
             ]);
             $orderId = $pdo->lastInsertId();
             
@@ -125,9 +137,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$item['StockItemID']]);
             }
             
-            // 更新订单总额
+            // 【修复】更新订单总额（包含运费）
             $stmt = $pdo->prepare("UPDATE CustomerOrder SET TotalAmount = ? WHERE OrderID = ?");
-            $stmt->execute([$finalTotal, $orderId]);
+            $stmt->execute([$finalTotalWithShipping, $orderId]);
             
             $pdo->commit();
             
@@ -297,12 +309,22 @@ require_once __DIR__ . '/../../includes/header.php';
                         <span>-<?= formatPrice($discount) ?></span>
                     </div>
                     <?php endif; ?>
-                    
+
+                    <!-- 【新增】运费显示 -->
+                    <div class="d-flex justify-content-between mb-2" id="shipping-cost-row">
+                        <span class="text-muted"><i class="fa-solid fa-truck me-1"></i>Shipping</span>
+                        <span class="text-white" id="shipping-cost-display">
+                            <?= $shopInfo['Type'] == 'Warehouse' ? formatPrice(SHIPPING_FEE) : 'Select option' ?>
+                        </span>
+                    </div>
+
                     <hr class="border-secondary">
-                    
+
                     <div class="d-flex justify-content-between mb-2">
                         <span class="fs-5 text-warning">Total</span>
-                        <span class="fs-4 text-warning fw-bold"><?= formatPrice($finalTotal) ?></span>
+                        <span class="fs-4 text-warning fw-bold" id="total-display">
+                            <?= $shopInfo['Type'] == 'Warehouse' ? formatPrice($finalTotal + SHIPPING_FEE) : formatPrice($finalTotal) ?>
+                        </span>
                     </div>
                     
                     <?php if ($customer['Points'] > 0): ?>
@@ -331,7 +353,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const shippingRadio = document.getElementById('shipping');
     const addressSection = document.getElementById('shipping-address-section');
     const fulfillmentOptions = document.querySelectorAll('.fulfillment-option');
-    
+    const shippingCostDisplay = document.getElementById('shipping-cost-display');
+    const totalDisplay = document.getElementById('total-display');
+
+    // 【新增】价格常量
+    const SHIPPING_FEE = <?= SHIPPING_FEE ?>;
+    const subtotalAfterDiscount = <?= $finalTotal ?>;
+
     function updateUI() {
         // 更新地址显示
         if (shippingRadio && shippingRadio.checked) {
@@ -339,7 +367,16 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (addressSection) {
             addressSection.style.display = 'none';
         }
-        
+
+        // 【新增】更新运费和总额显示
+        if (shippingRadio && shippingRadio.checked) {
+            shippingCostDisplay.textContent = '¥' + SHIPPING_FEE.toFixed(2);
+            totalDisplay.textContent = '¥' + (subtotalAfterDiscount + SHIPPING_FEE).toFixed(2);
+        } else if (pickupRadio && pickupRadio.checked) {
+            shippingCostDisplay.innerHTML = '<span class="text-success">Free</span>';
+            totalDisplay.textContent = '¥' + subtotalAfterDiscount.toFixed(2);
+        }
+
         // 更新选中样式
         fulfillmentOptions.forEach(opt => {
             const radio = opt.querySelector('input[type="radio"]');
@@ -352,10 +389,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     if (pickupRadio) pickupRadio.addEventListener('change', updateUI);
     if (shippingRadio) shippingRadio.addEventListener('change', updateUI);
-    
+
     // 点击卡片也能选中
     fulfillmentOptions.forEach(opt => {
         opt.addEventListener('click', function() {
@@ -366,7 +403,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-    
+
     updateUI();
 });
 </script>

@@ -108,30 +108,31 @@ $statusCondition = match($statusFilter) {
     default => ""
 };
 
+// 【修复】使用正确的字段名：FulfilledByShopID 和 COUNT(ol.StockItemID)
 $stmt = $pdo->prepare("
     SELECT co.*, c.Name as CustomerName, c.Email as CustomerEmail,
-           COUNT(ol.OrderLineID) as ItemCount,
-           (SELECT GROUP_CONCAT(DISTINCT r.Title SEPARATOR ', ') 
-            FROM OrderLine ol2 
+           COUNT(ol.StockItemID) as ItemCount,
+           (SELECT GROUP_CONCAT(DISTINCT r.Title SEPARATOR ', ')
+            FROM OrderLine ol2
             JOIN StockItem si ON ol2.StockItemID = si.StockItemID
             JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
             WHERE ol2.OrderID = co.OrderID
             LIMIT 3) as ItemTitles
     FROM CustomerOrder co
-    JOIN Customer c ON co.CustomerID = c.CustomerID
+    LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
     LEFT JOIN OrderLine ol ON co.OrderID = ol.OrderID
-    WHERE co.ShopID = ? $statusCondition
+    WHERE co.FulfilledByShopID = ? $statusCondition
     GROUP BY co.OrderID
     ORDER BY co.OrderDate DESC
 ");
 $stmt->execute([$shopId]);
 $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 统计各状态数量
+// 【修复】统计各状态数量 - 使用正确的字段名
 $stmt = $pdo->prepare("
     SELECT OrderStatus, COUNT(*) as cnt
     FROM CustomerOrder
-    WHERE ShopID = ?
+    WHERE FulfilledByShopID = ?
     GROUP BY OrderStatus
 ");
 $stmt->execute([$shopId]);
@@ -211,7 +212,9 @@ require_once __DIR__ . '/../../includes/header.php';
                 'Cancelled' => 'bg-danger',
                 default => 'bg-secondary'
             };
-            $fulfillmentIcon = $order['FulfillmentType'] == 'Pickup' ? 'fa-store' : 'fa-truck';
+            // 【修复】使用 null 安全的方式读取 FulfillmentType
+            $fulfillmentType = $order['FulfillmentType'] ?? 'Shipping';
+            $fulfillmentIcon = $fulfillmentType == 'Pickup' ? 'fa-store' : 'fa-truck';
             ?>
             <div class="col">
                 <div class="card bg-dark border-secondary h-100">
@@ -240,11 +243,18 @@ require_once __DIR__ . '/../../includes/header.php';
                             <small class="text-muted d-block">Fulfillment</small>
                             <span class="badge bg-dark border border-secondary">
                                 <i class="fa-solid <?= $fulfillmentIcon ?> me-1"></i>
-                                <?= h($order['FulfillmentType']) ?>
+                                <?= h($fulfillmentType) ?>
                             </span>
-                            <?php if ($order['FulfillmentType'] == 'Shipping' && $order['ShippingAddress']): ?>
+                            <?php
+                            $shippingAddress = $order['ShippingAddress'] ?? '';
+                            if ($fulfillmentType == 'Shipping' && $shippingAddress): ?>
                                 <div class="text-muted small mt-1">
-                                    <i class="fa-solid fa-location-dot me-1"></i><?= h($order['ShippingAddress']) ?>
+                                    <i class="fa-solid fa-location-dot me-1"></i><?= h($shippingAddress) ?>
+                                </div>
+                            <?php endif; ?>
+                            <?php if (($order['ShippingCost'] ?? 0) > 0): ?>
+                                <div class="text-warning small mt-1">
+                                    <i class="fa-solid fa-truck me-1"></i>运费: <?= formatPrice($order['ShippingCost']) ?>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -268,7 +278,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                 </form>
                             <?php endif; ?>
                             
-                            <?php if ($order['FulfillmentType'] == 'Shipping' && in_array($order['OrderStatus'], ['Pending', 'Paid'])): ?>
+                            <?php if ($fulfillmentType == 'Shipping' && in_array($order['OrderStatus'], ['Pending', 'Paid'])): ?>
                                 <form method="POST" class="d-inline">
                                     <input type="hidden" name="order_id" value="<?= $order['OrderID'] ?>">
                                     <input type="hidden" name="action" value="ship">
@@ -277,8 +287,8 @@ require_once __DIR__ . '/../../includes/header.php';
                                     </button>
                                 </form>
                             <?php endif; ?>
-                            
-                            <?php if ($order['FulfillmentType'] == 'Pickup' && in_array($order['OrderStatus'], ['Pending', 'Paid'])): ?>
+
+                            <?php if ($fulfillmentType == 'Pickup' && in_array($order['OrderStatus'], ['Pending', 'Paid'])): ?>
                                 <form method="POST" class="d-inline">
                                     <input type="hidden" name="order_id" value="<?= $order['OrderID'] ?>">
                                     <input type="hidden" name="action" value="ready_pickup">

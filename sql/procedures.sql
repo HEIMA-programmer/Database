@@ -10,6 +10,7 @@ DELIMITER $$
 -- ================================================
 
 -- 创建供应商订单
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_create_supplier_order$$
 CREATE PROCEDURE sp_create_supplier_order(
     IN p_supplier_id INT,
@@ -20,21 +21,18 @@ CREATE PROCEDURE sp_create_supplier_order(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
         SET p_order_id = -1;
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     INSERT INTO SupplierOrder (SupplierID, CreatedByEmployeeID, DestinationShopID)
     VALUES (p_supplier_id, p_employee_id, p_destination_shop_id);
 
     SET p_order_id = LAST_INSERT_ID();
-
-    COMMIT;
 END$$
 
 -- 添加订单行项目
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_add_supplier_order_line$$
 CREATE PROCEDURE sp_add_supplier_order_line(
     IN p_order_id INT,
@@ -45,19 +43,15 @@ CREATE PROCEDURE sp_add_supplier_order_line(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to add order line';
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     INSERT INTO SupplierOrderLine (SupplierOrderID, ReleaseID, Quantity, UnitCost)
     VALUES (p_order_id, p_release_id, p_quantity, p_unit_cost);
-
-    COMMIT;
 END$$
 
 -- 接收供应商订单并生成库存
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_receive_supplier_order$$
 CREATE PROCEDURE sp_receive_supplier_order(
     IN p_order_id INT,
@@ -83,11 +77,8 @@ BEGIN
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to receive supplier order';
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     -- 检查订单状态
     SELECT Status, DestinationShopID INTO v_status, v_shop_id
@@ -138,8 +129,6 @@ BEGIN
         WHERE SupplierOrderID = p_order_id
     )
     WHERE SupplierOrderID = p_order_id;
-
-    COMMIT;
 END$$
 
 -- ================================================
@@ -147,6 +136,7 @@ END$$
 -- ================================================
 
 -- 创建回购订单并生成库存
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_process_buyback$$
 CREATE PROCEDURE sp_process_buyback(
     IN p_customer_id INT,
@@ -165,11 +155,9 @@ BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
         SET p_buyback_id = -1;
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     -- 创建回购订单
     INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, Status)
@@ -200,8 +188,6 @@ BEGIN
     UPDATE BuybackOrder
     SET TotalPayment = p_quantity * p_unit_price
     WHERE BuybackOrderID = p_buyback_id;
-
-    COMMIT;
 END$$
 
 -- ================================================
@@ -209,6 +195,7 @@ END$$
 -- ================================================
 
 -- 发起库存调拨
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_initiate_transfer$$
 CREATE PROCEDURE sp_initiate_transfer(
     IN p_stock_item_id INT,
@@ -223,11 +210,9 @@ BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
         SET p_transfer_id = -1;
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     -- 验证库存状态
     SELECT ShopID, Status INTO v_current_shop, v_current_status
@@ -258,11 +243,10 @@ BEGIN
     UPDATE StockItem
     SET Status = 'InTransit'
     WHERE StockItemID = p_stock_item_id;
-
-    COMMIT;
 END$$
 
 -- 完成库存调拨
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_complete_transfer$$
 CREATE PROCEDURE sp_complete_transfer(
     IN p_transfer_id INT,
@@ -275,11 +259,8 @@ BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to complete transfer';
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     -- 获取调拨信息
     SELECT StockItemID, ToShopID, Status
@@ -299,11 +280,7 @@ BEGIN
         ReceivedDate = NOW()
     WHERE TransferID = p_transfer_id;
 
-    -- 【修复】移除重复的库存更新代码
     -- 库存位置和状态的更新由触发器 trg_after_transfer_complete 自动处理
-    -- 保持单一职责原则：存储过程只负责调拨状态变更，触发器负责库存状态同步
-
-    COMMIT;
 END$$
 
 -- ================================================
@@ -311,6 +288,7 @@ END$$
 -- ================================================
 
 -- 创建客户订单（在线/店内）
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_create_customer_order$$
 CREATE PROCEDURE sp_create_customer_order(
     IN p_customer_id INT,
@@ -322,11 +300,9 @@ CREATE PROCEDURE sp_create_customer_order(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
         SET p_order_id = -1;
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     INSERT INTO CustomerOrder (
         CustomerID, FulfilledByShopID, ProcessedByEmployeeID,
@@ -337,11 +313,10 @@ BEGIN
     );
 
     SET p_order_id = LAST_INSERT_ID();
-
-    COMMIT;
 END$$
 
 -- 添加订单商品
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_add_order_item$$
 CREATE PROCEDURE sp_add_order_item(
     IN p_order_id INT,
@@ -353,11 +328,8 @@ BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to add item to order';
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     -- 检查库存状态
     SELECT Status INTO v_stock_status
@@ -377,14 +349,12 @@ BEGIN
     UPDATE StockItem
     SET Status = 'Reserved'
     WHERE StockItemID = p_stock_item_id;
-
-    COMMIT;
 END$$
 
 -- 完成订单（支付成功）
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_complete_order$$
--- 【注意】p_points_earned 参数为向后兼容保留，实际积分由触发器 trg_after_order_complete 自动计算
--- 调用方传递的值不会被使用
+-- 【注意】积分由触发器 trg_after_order_complete 自动计算
 CREATE PROCEDURE sp_complete_order(
     IN p_order_id INT
 )
@@ -395,11 +365,8 @@ BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to complete order';
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     -- 获取订单信息
     SELECT CustomerID, OrderStatus INTO v_customer_id, v_order_status
@@ -430,12 +397,10 @@ BEGIN
     WHERE ol.OrderID = p_order_id;
 
     -- 注意: 积分更新和会员升级由触发器 trg_after_order_complete 自动处理
-    -- 避免重复增加积分，已删除手动更新逻辑
-
-    COMMIT;
 END$$
 
 -- 取消订单
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_cancel_order$$
 CREATE PROCEDURE sp_cancel_order(
     IN p_order_id INT
@@ -443,11 +408,8 @@ CREATE PROCEDURE sp_cancel_order(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to cancel order';
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     -- 释放预留库存
     UPDATE StockItem s
@@ -459,8 +421,6 @@ BEGIN
     UPDATE CustomerOrder
     SET OrderStatus = 'Cancelled'
     WHERE OrderID = p_order_id;
-
-    COMMIT;
 END$$
 
 -- ================================================
@@ -537,6 +497,7 @@ END$$
 -- 7. 会员等级自动升级
 -- ================================================
 
+-- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_update_customer_tier$$
 CREATE PROCEDURE sp_update_customer_tier(
     IN p_customer_id INT
@@ -547,10 +508,8 @@ BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     -- 获取客户积分
     SELECT Points INTO v_points
@@ -568,8 +527,6 @@ BEGIN
     UPDATE Customer
     SET TierID = v_new_tier_id
     WHERE CustomerID = p_customer_id;
-
-    COMMIT;
 END$$
 
 DELIMITER ;
@@ -597,6 +554,7 @@ DELIMITER $$
 -- ------------------------------------------------
 -- 8. 客户注册存储过程
 -- 替换 register.php 中的直接 INSERT
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_register_customer$$
 CREATE PROCEDURE sp_register_customer(
@@ -613,12 +571,10 @@ BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
         SET p_customer_id = -1;
         SET p_tier_id = -1;
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     -- 检查邮箱是否已存在
     SELECT COUNT(*) INTO v_email_exists FROM Customer WHERE Email = p_email;
@@ -626,7 +582,6 @@ BEGIN
     IF v_email_exists > 0 THEN
         SET p_customer_id = -2; -- 表示邮箱已存在
         SET p_tier_id = -1;
-        ROLLBACK;
     ELSE
         -- 获取默认等级（积分最低的等级）
         SELECT TierID INTO v_default_tier_id
@@ -640,14 +595,13 @@ BEGIN
 
         SET p_customer_id = LAST_INSERT_ID();
         SET p_tier_id = v_default_tier_id;
-
-        COMMIT;
     END IF;
 END$$
 
 -- ------------------------------------------------
 -- 9. 更新客户资料存储过程
 -- 替换 profile.php 中的直接 UPDATE
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_update_customer_profile$$
 CREATE PROCEDURE sp_update_customer_profile(
@@ -658,11 +612,8 @@ CREATE PROCEDURE sp_update_customer_profile(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to update customer profile';
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     IF p_password_hash IS NOT NULL AND p_password_hash != '' THEN
         UPDATE Customer
@@ -673,13 +624,12 @@ BEGIN
         SET Name = p_name
         WHERE CustomerID = p_customer_id;
     END IF;
-
-    COMMIT;
 END$$
 
 -- ------------------------------------------------
 -- 10. 添加员工存储过程
 -- 替换 users.php 中的直接 INSERT
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_add_employee$$
 CREATE PROCEDURE sp_add_employee(
@@ -693,23 +643,20 @@ CREATE PROCEDURE sp_add_employee(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
         SET p_employee_id = -1;
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     INSERT INTO Employee (Name, Username, PasswordHash, Role, ShopID, HireDate)
     VALUES (p_name, p_username, p_password_hash, p_role, p_shop_id, CURDATE());
 
     SET p_employee_id = LAST_INSERT_ID();
-
-    COMMIT;
 END$$
 
 -- ------------------------------------------------
 -- 11. 更新员工存储过程
 -- 替换 users.php 中的直接 UPDATE
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_update_employee$$
 CREATE PROCEDURE sp_update_employee(
@@ -722,11 +669,8 @@ CREATE PROCEDURE sp_update_employee(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to update employee';
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     IF p_password_hash IS NOT NULL AND p_password_hash != '' THEN
         UPDATE Employee
@@ -737,13 +681,12 @@ BEGIN
         SET Name = p_name, Role = p_role, ShopID = p_shop_id
         WHERE EmployeeID = p_employee_id;
     END IF;
-
-    COMMIT;
 END$$
 
 -- ------------------------------------------------
 -- 12. 删除员工存储过程
 -- 替换 users.php 中的直接 DELETE
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_delete_employee$$
 CREATE PROCEDURE sp_delete_employee(
@@ -753,24 +696,20 @@ CREATE PROCEDURE sp_delete_employee(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot delete employee - may be linked to records';
+        RESIGNAL;
     END;
 
     IF p_employee_id = p_current_user_id THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot delete your own account';
     END IF;
 
-    START TRANSACTION;
-
     DELETE FROM Employee WHERE EmployeeID = p_employee_id;
-
-    COMMIT;
 END$$
 
 -- ------------------------------------------------
 -- 13. 添加供应商存储过程
 -- 替换 suppliers.php 中的直接 INSERT
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_add_supplier$$
 CREATE PROCEDURE sp_add_supplier(
@@ -781,23 +720,20 @@ CREATE PROCEDURE sp_add_supplier(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
         SET p_supplier_id = -1;
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     INSERT INTO Supplier (Name, Email)
     VALUES (p_name, p_email);
 
     SET p_supplier_id = LAST_INSERT_ID();
-
-    COMMIT;
 END$$
 
 -- ------------------------------------------------
 -- 14. 更新供应商存储过程
 -- 替换 suppliers.php 中的直接 UPDATE
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_update_supplier$$
 CREATE PROCEDURE sp_update_supplier(
@@ -808,22 +744,18 @@ CREATE PROCEDURE sp_update_supplier(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to update supplier';
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     UPDATE Supplier
     SET Name = p_name, Email = p_email
     WHERE SupplierID = p_supplier_id;
-
-    COMMIT;
 END$$
 
 -- ------------------------------------------------
 -- 15. 删除供应商存储过程（带依赖检查）
 -- 替换 suppliers.php 中的直接 DELETE
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_delete_supplier$$
 CREATE PROCEDURE sp_delete_supplier(
@@ -835,8 +767,8 @@ BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
         SET p_result = 0;
+        RESIGNAL;
     END;
 
     -- 检查是否有关联的供应商订单
@@ -847,16 +779,15 @@ BEGIN
     IF v_order_count > 0 THEN
         SET p_result = -1;
     ELSE
-        START TRANSACTION;
         DELETE FROM Supplier WHERE SupplierID = p_supplier_id;
         SET p_result = 1;
-        COMMIT;
     END IF;
 END$$
 
 -- ------------------------------------------------
 -- 16. 添加专辑存储过程
 -- 替换 products.php 中的直接 INSERT
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_add_release$$
 CREATE PROCEDURE sp_add_release(
@@ -871,23 +802,20 @@ CREATE PROCEDURE sp_add_release(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
         SET p_release_id = -1;
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     INSERT INTO ReleaseAlbum (Title, ArtistName, LabelName, ReleaseYear, Genre, Format, Description)
     VALUES (p_title, p_artist, p_label, p_year, p_genre, 'Vinyl', p_description);
 
     SET p_release_id = LAST_INSERT_ID();
-
-    COMMIT;
 END$$
 
 -- ------------------------------------------------
 -- 17. 更新专辑存储过程
 -- 替换 products.php 中的直接 UPDATE
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_update_release$$
 CREATE PROCEDURE sp_update_release(
@@ -902,11 +830,8 @@ CREATE PROCEDURE sp_update_release(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Failed to update release';
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     UPDATE ReleaseAlbum
     SET Title = p_title,
@@ -916,13 +841,12 @@ BEGIN
         Genre = p_genre,
         Description = p_description
     WHERE ReleaseID = p_release_id;
-
-    COMMIT;
 END$$
 
 -- ------------------------------------------------
 -- 18. 发货订单存储过程
 -- 替换 fulfillment.php 中的直接 UPDATE
+-- 【修复】移除内部事务控制，由调用方管理事务
 -- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_ship_order$$
 CREATE PROCEDURE sp_ship_order(
@@ -934,11 +858,9 @@ BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
         SET p_result = 0;
+        RESIGNAL;
     END;
-
-    START TRANSACTION;
 
     -- 验证订单状态
     SELECT OrderStatus INTO v_status
@@ -954,8 +876,6 @@ BEGIN
     ELSE
         SET p_result = 0;
     END IF;
-
-    COMMIT;
 END$$
 
 DELIMITER ;

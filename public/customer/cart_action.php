@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stockId) {
                 $result = addToCart($pdo, $stockId);
                 flash($result['message'], $result['success'] ? 'success' : 'warning');
+                error_log("Cart action 'add': Stock #$stockId, Success: " . ($result['success'] ? 'Yes' : 'No'));
             }
             break;
 
@@ -34,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($releaseId && $condition) {
                 $result = addMultipleToCart($pdo, $releaseId, $condition, $quantity);
                 flash($result['message'], $result['success'] ? 'success' : 'warning');
+                error_log("Cart action 'add_multiple': Release #$releaseId, Condition: $condition, Qty: $quantity, Success: " . ($result['success'] ? 'Yes' : 'No'));
             }
             break;
 
@@ -41,15 +43,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stockId) {
                 if (removeFromCart($stockId)) {
                     flash('Item removed from cart.', 'info');
+                    error_log("Cart action 'remove': Stock #$stockId removed successfully");
                 }
             }
             break;
 
         case 'clear':
+            $cartCount = isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
             clearCart();
             flash('Cart cleared.', 'info');
+            error_log("Cart action 'clear': $cartCount items cleared");
             break;
     }
+
+    // 【修复5】确保session修改立即持久化
+    session_write_close();
 
     // 重定向回来源页面
     $referer = $_SERVER['HTTP_REFERER'] ?? 'cart.php';

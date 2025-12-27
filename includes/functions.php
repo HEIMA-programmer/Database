@@ -1067,6 +1067,7 @@ function handleReleaseAction($pdo, $action, $data) {
 
 /**
  * 处理取货确认
+ * 【修复】添加事务管理
  */
 function handlePickupConfirmation($pdo, $orderId, $shopId) {
     require_once __DIR__ . '/db_procedures.php';
@@ -1081,33 +1082,54 @@ function handlePickupConfirmation($pdo, $orderId, $shopId) {
         return ['success' => false, 'message' => "Invalid order status: {$order['OrderStatus']}"];
     }
 
-    $pointsEarned = floor($order['TotalAmount']);
-    $success = DBProcedures::completeOrder($pdo, $orderId);
+    try {
+        $pdo->beginTransaction();
+        $success = DBProcedures::completeOrder($pdo, $orderId);
 
-    if ($success) {
-        return ['success' => true, 'message' => "Order #$orderId marked as collected."];
+        if ($success) {
+            $pdo->commit();
+            return ['success' => true, 'message' => "Order #$orderId marked as collected."];
+        } else {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Failed to complete order.'];
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return ['success' => false, 'message' => 'Failed to complete order.'];
     }
-
-    return ['success' => false, 'message' => 'Failed to complete order.'];
 }
 
 /**
  * 处理订单发货
+ * 【修复】添加事务管理
  */
 function handleShipOrder($pdo, $orderId) {
     require_once __DIR__ . '/db_procedures.php';
 
-    $success = DBProcedures::shipOrder($pdo, $orderId);
+    try {
+        $pdo->beginTransaction();
+        $success = DBProcedures::shipOrder($pdo, $orderId);
 
-    if ($success) {
-        return ['success' => true, 'message' => "Order #$orderId has been shipped!"];
+        if ($success) {
+            $pdo->commit();
+            return ['success' => true, 'message' => "Order #$orderId has been shipped!"];
+        } else {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Failed to ship order. Invalid order status.'];
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return ['success' => false, 'message' => 'Failed to ship order. Invalid order status.'];
     }
-
-    return ['success' => false, 'message' => 'Failed to ship order. Invalid order status.'];
 }
 
 /**
  * 处理订单送达确认
+ * 【修复】添加事务管理
  */
 function handleDeliveryConfirmation($pdo, $orderId) {
     require_once __DIR__ . '/db_procedures.php';
@@ -1122,21 +1144,27 @@ function handleDeliveryConfirmation($pdo, $orderId) {
             return ['success' => false, 'message' => 'Order not found or not shipped.'];
         }
 
-        $pointsEarned = floor($order['TotalAmount']);
+        $pdo->beginTransaction();
         $success = DBProcedures::completeOrder($pdo, $orderId);
 
         if ($success) {
+            $pdo->commit();
             return ['success' => true, 'message' => "Order #$orderId delivery confirmed!"];
+        } else {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Failed to complete order.'];
         }
-
-        return ['success' => false, 'message' => 'Failed to complete order.'];
     } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
     }
 }
 
 /**
  * 处理库存调拨发起
+ * 【修复】添加事务管理
  */
 function handleTransferInitiation($pdo, $stockId, $toShopId, $employeeId, $shops) {
     require_once __DIR__ . '/db_procedures.php';
@@ -1165,28 +1193,49 @@ function handleTransferInitiation($pdo, $stockId, $toShopId, $employeeId, $shops
         return ['success' => false, 'message' => 'Item already at destination.'];
     }
 
-    $transferId = DBProcedures::initiateTransfer($pdo, $stockId, $stockInfo['ShopID'], $toShopId, $employeeId);
+    try {
+        $pdo->beginTransaction();
+        $transferId = DBProcedures::initiateTransfer($pdo, $stockId, $stockInfo['ShopID'], $toShopId, $employeeId);
 
-    if ($transferId) {
-        return ['success' => true, 'message' => "Transfer #$transferId initiated. Item #$stockId is now InTransit."];
+        if ($transferId && $transferId > 0) {
+            $pdo->commit();
+            return ['success' => true, 'message' => "Transfer #$transferId initiated. Item #$stockId is now InTransit."];
+        } else {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Transfer failed. Please check item availability.'];
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return ['success' => false, 'message' => 'Transfer failed. Please check item availability.'];
     }
-
-    return ['success' => false, 'message' => 'Transfer failed. Please check item availability.'];
 }
 
 /**
  * 处理调拨接收确认
+ * 【修复】添加事务管理
  */
 function handleTransferReceipt($pdo, $transferId, $employeeId) {
     require_once __DIR__ . '/db_procedures.php';
 
-    $success = DBProcedures::completeTransfer($pdo, $transferId, $employeeId);
+    try {
+        $pdo->beginTransaction();
+        $success = DBProcedures::completeTransfer($pdo, $transferId, $employeeId);
 
-    if ($success) {
-        return ['success' => true, 'message' => "Transfer #$transferId confirmed. Item received."];
+        if ($success) {
+            $pdo->commit();
+            return ['success' => true, 'message' => "Transfer #$transferId confirmed. Item received."];
+        } else {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Receipt confirmation failed.'];
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return ['success' => false, 'message' => 'Receipt confirmation failed.'];
     }
-
-    return ['success' => false, 'message' => 'Receipt confirmation failed.'];
 }
 
 /**
@@ -1208,6 +1257,7 @@ function handleProfileUpdate($pdo, $customerId, $name, $password = null) {
 
 /**
  * 处理支付完成
+ * 【修复】添加事务管理，确保支付操作的原子性
  */
 function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
     require_once __DIR__ . '/db_procedures.php';
@@ -1228,40 +1278,64 @@ function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
         return ['success' => false, 'message' => 'Order items expired. Please create a new order.'];
     }
 
-    // 完成订单
-    $pointsEarned = floor($order['TotalAmount']);
-    $success = DBProcedures::completeOrder($pdo, $orderId);
+    try {
+        // 【修复】开启事务
+        $pdo->beginTransaction();
 
-    if ($success) {
-        return ['success' => true, 'message' => 'Payment successful!', 'order_id' => $orderId];
+        // 完成订单（触发器会自动更新积分和会员等级）
+        $success = DBProcedures::completeOrder($pdo, $orderId);
+
+        if ($success) {
+            $pdo->commit();
+            return ['success' => true, 'message' => 'Payment successful!', 'order_id' => $orderId];
+        } else {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Payment failed. Please contact support.'];
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log("Payment completion error: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Payment failed. Please contact support.'];
     }
-
-    return ['success' => false, 'message' => 'Payment failed. Please contact support.'];
 }
 
 /**
  * 处理回购提交
+ * 【修复】添加事务管理
  */
 function handleBuybackSubmission($pdo, $data) {
     require_once __DIR__ . '/db_procedures.php';
 
-    $buybackId = DBProcedures::processBuyback(
-        $pdo,
-        $data['customer_id'] ?: null,
-        $data['employee_id'],
-        $data['shop_id'],
-        $data['release_id'],
-        1, // 数量固定为1
-        $data['buy_price'],
-        $data['condition'],
-        $data['resale_price']
-    );
+    try {
+        $pdo->beginTransaction();
 
-    if ($buybackId) {
-        return ['success' => true, 'message' => "Buyback processed successfully. Buyback Order #$buybackId created.", 'buyback_id' => $buybackId];
+        $buybackId = DBProcedures::processBuyback(
+            $pdo,
+            $data['customer_id'] ?: null,
+            $data['employee_id'],
+            $data['shop_id'],
+            $data['release_id'],
+            1, // 数量固定为1
+            $data['buy_price'],
+            $data['condition'],
+            $data['resale_price']
+        );
+
+        if ($buybackId && $buybackId > 0) {
+            $pdo->commit();
+            return ['success' => true, 'message' => "Buyback processed successfully. Buyback Order #$buybackId created.", 'buyback_id' => $buybackId];
+        } else {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Failed to process buyback.'];
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return ['success' => false, 'message' => 'Failed to process buyback.'];
     }
-
-    return ['success' => false, 'message' => 'Failed to process buyback.'];
 }
 
 /**
@@ -1302,6 +1376,7 @@ function handleProcurementCreatePO($pdo, $data, $warehouseId) {
 
 /**
  * 处理采购订单接收
+ * 【修复】添加事务管理
  */
 function handleProcurementReceivePO($pdo, $orderId, $warehouseId) {
     require_once __DIR__ . '/db_procedures.php';
@@ -1310,13 +1385,24 @@ function handleProcurementReceivePO($pdo, $orderId, $warehouseId) {
         return ['success' => false, 'message' => 'Warehouse not configured.'];
     }
 
-    $batchNo = "BATCH-" . date('Ymd') . "-" . $orderId;
-    $success = DBProcedures::receiveSupplierOrder($pdo, $orderId, $batchNo, 'New', 0.5);
+    try {
+        $pdo->beginTransaction();
 
-    if ($success) {
-        return ['success' => true, 'message' => "Supplier Order #$orderId received. Items added to Warehouse inventory."];
+        $batchNo = "BATCH-" . date('Ymd') . "-" . $orderId;
+        $success = DBProcedures::receiveSupplierOrder($pdo, $orderId, $batchNo, 'New', 0.5);
+
+        if ($success) {
+            $pdo->commit();
+            return ['success' => true, 'message' => "Supplier Order #$orderId received. Items added to Warehouse inventory."];
+        } else {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Failed to receive order.'];
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return ['success' => false, 'message' => 'Failed to receive order.'];
     }
-
-    return ['success' => false, 'message' => 'Failed to receive order.'];
 }
 ?>

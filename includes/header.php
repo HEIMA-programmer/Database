@@ -45,11 +45,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
         <?php endif; ?>
 
         <?php if (hasRole('Staff')): ?>
-            <?php
-            // 【修复】根据店铺类型显示不同菜单：仓库员工只显示Fulfillment和Pickups
-            $isWarehouseStaff = (($_SESSION['user']['ShopType'] ?? '') === 'Warehouse');
-            ?>
-            <?php if (!$isWarehouseStaff): ?>
             <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'pos.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pos.php">
                     <i class="fa-solid fa-cash-register me-1"></i>POS
@@ -60,7 +55,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <i class="fa-solid fa-recycle me-1"></i>Buyback
                 </a>
             </li>
-            <?php endif; ?>
             <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'fulfillment.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/fulfillment.php">
                     <i class="fa-solid fa-truck-fast me-1"></i>Fulfillment
@@ -71,13 +65,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <i class="fa-solid fa-box-open me-1"></i>Pickups
                 </a>
             </li>
-            <?php if (!$isWarehouseStaff): ?>
             <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/inventory.php">
                     <i class="fa-solid fa-boxes-stacked me-1"></i>Inventory
                 </a>
             </li>
-            <?php endif; ?>
         <?php endif; ?>
 
         <?php if (hasRole('Manager')): ?>

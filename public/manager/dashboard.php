@@ -1,106 +1,134 @@
 <?php
 /**
- * 管理仪表板
- * 【架构重构】遵循理想化分层架构
- * - 通过 functions.php 的数据准备函数获取所有数据
- * - 底部仅负责 HTML 渲染
+ * 管理仪表板 - 重构版
+ * 【架构重构】Manager只能查看自己店铺的数据
+ * - 四个小框：总收入、最受欢迎单品、消费最多用户、总支出
+ * - 四个大框：Top Spenders（带detail）、Stagnant Inventory（带调价申请）、
+ *            Low Stock Alert（带调货申请）、Shop Performance（收入支出明细）
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Manager');
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/db_procedures.php';
 
-// =============================================
-// 【数据准备层】调用 functions.php 获取所有数据
-// =============================================
-$dashboardData = prepareDashboardData($pdo);
+// 获取当前Manager的店铺ID
+$shopId = $_SESSION['user']['ShopID'] ?? null;
+$shopType = $_SESSION['user']['ShopType'] ?? 'Retail';
+$isWarehouse = ($shopType === 'Warehouse');
+
+if (!$shopId) {
+    die('Error: Shop ID not found in session.');
+}
+
+// 获取店铺级别的Dashboard数据
+$dashboardData = prepareDashboardData($pdo, $shopId);
 
 // 提取变量供模板使用
 $totalSales = $dashboardData['total_sales'];
-$activeOrders = $dashboardData['active_orders'];
-$lowStockCount = $dashboardData['low_stock_count'];
-$topVipName = $dashboardData['top_vip_name'];
-$vips = $dashboardData['vips'];
+$totalExpense = $dashboardData['total_expense'];
+$popularItem = $dashboardData['popular_item'];
+$topSpenderName = $dashboardData['top_spender_name'];
+$topCustomers = $dashboardData['top_customers'];
 $deadStock = $dashboardData['dead_stock'];
 $lowStock = $dashboardData['low_stock'];
-$shopPerformance = $dashboardData['shop_performance'];
+$revenueByType = $dashboardData['revenue_by_type'];
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
 
-<!-- =============================================
-     【表现层】仅负责 HTML 渲染，无任何业务逻辑
-     ============================================= -->
-
 <div class="row mb-4">
     <div class="col-12">
-        <h2 class="text-warning display-6 fw-bold"><i class="fa-solid fa-chart-line me-2"></i>Executive Dashboard</h2>
-        <p class="text-secondary">Real-time business intelligence and performance metrics.</p>
+        <h2 class="text-warning display-6 fw-bold"><i class="fa-solid fa-chart-line me-2"></i>Store Dashboard</h2>
+        <p class="text-secondary">
+            Real-time business intelligence for <span class="text-info fw-bold"><?= h($_SESSION['shop_name'] ?? 'Your Store') ?></span>
+            <?php if ($isWarehouse): ?>
+            <span class="badge bg-secondary ms-2">Warehouse</span>
+            <?php endif; ?>
+        </p>
     </div>
 </div>
 
+<!-- 四个KPI小框 -->
 <div class="row g-4 mb-5">
+    <!-- 1. Total Revenue -->
     <div class="col-md-6 col-lg-3">
         <div class="card bg-dark border-success h-100">
             <div class="card-body">
-                <h6 class="text-success text-uppercase mb-2">Total Revenue</h6>
+                <h6 class="text-success text-uppercase mb-2"><i class="fa-solid fa-dollar-sign me-1"></i>Total Revenue</h6>
                 <h3 class="text-white fw-bold"><?= formatPrice($totalSales) ?></h3>
             </div>
         </div>
     </div>
+    <!-- 2. Most Popular Item -->
     <div class="col-md-6 col-lg-3">
         <div class="card bg-dark border-info h-100">
             <div class="card-body">
-                <h6 class="text-info text-uppercase mb-2">Active Orders</h6>
-                <h3 class="text-white fw-bold"><?= $activeOrders ?></h3>
+                <h6 class="text-info text-uppercase mb-2"><i class="fa-solid fa-fire me-1"></i>Most Popular</h6>
+                <h3 class="text-white fw-bold" style="font-size: 1.1rem;">
+                    <?= $popularItem ? h($popularItem['Title']) : 'No Data' ?>
+                </h3>
+                <?php if ($popularItem): ?>
+                <small class="text-muted"><?= $popularItem['TotalSold'] ?> sold</small>
+                <?php endif; ?>
             </div>
         </div>
     </div>
+    <!-- 3. Top Spender -->
     <div class="col-md-6 col-lg-3">
         <div class="card bg-dark border-warning h-100">
             <div class="card-body">
-                <h6 class="text-warning text-uppercase mb-2">Top VIP</h6>
-                <h3 class="text-white fw-bold"><?= h($topVipName) ?></h3>
+                <h6 class="text-warning text-uppercase mb-2"><i class="fa-solid fa-crown me-1"></i>Top Spender</h6>
+                <h3 class="text-white fw-bold" style="font-size: 1.1rem;"><?= h($topSpenderName) ?></h3>
             </div>
         </div>
     </div>
+    <!-- 4. Total Expense (Buyback) -->
     <div class="col-md-6 col-lg-3">
         <div class="card bg-dark border-danger h-100">
             <div class="card-body">
-                <h6 class="text-danger text-uppercase mb-2">Low Stock Items</h6>
-                <h3 class="text-white fw-bold"><?= $lowStockCount ?> Types</h3>
+                <h6 class="text-danger text-uppercase mb-2"><i class="fa-solid fa-money-bill-transfer me-1"></i>Total Expense</h6>
+                <h3 class="text-white fw-bold"><?= formatPrice($totalExpense) ?></h3>
+                <small class="text-muted">Buyback payments</small>
             </div>
         </div>
     </div>
 </div>
 
 <div class="row g-4">
+    <!-- Top Spenders 大框 -->
     <div class="col-lg-6">
         <div class="card bg-dark border-secondary h-100">
             <div class="card-header border-secondary bg-transparent">
-                <h5 class="card-title text-warning mb-0"><i class="fa-solid fa-trophy me-2"></i>Top Spenders (Window Func)</h5>
+                <h5 class="card-title text-warning mb-0"><i class="fa-solid fa-trophy me-2"></i>Top Spenders</h5>
             </div>
             <div class="table-responsive">
                 <table class="table table-dark table-sm mb-0">
                     <thead>
                         <tr>
-                            <th>Rank</th>
+                            <th>#</th>
                             <th>Customer</th>
                             <th>Tier</th>
                             <th class="text-end">Total Spent</th>
+                            <th class="text-center">Details</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($vips as $v): ?>
+                        <?php $rank = 1; foreach ($topCustomers as $c): ?>
                         <tr>
-                            <td><span class="badge bg-warning text-dark">#<?= $v['RankPosition'] ?></span></td>
-                            <td><?= h($v['Name']) ?></td>
-                            <td><small class="text-muted"><?= h($v['TierName']) ?></small></td>
-                            <td class="text-end text-success fw-bold"><?= formatPrice($v['TotalSpent']) ?></td>
+                            <td><span class="badge bg-warning text-dark">#<?= $rank++ ?></span></td>
+                            <td><?= h($c['CustomerName']) ?></td>
+                            <td><small class="text-muted"><?= h($c['TierName']) ?></small></td>
+                            <td class="text-end text-success fw-bold"><?= formatPrice($c['TotalSpent']) ?></td>
+                            <td class="text-center">
+                                <a href="customer_orders.php?customer_id=<?= $c['CustomerID'] ?>" class="btn btn-sm btn-outline-info">
+                                    <i class="fa-solid fa-eye"></i>
+                                </a>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
-                        <?php if (empty($vips)): ?>
-                            <tr><td colspan="4" class="text-center text-muted py-3">No sales data available yet.</td></tr>
+                        <?php if (empty($topCustomers)): ?>
+                            <tr><td colspan="5" class="text-center text-muted py-3">No sales data available yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -108,6 +136,7 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 
+    <!-- Stagnant Inventory 大框 -->
     <div class="col-lg-6">
         <div class="card bg-dark border-secondary h-100">
             <div class="card-header border-secondary bg-transparent">
@@ -119,22 +148,31 @@ require_once __DIR__ . '/../../includes/header.php';
                         <tr>
                             <th>Days</th>
                             <th>Album</th>
-                            <th>Batch</th>
+                            <th>Condition</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($deadStock as $d): ?>
                         <tr>
-                            <td class="text-danger fw-bold"><?= $d['DaysInStock'] ?> days</td>
+                            <td class="text-danger fw-bold"><?= $d['MaxDaysInStock'] ?>d</td>
                             <td>
                                 <div><?= h($d['Title']) ?></div>
                                 <small class="text-muted"><?= h($d['ArtistName']) ?></small>
                             </td>
-                            <td><span class="badge bg-secondary"><?= h($d['BatchNo']) ?></span></td>
+                            <td><span class="badge bg-secondary"><?= h($d['ConditionGrade']) ?></span></td>
+                            <td class="text-center"><span class="badge bg-warning text-dark"><?= $d['Quantity'] ?></span></td>
+                            <td class="text-center">
+                                <a href="requests.php?action=price&release_id=<?= $d['ReleaseID'] ?>&condition=<?= urlencode($d['ConditionGrade']) ?>&qty=<?= $d['Quantity'] ?>&price=<?= $d['UnitPrice'] ?>"
+                                   class="btn btn-sm btn-outline-warning" title="Request Price Adjustment">
+                                    <i class="fa-solid fa-tag"></i>
+                                </a>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($deadStock)): ?>
-                            <tr><td colspan="3" class="text-center text-success py-3">No stagnant inventory found! Excellent work.</td></tr>
+                            <tr><td colspan="5" class="text-center text-success py-3">No stagnant inventory found!</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -144,6 +182,7 @@ require_once __DIR__ . '/../../includes/header.php';
 </div>
 
 <div class="row g-4 mt-4">
+    <!-- Low Stock Alert 大框 -->
     <div class="col-lg-6">
         <div class="card bg-dark border-secondary h-100">
             <div class="card-header border-secondary bg-transparent">
@@ -154,8 +193,9 @@ require_once __DIR__ . '/../../includes/header.php';
                     <thead>
                         <tr>
                             <th>Album</th>
-                            <th>Shop</th>
+                            <th>Condition</th>
                             <th class="text-center">Stock</th>
+                            <th class="text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -165,12 +205,18 @@ require_once __DIR__ . '/../../includes/header.php';
                                 <div><?= h($ls['Title']) ?></div>
                                 <small class="text-muted"><?= h($ls['ArtistName']) ?></small>
                             </td>
-                            <td><?= h($ls['ShopName']) ?></td>
+                            <td><span class="badge bg-secondary"><?= h($ls['ConditionGrade']) ?></span></td>
                             <td class="text-center"><span class="badge bg-danger"><?= $ls['AvailableQuantity'] ?></span></td>
+                            <td class="text-center">
+                                <a href="requests.php?action=transfer&release_id=<?= $ls['ReleaseID'] ?>&condition=<?= urlencode($ls['ConditionGrade']) ?>&qty=<?= $ls['AvailableQuantity'] ?>"
+                                   class="btn btn-sm btn-outline-primary" title="Request Transfer">
+                                    <i class="fa-solid fa-truck"></i>
+                                </a>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($lowStock)): ?>
-                            <tr><td colspan="3" class="text-center text-success py-3">All items well stocked!</td></tr>
+                            <tr><td colspan="4" class="text-center text-success py-3">All items well stocked!</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -178,32 +224,82 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 
+    <!-- Shop Performance 大框 - 收入支出明细 -->
     <div class="col-lg-6">
         <div class="card bg-dark border-secondary h-100">
             <div class="card-header border-secondary bg-transparent">
-                <h5 class="card-title text-info mb-0"><i class="fa-solid fa-store me-2"></i>Shop Performance</h5>
+                <h5 class="card-title text-info mb-0"><i class="fa-solid fa-chart-pie me-2"></i>Revenue & Expense Breakdown</h5>
             </div>
             <div class="table-responsive">
                 <table class="table table-dark table-sm mb-0">
                     <thead>
                         <tr>
-                            <th>Shop</th>
                             <th>Type</th>
                             <th class="text-center">Orders</th>
-                            <th class="text-end">Revenue</th>
+                            <th class="text-end">Amount</th>
+                            <th class="text-center">Details</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($shopPerformance as $sp): ?>
+                        <?php
+                        // 收入部分
+                        $typeLabels = [
+                            'OnlineSales' => ['Online Sales (Shipping)', 'fa-globe', 'text-success'],
+                            'OnlinePickup' => ['Online Pickup', 'fa-store', 'text-info'],
+                            'POS' => ['POS In-Store', 'fa-cash-register', 'text-warning']
+                        ];
+
+                        // 根据店铺类型显示不同的收入类型
+                        if ($isWarehouse) {
+                            // Warehouse只显示Online Sales
+                            $displayTypes = ['OnlineSales'];
+                        } else {
+                            // Retail店铺显示全部三种
+                            $displayTypes = ['OnlineSales', 'OnlinePickup', 'POS'];
+                        }
+
+                        foreach ($displayTypes as $type):
+                            $revenue = null;
+                            foreach ($revenueByType as $r) {
+                                if ($r['RevenueType'] === $type) {
+                                    $revenue = $r;
+                                    break;
+                                }
+                            }
+                            $label = $typeLabels[$type];
+                        ?>
                         <tr>
-                            <td class="fw-bold"><?= h($sp['ShopName']) ?></td>
-                            <td><span class="badge bg-secondary"><?= h($sp['Type']) ?></span></td>
-                            <td class="text-center"><?= $sp['TotalOrders'] ?></td>
-                            <td class="text-end text-success fw-bold"><?= formatPrice($sp['Revenue']) ?></td>
+                            <td>
+                                <i class="fa-solid <?= $label[1] ?> me-2 <?= $label[2] ?>"></i>
+                                <?= $label[0] ?>
+                            </td>
+                            <td class="text-center"><?= $revenue ? $revenue['OrderCount'] : 0 ?></td>
+                            <td class="text-end text-success fw-bold">
+                                <?= $revenue ? formatPrice($revenue['Revenue'] + ($revenue['TotalShipping'] ?? 0)) : formatPrice(0) ?>
+                            </td>
+                            <td class="text-center">
+                                <a href="order_details.php?type=<?= $type ?>" class="btn btn-sm btn-outline-info">
+                                    <i class="fa-solid fa-list"></i>
+                                </a>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
-                        <?php if (empty($shopPerformance)): ?>
-                            <tr><td colspan="4" class="text-center text-muted py-3">No sales data yet.</td></tr>
+
+                        <?php if (!$isWarehouse): ?>
+                        <!-- Buyback支出（仅Retail店铺） -->
+                        <tr class="table-secondary">
+                            <td>
+                                <i class="fa-solid fa-money-bill-transfer me-2 text-danger"></i>
+                                Buyback Expense
+                            </td>
+                            <td class="text-center"><?= $dashboardData['buyback_count'] ?? 0 ?></td>
+                            <td class="text-end text-danger fw-bold">-<?= formatPrice($totalExpense) ?></td>
+                            <td class="text-center">
+                                <a href="order_details.php?type=buyback" class="btn btn-sm btn-outline-danger">
+                                    <i class="fa-solid fa-list"></i>
+                                </a>
+                            </td>
+                        </tr>
                         <?php endif; ?>
                     </tbody>
                 </table>

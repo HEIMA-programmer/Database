@@ -18,11 +18,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $responseNote = trim($_POST['response_note'] ?? '');
 
     if ($requestId && in_array($action, ['approve', 'reject'])) {
-        $status = ($action === 'approve') ? 'Approved' : 'Rejected';
-        $result = DBProcedures::respondToRequest($pdo, $requestId, $status, $responseNote, $employeeId);
+        $approved = ($action === 'approve');
+        $result = DBProcedures::respondToRequest($pdo, $requestId, $employeeId, $approved, $responseNote);
 
         if ($result) {
-            flash("Request #$requestId has been $status.", $action === 'approve' ? 'success' : 'warning');
+            $statusText = $approved ? 'Approved' : 'Rejected';
+            flash("Request #$requestId has been $statusText.", $approved ? 'success' : 'warning');
         } else {
             flash("Failed to process request #$requestId.", 'danger');
         }

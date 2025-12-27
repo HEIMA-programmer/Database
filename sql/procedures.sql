@@ -383,13 +383,13 @@ END$$
 
 
 -- 支付订单（仅更新状态为 Paid，不完成订单）
+-- 【修复】移除TotalAmount重算，避免覆盖包含运费的金额
 DROP PROCEDURE IF EXISTS sp_pay_order$$
 CREATE PROCEDURE sp_pay_order(
     IN p_order_id INT
 )
 BEGIN
     DECLARE v_order_status VARCHAR(20);
-    DECLARE v_total_amount DECIMAL(10,2);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -406,15 +406,9 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order is not in Pending status';
     END IF;
 
-    -- 计算订单总额
-    SELECT SUM(PriceAtSale) INTO v_total_amount
-    FROM OrderLine
-    WHERE OrderID = p_order_id;
-
-    -- 更新订单状态为 Paid（不是 Completed）
+    -- 更新订单状态为 Paid（TotalAmount已在创建订单时正确设置，包含运费）
     UPDATE CustomerOrder
-    SET OrderStatus = 'Paid',
-        TotalAmount = v_total_amount
+    SET OrderStatus = 'Paid'
     WHERE OrderID = p_order_id;
 
     -- 库存保持 Reserved 状态，等待发货或取货后再改为 Sold
@@ -424,6 +418,7 @@ END$$
 
 -- ================================================
 -- 修复1: sp_complete_order - 支持门店直接完成订单
+-- 【修复】移除TotalAmount重算，避免覆盖包含运费的金额
 -- ================================================
 DROP PROCEDURE IF EXISTS sp_complete_order$$
 CREATE PROCEDURE sp_complete_order(
@@ -431,7 +426,6 @@ CREATE PROCEDURE sp_complete_order(
 )
 BEGIN
     DECLARE v_customer_id INT;
-    DECLARE v_total_amount DECIMAL(10,2);
     DECLARE v_order_status VARCHAR(20);
     DECLARE v_order_type VARCHAR(10);
 
@@ -457,15 +451,9 @@ BEGIN
         END IF;
     END IF;
 
-    -- 计算订单总额
-    SELECT SUM(PriceAtSale) INTO v_total_amount
-    FROM OrderLine
-    WHERE OrderID = p_order_id;
-
-    -- 更新订单状态
+    -- 更新订单状态（TotalAmount已在创建订单时正确设置，包含运费）
     UPDATE CustomerOrder
-    SET OrderStatus = 'Completed',
-        TotalAmount = v_total_amount
+    SET OrderStatus = 'Completed'
     WHERE OrderID = p_order_id;
 
     -- 更新库存状态为已售出
@@ -531,13 +519,17 @@ END$$
 -- ================================================
 
 -- 释放过期的预留库存（超过30分钟未支付）
+-- 【修复】移除内部事务控制，由调用方（PHP或定时事件）管理事务
 DROP PROCEDURE IF EXISTS sp_release_expired_reservations$$
 CREATE PROCEDURE sp_release_expired_reservations()
 BEGIN
     DECLARE v_affected_orders INT DEFAULT 0;
     DECLARE v_released_items INT DEFAULT 0;
 
-    START TRANSACTION;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        RESIGNAL;
+    END;
 
     -- 统计受影响的订单数
     SELECT COUNT(DISTINCT co.OrderID) INTO v_affected_orders
@@ -561,8 +553,6 @@ BEGIN
     SET OrderStatus = 'Cancelled'
     WHERE OrderStatus = 'Pending'
       AND OrderDate < DATE_SUB(NOW(), INTERVAL 30 MINUTE);
-
-    COMMIT;
 
     -- 返回统计信息
     SELECT

@@ -26,15 +26,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $prices = $_POST['prices'] ?? [];
         $updatedCount = 0;
 
+        // 获取该release所有店铺的库存信息
+        $stockData = DBProcedures::getStockPriceByCondition($pdo, $releaseId);
+
+        // 按condition分组找出所有需要更新的shopId
+        $shopsByCondition = [];
+        foreach ($stockData as $row) {
+            $cond = $row['ConditionGrade'];
+            if (!isset($shopsByCondition[$cond])) {
+                $shopsByCondition[$cond] = [];
+            }
+            $shopsByCondition[$cond][$row['ShopID']] = true;
+        }
+
         foreach ($prices as $condition => $newPrice) {
             if ($newPrice !== '' && is_numeric($newPrice)) {
-                $result = DBProcedures::updateStockPrice($pdo, $releaseId, $condition, (float)$newPrice);
-                if ($result) $updatedCount++;
+                // 更新所有有该condition库存的店铺
+                $shopsToUpdate = $shopsByCondition[$condition] ?? [];
+                foreach (array_keys($shopsToUpdate) as $shopId) {
+                    $result = DBProcedures::updateStockPrice($pdo, $shopId, $releaseId, $condition, (float)$newPrice);
+                    if ($result) $updatedCount++;
+                }
             }
         }
 
         if ($updatedCount > 0) {
-            flash("Updated prices for $updatedCount condition(s) successfully.", 'success');
+            flash("Updated prices for $updatedCount shop/condition combination(s) successfully.", 'success');
         } else {
             flash("No prices were updated.", 'warning');
         }

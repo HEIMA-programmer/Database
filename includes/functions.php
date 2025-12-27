@@ -260,16 +260,6 @@ function checkMembershipUpgrade($pdo, $customerId, $amountSpent, $oldTierId = nu
     }
 }
 
-/**
- * 【已废弃】旧函数保留用于向后兼容
- * 建议使用 getCustomerTierInfo + checkMembershipUpgrade 组合
- * @deprecated 使用 checkMembershipUpgrade 替代
- */
-function addPointsAndCheckUpgrade($pdo, $customerId, $amountSpent) {
-    // 积分更新现在由触发器 trg_after_order_complete 自动处理
-    // 此函数仅用于向后兼容，返回当前状态但无法检测升级
-    return checkMembershipUpgrade($pdo, $customerId, $amountSpent, null);
-}
 
 // =============================================
 // 【架构重构】业务逻辑层 - 购物车与订单计算
@@ -436,25 +426,6 @@ function storeCheckoutSummary($summary) {
     ];
 }
 
-/**
- * 获取存储的结账汇总（用于结账验证）
- * 超过30分钟自动失效
- *
- * @return array|false
- */
-function getCheckoutSummary() {
-    if (!isset($_SESSION['checkout_summary'])) return false;
-
-    $summary = $_SESSION['checkout_summary'];
-
-    // 30分钟有效期
-    if (time() - $summary['timestamp'] > 1800) {
-        unset($_SESSION['checkout_summary']);
-        return false;
-    }
-
-    return $summary;
-}
 
 // =============================================
 // 【架构重构】业务逻辑层 - POS 系统
@@ -642,44 +613,6 @@ function getLoginRedirectUrl($role) {
 // =============================================
 // 【架构重构】数据准备函数 - 页面顶部调用
 // =============================================
-
-/**
- * 准备购物车页面数据
- *
- * @param PDO $pdo
- * @return array 页面所需的所有数据
- */
-function prepareCartPageData($pdo) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    $cart = $_SESSION['cart'] ?? [];
-    $items = [];
-    $summary = null;
-
-    if (!empty($cart)) {
-        // 验证库存可用性
-        $unavailable = validateCartItemsAvailability($pdo, $cart);
-        if (!empty($unavailable)) {
-            removeUnavailableFromCart($unavailable);
-            $cart = $_SESSION['cart'];
-        }
-
-        // 获取商品详情
-        $items = DBProcedures::getCartItems($pdo, $cart);
-
-        // 计算汇总
-        $summary = calculateCartSummary($items);
-
-        // 存储到 Session 供结账使用
-        storeCheckoutSummary($summary);
-    }
-
-    return [
-        'items'   => $items,
-        'summary' => $summary,
-        'empty'   => empty($items)
-    ];
-}
 
 /**
  * 准备 POS 页面数据

@@ -1071,10 +1071,15 @@ class DBProcedures {
 
     /**
      * 获取订单用于取货验证
+     * 【修复】添加 FulfillmentType = 'Pickup' 验证，防止Shipping订单被错误取货
      */
     public static function getOrderForPickupValidation($pdo, $orderId, $shopId) {
         try {
-            $stmt = $pdo->prepare("SELECT OrderID, TotalAmount, OrderStatus FROM CustomerOrder WHERE OrderID = ? AND FulfilledByShopID = ? AND OrderStatus = 'Paid'");
+            $stmt = $pdo->prepare("
+                SELECT OrderID, TotalAmount, OrderStatus, FulfillmentType
+                FROM CustomerOrder
+                WHERE OrderID = ? AND FulfilledByShopID = ? AND OrderStatus = 'Paid' AND FulfillmentType = 'Pickup'
+            ");
             $stmt->execute([$orderId, $shopId]);
             return $stmt->fetch();
         } catch (PDOException $e) {

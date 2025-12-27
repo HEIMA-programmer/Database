@@ -69,18 +69,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                 case 'cancel':
                     if (!in_array($order['OrderStatus'], ['Completed', 'Cancelled'])) {
+                        // 【修复】使用存储过程取消订单，触发器会自动释放库存
                         $pdo->beginTransaction();
-                        // 释放库存
-                        $stmt = $pdo->prepare("
-                            UPDATE StockItem si
-                            JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
-                            SET si.Status = 'Available'
-                            WHERE ol.OrderID = ? AND si.Status = 'Reserved'
-                        ");
-                        $stmt->execute([$orderId]);
-                        // 取消订单
-                        $stmt = $pdo->prepare("UPDATE CustomerOrder SET OrderStatus = 'Cancelled' WHERE OrderID = ?");
-                        $stmt->execute([$orderId]);
+                        DBProcedures::cancelOrder($pdo, $orderId);
                         $pdo->commit();
                         flash("Order #$orderId cancelled.", 'info');
                     }

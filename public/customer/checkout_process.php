@@ -1,10 +1,19 @@
 <?php
+/**
+ * 结账流程处理
+ * 【修复】确保Session正确启动和持久化
+ */
+
+// 【修复1】显式启动session，不依赖其他文件
+session_start();
+
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 
 // 必须登录
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Customer') {
+    error_log("Checkout access denied: Session not found or invalid role");
     header("Location: ../login.php");
     exit();
 }
@@ -74,9 +83,18 @@ try {
 
     // 6. 提交事务
     $pdo->commit();
+    error_log("Order #$orderId created successfully for customer #$customerId");
 
-    // 7. 清空购物车
+    // 7. 【修复2】清空购物车并立即持久化session
+    $cartItemCount = count($_SESSION['cart']);
     unset($_SESSION['cart']);
+
+    // 强制写入session，确保购物车清空持久化
+    session_write_close();
+    error_log("Shopping cart cleared: $cartItemCount items removed for customer #$customerId");
+
+    // 重新启动session以便flash消息能写入
+    session_start();
 
     // 8. 重定向到支付页面
     flash("Order #$orderId created! Please complete your payment.", 'info');
@@ -87,6 +105,10 @@ try {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
+    // 【修复3】详细记录错误信息
+    error_log("Checkout failed for customer #$customerId: " . $e->getMessage());
+    error_log("Stack trace: " . $e->getTraceAsString());
+
     flash("Order failed: " . $e->getMessage(), 'danger');
     header("Location: cart.php");
     exit();

@@ -1257,46 +1257,59 @@ function handleProfileUpdate($pdo, $customerId, $name, $password = null) {
 
 /**
  * 处理支付完成
- * 【修复】添加事务管理，确保支付操作的原子性
+ * 【修复】添加事务管理，确保支付操作的原子性，增强错误日志
  */
 function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
     require_once __DIR__ . '/db_procedures.php';
 
+    // 【修复4】详细日志：支付开始
+    error_log("Payment initiated: Order #$orderId, Customer #$customerId, Method: $paymentMethod");
+
     if (!in_array($paymentMethod, ['alipay', 'wechat', 'card'])) {
+        error_log("Payment failed: Invalid payment method '$paymentMethod'");
         return ['success' => false, 'message' => 'Invalid payment method.'];
     }
 
     // 验证订单
     $order = DBProcedures::getPendingOrder($pdo, $orderId, $customerId);
     if (!$order) {
+        error_log("Payment failed: Order #$orderId not found or already paid for customer #$customerId");
         return ['success' => false, 'message' => 'Order not found or already paid.'];
     }
 
     // 验证库存仍然预留
     $reservedCount = DBProcedures::getOrderReservedCount($pdo, $orderId);
     if ($reservedCount == 0) {
+        error_log("Payment failed: No reserved items for order #$orderId (expired or already processed)");
         return ['success' => false, 'message' => 'Order items expired. Please create a new order.'];
     }
+
+    error_log("Payment validation passed: Order #$orderId has $reservedCount reserved items");
 
     try {
         // 【修复】开启事务
         $pdo->beginTransaction();
+        error_log("Payment transaction started for order #$orderId");
 
         // 完成订单（触发器会自动更新积分和会员等级）
         $success = DBProcedures::completeOrder($pdo, $orderId);
 
         if ($success) {
             $pdo->commit();
+            error_log("Payment completed successfully: Order #$orderId committed, trigger should have updated points");
             return ['success' => true, 'message' => 'Payment successful!', 'order_id' => $orderId];
         } else {
             $pdo->rollBack();
+            error_log("Payment failed: completeOrder returned false for order #$orderId, transaction rolled back");
             return ['success' => false, 'message' => 'Payment failed. Please contact support.'];
         }
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
+            error_log("Payment exception: Transaction rolled back for order #$orderId");
         }
-        error_log("Payment completion error: " . $e->getMessage());
+        error_log("Payment completion error for order #$orderId: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
         return ['success' => false, 'message' => 'Payment failed. Please contact support.'];
     }
 }

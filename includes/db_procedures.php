@@ -765,6 +765,19 @@ class DBProcedures {
     }
 
     /**
+     * 支付订单（状态从 Pending 改为 Paid）
+     */
+    public static function payOrder($pdo, $orderId) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_pay_order(?)");
+            return $stmt->execute([$orderId]);
+        } catch (PDOException $e) {
+            error_log("payOrder Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
      * 完成订单
      */
     public static function completeOrder($pdo, $orderId) {

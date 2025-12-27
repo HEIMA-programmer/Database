@@ -10,7 +10,7 @@ requireRole(['Staff', 'Manager']);
 
 // ========== 数据准备 ==========
 $shopId = $_SESSION['shop_id'];
-$viewMode = $_GET['view'] ?? 'detail';
+$viewMode = $_GET['view'] ?? 'summary';
 
 $pageData = prepareInventoryPageData($pdo, $shopId, $viewMode);
 $inventory = $pageData['inventory'];

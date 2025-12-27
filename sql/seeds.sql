@@ -136,8 +136,9 @@ INSERT INTO SupplierOrderLine (SupplierOrderID, ReleaseID, Quantity, UnitCost) V
 -- ==========================================
 -- 7. 回购订单
 -- ==========================================
+-- 改为（员工6属于仓库ShopID=3）：
 INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, BuybackDate, Status, TotalPayment) VALUES
-(2, 3, 3, DATE_SUB(NOW(), INTERVAL 15 DAY), 'Completed', 66.00);
+(2, 6, 3, DATE_SUB(NOW(), INTERVAL 15 DAY), 'Completed', 66.00);
 
 INSERT INTO BuybackOrderLine (BuybackOrderID, ReleaseID, Quantity, UnitPrice, ConditionGrade) VALUES
 (1, 9, 3, 12.00, 'VG+'),

@@ -157,7 +157,8 @@ SELECT
     co.TotalAmount
 FROM CustomerOrder co
 JOIN Customer c ON co.CustomerID = c.CustomerID
-WHERE co.OrderType = 'Online' AND co.OrderStatus = 'Paid';
+-- 改为（支持两种自提方式）：
+WHERE co.OrderStatus = 'Paid' AND co.OrderType = 'InStore';
 
 -- 7. [Manager View] Shop Performance
 CREATE OR REPLACE VIEW vw_manager_shop_performance AS

@@ -351,6 +351,47 @@ BEGIN
     WHERE StockItemID = p_stock_item_id;
 END$$
 
+
+-- 支付订单（仅更新状态为 Paid，不完成订单）
+DROP PROCEDURE IF EXISTS sp_pay_order$$
+CREATE PROCEDURE sp_pay_order(
+    IN p_order_id INT
+)
+BEGIN
+    DECLARE v_order_status VARCHAR(20);
+    DECLARE v_total_amount DECIMAL(10,2);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        RESIGNAL;
+    END;
+
+    -- 获取订单信息
+    SELECT OrderStatus INTO v_order_status
+    FROM CustomerOrder
+    WHERE OrderID = p_order_id
+    FOR UPDATE;
+
+    IF v_order_status != 'Pending' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order is not in Pending status';
+    END IF;
+
+    -- 计算订单总额
+    SELECT SUM(PriceAtSale) INTO v_total_amount
+    FROM OrderLine
+    WHERE OrderID = p_order_id;
+
+    -- 更新订单状态为 Paid（不是 Completed）
+    UPDATE CustomerOrder
+    SET OrderStatus = 'Paid',
+        TotalAmount = v_total_amount
+    WHERE OrderID = p_order_id;
+
+    -- 库存保持 Reserved 状态，等待发货或取货后再改为 Sold
+END$$
+
+
+
 -- 完成订单（支付成功）
 -- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_complete_order$$
@@ -374,9 +415,9 @@ BEGIN
     WHERE OrderID = p_order_id
     FOR UPDATE;
 
-    -- 【修复】支持 Shipped 状态的订单完成（在线订单发货后确认送达）
-    IF v_order_status NOT IN ('Pending', 'Paid', 'Shipped') THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid order status for completion';
+    -- 改为（保持不变，但确保逻辑正确）：
+    IF v_order_status NOT IN ('Paid', 'Shipped') THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order must be Paid or Shipped to complete';
     END IF;
 
     -- 计算订单总额

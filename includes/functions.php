@@ -1292,7 +1292,7 @@ function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
         error_log("Payment transaction started for order #$orderId");
 
         // 完成订单（触发器会自动更新积分和会员等级）
-        $success = DBProcedures::completeOrder($pdo, $orderId);
+        $success = DBProcedures::payOrder($pdo, $orderId);
 
         if ($success) {
             $pdo->commit();

@@ -11,6 +11,7 @@
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Customer');
 
 // ========== 店铺选择处理 ==========

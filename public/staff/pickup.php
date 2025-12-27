@@ -30,7 +30,7 @@ $orders = $pageData['orders'];
 $pickupHistory = DBProcedures::getPickupHistory($pdo, $shopId, 10);
 
 require_once __DIR__ . '/../../includes/header.php';
-require_once __DIR__ . '/../../includes/staff_nav.php';
+// 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单
 ?>
 
 <!-- ========== 表现层 ========== -->

@@ -146,8 +146,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // 清空购物车
             $_SESSION['cart'] = [];
             
-            flash('Order placed successfully! Order #' . $orderId, 'success');
-            header('Location: orders.php');
+            flash('Order #' . $orderId . ' created! Please complete your payment.', 'info');
+            header('Location: pay.php?order_id=' . $orderId);
             exit;
             
         } catch (Exception $e) {

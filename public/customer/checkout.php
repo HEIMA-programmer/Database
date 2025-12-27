@@ -362,7 +362,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateUI() {
         // 更新地址显示
-        if (shippingRadio && shippingRadio.checked) {
+        // 修复：Warehouse 时没有 radio 按钮，地址栏应始终显示
+        const isWarehouse = !pickupRadio && !shippingRadio;
+        
+        if (isWarehouse || (shippingRadio && shippingRadio.checked)) {
             addressSection.style.display = 'block';
         } else if (addressSection) {
             addressSection.style.display = 'none';

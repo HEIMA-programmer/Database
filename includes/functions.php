@@ -63,12 +63,7 @@ function hasRole($role) {
 
 /**
  * 【修复】按店铺获取目录数据
- * 
- * @param PDO $pdo 数据库连接
- * @param int $shopId 店铺ID
- * @param string $search 搜索关键词
- * @param string $genre 音乐类型筛选
- * @return array 包含items和genres的数组
+ * 已更新以匹配 ReleaseAlbum 架构
  */
 function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') {
     // 构建查询条件
@@ -76,7 +71,8 @@ function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') 
     $where = "si.ShopID = ? AND si.Status = 'Available'";
     
     if ($search) {
-        $where .= " AND (r.Title LIKE ? OR a.Name LIKE ?)";
+        // 注意：Artist 表已移除，直接查询 ReleaseAlbum 中的 ArtistName
+        $where .= " AND (r.Title LIKE ? OR r.ArtistName LIKE ?)";
         $searchParam = "%$search%";
         $params[] = $searchParam;
         $params[] = $searchParam;
@@ -88,13 +84,16 @@ function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') 
     }
     
     // 获取按Release分组的库存统计
+    // 修正：表名 Release -> ReleaseAlbum
+    // 修正：字段 Year -> ReleaseYear
+    // 修正：移除 Artist 表连接
     $sql = "
         SELECT 
             r.ReleaseID,
             r.Title,
             r.Genre,
-            r.Year,
-            a.Name as ArtistName,
+            r.ReleaseYear as Year, 
+            r.ArtistName,
             COUNT(si.StockItemID) as TotalAvailable,
             MIN(si.UnitPrice) as MinPrice,
             MAX(si.UnitPrice) as MaxPrice,
@@ -102,8 +101,7 @@ function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') 
                 FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P')
             ) as AvailableConditions
         FROM StockItem si
-        JOIN `Release` r ON si.ReleaseID = r.ReleaseID
-        JOIN Artist a ON r.ArtistID = a.ArtistID
+        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
         WHERE $where
         GROUP BY r.ReleaseID
         ORDER BY r.Title
@@ -114,10 +112,11 @@ function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') 
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // 获取该店铺可用的所有音乐类型
+    // 修正：表名 Release -> ReleaseAlbum
     $stmt = $pdo->prepare("
         SELECT DISTINCT r.Genre
         FROM StockItem si
-        JOIN `Release` r ON si.ReleaseID = r.ReleaseID
+        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
         WHERE si.ShopID = ? AND si.Status = 'Available'
         ORDER BY r.Genre
     ");
@@ -130,21 +129,12 @@ function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') 
     ];
 }
 
-/**
- * 【修复】按店铺获取Release详情和可用库存
- * 
- * @param PDO $pdo 数据库连接
- * @param int $releaseId Release ID
- * @param int $shopId 店铺ID
- * @return array|null Release信息和库存列表
- */
 function getReleaseDetailsByShop($pdo, $releaseId, $shopId) {
     // 获取Release基本信息
+    // 修正：表名 ReleaseAlbum，字段 ArtistName, LabelName
     $stmt = $pdo->prepare("
-        SELECT r.*, a.Name as ArtistName, l.Name as LabelName
-        FROM `Release` r
-        JOIN Artist a ON r.ArtistID = a.ArtistID
-        LEFT JOIN RecordLabel l ON r.LabelID = l.LabelID
+        SELECT r.*, r.ArtistName, r.LabelName
+        FROM ReleaseAlbum r
         WHERE r.ReleaseID = ?
     ");
     $stmt->execute([$releaseId]);

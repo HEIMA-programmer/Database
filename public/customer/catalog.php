@@ -80,27 +80,27 @@ require_once __DIR__ . '/../../includes/header.php';
         <h1 class="display-5 text-warning fw-bold mb-0">Vinyl Catalog</h1>
         <p class="text-secondary lead">Explore our collection of timeless records.</p>
     </div>
-    <div class="col-md-6">
-        <!-- 店铺选择卡片 -->
-        <div class="card bg-dark border-warning mb-3">
-            <div class="card-body py-2">
-                <div class="d-flex align-items-center justify-content-between">
-                    <span class="text-muted small"><i class="fa-solid fa-store me-1"></i>Shopping at:</span>
-                    <div class="btn-group" role="group">
-                        <?php foreach ($shops as $shop): ?>
-                            <?php 
-                            $isSelected = ($shop['ShopID'] == $selectedShopId);
-                            $btnClass = $isSelected ? 'btn-warning' : 'btn-outline-secondary';
-                            $icon = $shop['Type'] == 'Warehouse' ? 'fa-warehouse' : 'fa-store';
-                            ?>
-                            <a href="?shop_id=<?= $shop['ShopID'] ?><?= $search ? '&q='.urlencode($search) : '' ?><?= $genre ? '&genre='.urlencode($genre) : '' ?>" 
-                               class="btn btn-sm <?= $btnClass ?>">
-                                <i class="fa-solid <?= $icon ?> me-1"></i>
-                                <?= h($shop['Name']) ?>
-                            </a>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
+<div class="col-md-6">
+        <div class="d-flex flex-column align-items-md-end">
+            <span class="text-secondary small mb-2 text-uppercase" style="letter-spacing: 1px;">
+                <i class="fa-solid fa-location-dot me-1"></i>Select Location
+            </span>
+            
+            <div class="btn-group shadow" role="group">
+                <?php foreach ($shops as $shop): ?>
+                    <?php 
+                    $isSelected = ($shop['ShopID'] == $selectedShopId);
+                    // 优化样式：选中为醒目黄，未选中为深灰背景+灰色文字（去除杂乱边框）
+                    $btnClass = $isSelected 
+                        ? 'btn-warning text-dark fw-bold' 
+                        : 'btn-dark text-secondary border-secondary';
+                    $icon = $shop['Type'] == 'Warehouse' ? 'fa-warehouse' : 'fa-store';
+                    ?>
+                    <a href="?shop_id=<?= $shop['ShopID'] ?><?= $search ? '&q='.urlencode($search) : '' ?><?= $genre ? '&genre='.urlencode($genre) : '' ?>" 
+                       class="btn btn-sm <?= $btnClass ?> py-2"
+                       style="min-width: 120px;"> <i class="fa-solid <?= $icon ?> me-2"></i><?= h($shop['Name']) ?>
+                    </a>
+                <?php endforeach; ?>
             </div>
         </div>
     </div>

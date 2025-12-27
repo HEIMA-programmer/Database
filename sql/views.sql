@@ -104,6 +104,7 @@ JOIN StockItem s ON ol.StockItemID = s.StockItemID
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID;
 
 -- 3. [Customer View] My Orders List
+-- 【修复】添加 FulfillmentType 字段，用于区分线上配送和自提订单
 CREATE OR REPLACE VIEW vw_customer_my_orders_list AS
 SELECT
     OrderID,
@@ -111,7 +112,8 @@ SELECT
     OrderDate,
     OrderStatus,
     TotalAmount,
-    OrderType
+    OrderType,
+    FulfillmentType
 FROM CustomerOrder;
 
 -- 4. [Customer View] Profile & Membership Info

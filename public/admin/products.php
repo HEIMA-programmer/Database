@@ -13,7 +13,7 @@ requireRole('Admin');
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'stock_prices' && isset($_GET['release_id'])) {
     header('Content-Type: application/json');
     $releaseId = (int)$_GET['release_id'];
-    $prices = DBProcedures::getAllStockPrices($pdo, $releaseId);
+    $prices = DBProcedures::getStockPriceByCondition($pdo, $releaseId);
     echo json_encode(['success' => true, 'data' => $prices]);
     exit;
 }

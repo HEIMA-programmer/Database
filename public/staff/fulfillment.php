@@ -9,6 +9,7 @@
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Staff');
 
 // 【修复】使用正确的Session结构
@@ -102,7 +103,6 @@ $statusFilter = $_GET['status'] ?? 'pending';
 $statusCondition = match($statusFilter) {
     'pending' => "AND co.OrderStatus IN ('Pending', 'Paid')",
     'shipping' => "AND co.OrderStatus = 'Shipped'",
-    'pickup' => "AND co.OrderStatus = 'ReadyForPickup'",
     'completed' => "AND co.OrderStatus = 'Completed'",
     'cancelled' => "AND co.OrderStatus = 'Cancelled'",
     default => ""
@@ -121,7 +121,7 @@ $stmt = $pdo->prepare("
     FROM CustomerOrder co
     LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
     LEFT JOIN OrderLine ol ON co.OrderID = ol.OrderID
-    WHERE co.FulfilledByShopID = ? $statusCondition
+    WHERE co.FulfilledByShopID = ? AND co.FulfillmentType = 'Shipping' $statusCondition
     GROUP BY co.OrderID
     ORDER BY co.OrderDate DESC
 ");
@@ -132,7 +132,7 @@ $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $stmt = $pdo->prepare("
     SELECT OrderStatus, COUNT(*) as cnt
     FROM CustomerOrder
-    WHERE FulfilledByShopID = ?
+    WHERE FulfilledByShopID = ? AND FulfillmentType = 'Shipping'
     GROUP BY OrderStatus
 ");
 $stmt->execute([$shopId]);
@@ -166,14 +166,6 @@ require_once __DIR__ . '/../../includes/header.php';
                     <span class="badge bg-dark"><?= ($statusCounts['Pending'] ?? 0) + ($statusCounts['Paid'] ?? 0) ?></span>
                 <?php endif; ?>
             </a>
-            <?php if ($shopType != 'Warehouse'): ?>
-            <a href="?status=pickup" class="btn btn-sm <?= $statusFilter == 'pickup' ? 'btn-info' : 'btn-outline-info' ?>">
-                <i class="fa-solid fa-store me-1"></i>Ready for Pickup
-                <?php if (($statusCounts['ReadyForPickup'] ?? 0) > 0): ?>
-                    <span class="badge bg-dark"><?= $statusCounts['ReadyForPickup'] ?></span>
-                <?php endif; ?>
-            </a>
-            <?php endif; ?>
             <a href="?status=shipping" class="btn btn-sm <?= $statusFilter == 'shipping' ? 'btn-primary' : 'btn-outline-primary' ?>">
                 <i class="fa-solid fa-truck me-1"></i>Shipped
                 <?php if (($statusCounts['Shipped'] ?? 0) > 0): ?>
@@ -284,16 +276,6 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <input type="hidden" name="action" value="ship">
                                     <button type="submit" class="btn btn-primary btn-sm">
                                         <i class="fa-solid fa-truck me-1"></i>Ship
-                                    </button>
-                                </form>
-                            <?php endif; ?>
-
-                            <?php if ($fulfillmentType == 'Pickup' && in_array($order['OrderStatus'], ['Pending', 'Paid'])): ?>
-                                <form method="POST" class="d-inline">
-                                    <input type="hidden" name="order_id" value="<?= $order['OrderID'] ?>">
-                                    <input type="hidden" name="action" value="ready_pickup">
-                                    <button type="submit" class="btn btn-info btn-sm">
-                                        <i class="fa-solid fa-store me-1"></i>Ready for Pickup
                                     </button>
                                 </form>
                             <?php endif; ?>

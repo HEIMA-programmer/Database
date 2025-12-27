@@ -160,7 +160,7 @@ SELECT
     co.OrderType
 FROM CustomerOrder co
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-WHERE co.OrderStatus = 'Paid';
+WHERE co.OrderStatus = 'Paid' AND co.FulfillmentType = 'Pickup';
 
 -- 7. [Manager View] Shop Performance
 CREATE OR REPLACE VIEW vw_manager_shop_performance AS

@@ -257,7 +257,20 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('genreDetailContent').classList.add('d-none');
         document.getElementById('genreDetailEmpty').classList.add('d-none');
         document.getElementById('genreDetailBody').innerHTML = '';
+        
+        // 清理残留的 backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('padding-right');
+        document.body.style.removeProperty('overflow');
+        
+        // 销毁实例，下次点击时重新创建
+        const instance = bootstrap.Modal.getInstance(genreModalEl);
+        if (instance) {
+            instance.dispose();
+        }
     });
+
 
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -312,7 +325,20 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('monthDetailContent').classList.add('d-none');
         document.getElementById('monthDetailEmpty').classList.add('d-none');
         document.getElementById('monthDetailBody').innerHTML = '';
+        
+        // 清理残留的 backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('padding-right');
+        document.body.style.removeProperty('overflow');
+        
+        // 销毁实例
+        const instance = bootstrap.Modal.getInstance(monthModalEl);
+        if (instance) {
+            instance.dispose();
+        }
     });
+
 
     document.querySelectorAll('.btn-month-detail').forEach(btn => {
         btn.addEventListener('click', function() {

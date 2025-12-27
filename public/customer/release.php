@@ -9,15 +9,20 @@ require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Customer');
 
 // ========== 数据准备 ==========
+// ========== 数据准备 ==========
 $releaseId = $_GET['id'] ?? 0;
-$pageData = prepareReleaseDetailData($pdo, $releaseId);
+// 新增：获取 shop_id
+$shopId = $_GET['shop_id'] ?? ($_SESSION['selected_shop_id'] ?? 0);
 
-if (!$pageData['found']) {
+// 修改：使用支持店铺筛选的函数 getReleaseDetailsByShop
+// 原代码：$pageData = prepareReleaseDetailData($pdo, $releaseId);
+$pageData = getReleaseDetailsByShop($pdo, $releaseId, $shopId);
+
+if (!$pageData || !$pageData['release']) { // 注意：getReleaseDetailsByShop 返回结构可能略有不同，需做非空判断
     flash("Album not found.", 'danger');
     header("Location: catalog.php");
     exit();
 }
-
 $release = $pageData['release'];
 $stockItems = $pageData['stockItems'];
 

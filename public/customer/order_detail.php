@@ -94,8 +94,15 @@ require_once __DIR__ . '/../../includes/header.php';
                     </li>
                     <li class="mb-3">
                         <small class="text-muted d-block">Order Type</small>
-                        <?php if($order['OrderType'] == 'InStore'): ?>
-                            <span class="badge bg-info text-dark">In-Store Pick-up</span>
+                        <?php
+                        // 【修复】正确区分订单类型
+                        // InStore = 店内购买
+                        // Online + Pickup = 线上支付线下取货
+                        // Online + Shipping = 线上配送
+                        if($order['OrderType'] == 'InStore'): ?>
+                            <span class="badge bg-success text-dark">In-Store</span>
+                        <?php elseif(($order['FulfillmentType'] ?? '') == 'Pickup'): ?>
+                            <span class="badge bg-info text-dark">In-Store Pickup</span>
                         <?php else: ?>
                             <span class="badge bg-primary">Online Delivery</span>
                         <?php endif; ?>

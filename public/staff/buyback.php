@@ -107,7 +107,7 @@ $customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $conditions = ['New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'];
 
 require_once __DIR__ . '/../../includes/header.php';
-require_once __DIR__ . '/../../includes/staff_nav.php';
+// 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单
 ?>
 
 <div class="row mb-4">

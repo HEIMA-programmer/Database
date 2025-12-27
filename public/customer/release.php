@@ -14,11 +14,10 @@ $releaseId = $_GET['id'] ?? 0;
 // 新增：获取 shop_id
 $shopId = $_GET['shop_id'] ?? ($_SESSION['selected_shop_id'] ?? 0);
 
-// 修改：使用支持店铺筛选的函数 getReleaseDetailsByShop
-// 原代码：$pageData = prepareReleaseDetailData($pdo, $releaseId);
-$pageData = getReleaseDetailsByShop($pdo, $releaseId, $shopId);
 
-if (!$pageData || !$pageData['release']) { // 注意：getReleaseDetailsByShop 返回结构可能略有不同，需做非空判断
+$pageData = prepareReleaseDetailData($pdo, $releaseId, $shopId);
+
+if (!$pageData['found']) { 
     flash("Album not found.", 'danger');
     header("Location: catalog.php");
     exit();

@@ -919,21 +919,84 @@ function prepareProductDetailData($pdo, $stockId) {
 }
 
 /**
- * 【新增】准备专辑详情页面数据（按条件分组显示库存）
+ * 【修改】准备专辑详情页面数据（支持按店铺筛选）
  */
-function prepareReleaseDetailData($pdo, $releaseId) {
+function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
     require_once __DIR__ . '/db_procedures.php';
 
+    // 1. 获取 Release 基本信息 (此时包含的是全局统计数据)
     $release = DBProcedures::getReleaseInfo($pdo, $releaseId);
 
     if (!$release) {
         return ['found' => false];
     }
 
+    // 2. 获取库存并根据 ShopID 处理统计逻辑
+    $stockItems = [];
+
+    if ($shopId > 0) {
+        // ====== 针对特定店铺的逻辑 ======
+        
+        // A. 获取该店铺的分组库存 (必须包含 AvailableQuantity 字段，release.php 依赖此字段)
+        $stmt = $pdo->prepare("
+            SELECT 
+                ConditionGrade,
+                UnitPrice,
+                COUNT(*) as AvailableQuantity
+            FROM StockItem
+            WHERE ReleaseID = ? AND ShopID = ? AND Status = 'Available'
+            GROUP BY ConditionGrade, UnitPrice
+            ORDER BY 
+                FIELD(ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'),
+                UnitPrice
+        ");
+        $stmt->execute([$releaseId, $shopId]);
+        $stockItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // B. 重新计算该店铺的统计数据 (覆盖 $release 中的全局数据)
+        $totalAvailable = 0;
+        $prices = [];
+        $conditions = [];
+
+        foreach ($stockItems as $item) {
+            $qty = (int)$item['AvailableQuantity'];
+            $totalAvailable += $qty;
+            $prices[] = (float)$item['UnitPrice'];
+            $conditions[] = $item['ConditionGrade'];
+        }
+
+        // 更新统计字段
+        $release['TotalAvailable'] = $totalAvailable;
+        
+        if ($totalAvailable > 0) {
+            $release['MinPrice'] = min($prices);
+            $release['MaxPrice'] = max($prices);
+            
+            // 重新整理成色字符串
+            $conditions = array_unique($conditions);
+            $condOrder = ['New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'];
+            usort($conditions, function($a, $b) use ($condOrder) {
+                $posA = array_search($a, $condOrder);
+                $posB = array_search($b, $condOrder);
+                return (($posA === false) ? 999 : $posA) - (($posB === false) ? 999 : $posB);
+            });
+            $release['AvailableConditions'] = implode(', ', $conditions);
+        } else {
+            $release['MinPrice'] = 0;
+            $release['MaxPrice'] = 0;
+            $release['AvailableConditions'] = '';
+        }
+
+    } else {
+        // ====== 原有逻辑 (所有店铺/仓库) ======
+        // 保持调用原有存储过程，获取全局库存分组
+        $stockItems = DBProcedures::getReleaseStockByCondition($pdo, $releaseId);
+    }
+
     return [
         'found'      => true,
         'release'    => $release,
-        'stockItems' => DBProcedures::getReleaseStockByCondition($pdo, $releaseId)
+        'stockItems' => $stockItems
     ];
 }
 

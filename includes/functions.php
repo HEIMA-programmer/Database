@@ -1001,7 +1001,8 @@ function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
 }
 
 /**
- * 【新增】添加多个库存到购物车
+ * 【修复】添加多个库存到购物车
+ * 现在会根据用户选择的店铺来获取库存
  */
 function addMultipleToCart($pdo, $releaseId, $conditionGrade, $quantity) {
     require_once __DIR__ . '/db_procedures.php';
@@ -1012,8 +1013,11 @@ function addMultipleToCart($pdo, $releaseId, $conditionGrade, $quantity) {
 
     $quantity = max(1, min(10, (int)$quantity)); // 限制1-10
 
-    // 获取可用库存ID
-    $stockIds = DBProcedures::getAvailableStockIds($pdo, $releaseId, $conditionGrade, $quantity);
+    // 【修复】获取用户当前选择的店铺ID
+    $shopId = $_SESSION['selected_shop_id'] ?? null;
+
+    // 获取可用库存ID（传递店铺ID参数）
+    $stockIds = DBProcedures::getAvailableStockIds($pdo, $releaseId, $conditionGrade, $quantity, $shopId);
 
     if (empty($stockIds)) {
         return ['success' => false, 'message' => 'No available stock for this item.'];

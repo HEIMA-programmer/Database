@@ -64,6 +64,7 @@ ORDER BY s.AcquiredDate ASC;
 -- ================================================
 
 -- 1. [Customer View] Browse Catalog
+-- 【修复】移除 Warehouse 限制，支持所有店铺类型，添加 ShopType 字段
 CREATE OR REPLACE VIEW vw_customer_catalog AS
 SELECT
     s.StockItemID,
@@ -77,12 +78,12 @@ SELECT
     s.ConditionGrade,
     s.UnitPrice,
     sh.Name AS LocationName,
-    sh.ShopID
+    sh.ShopID,
+    sh.Type AS ShopType
 FROM StockItem s
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 JOIN Shop sh ON s.ShopID = sh.ShopID
-WHERE s.Status = 'Available'
-  AND sh.Type = 'Warehouse';
+WHERE s.Status = 'Available';
 
 -- 2. [Customer View] Order History with Details
 CREATE OR REPLACE VIEW vw_customer_order_history AS
@@ -145,7 +146,8 @@ FROM StockItem s
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID;
 
 -- 6. [Staff View] Pending Pickups (BOPIS - Buy Online Pick up In Store)
--- 【修复】BOPIS 是在线下单到店自提，所以 OrderType 应该是 'Online' 而非 'InStore'
+-- 【修复】BOPIS 是在线下单到店自提，OrderType 应该是 'Online'
+-- 同时支持 InStore 订单（店内已付款待提货）
 CREATE OR REPLACE VIEW vw_staff_bopis_pending AS
 SELECT
     co.OrderID,
@@ -154,11 +156,11 @@ SELECT
     c.Email AS CustomerEmail,
     co.OrderDate,
     co.OrderStatus,
-    co.TotalAmount
+    co.TotalAmount,
+    co.OrderType
 FROM CustomerOrder co
-JOIN Customer c ON co.CustomerID = c.CustomerID
--- 改为（支持两种自提方式）：
-WHERE co.OrderStatus = 'Paid' AND co.OrderType = 'InStore';
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+WHERE co.OrderStatus = 'Paid';
 
 -- 7. [Manager View] Shop Performance
 CREATE OR REPLACE VIEW vw_manager_shop_performance AS
@@ -209,6 +211,7 @@ LEFT JOIN StockItem s ON r.ReleaseID = s.ReleaseID
 GROUP BY r.ReleaseID;
 
 -- 10. [Admin View] Employee List
+-- 【修复】使用 LEFT JOIN 支持 ShopID 为 NULL 的员工（如系统管理员）
 CREATE OR REPLACE VIEW vw_admin_employee_list AS
 SELECT
     e.EmployeeID,
@@ -217,9 +220,9 @@ SELECT
     e.HireDate,
     e.Role,
     e.ShopID,
-    s.Name AS ShopName
+    COALESCE(s.Name, 'Headquarters') AS ShopName
 FROM Employee e
-JOIN Shop s ON e.ShopID = s.ShopID;
+LEFT JOIN Shop s ON e.ShopID = s.ShopID;
 
 -- 11. [Admin View] Customer List
 CREATE OR REPLACE VIEW vw_admin_customer_list AS

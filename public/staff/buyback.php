@@ -10,8 +10,9 @@ require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Staff');
 
-// 获取员工信息
-$employeeId = $_SESSION['user']['EmployeeID'];
+// 【修复】使用正确的Session结构
+$employeeId = $_SESSION['user_id'];
+$shopId = $_SESSION['shop_id'];
 $stmt = $pdo->prepare("
     SELECT e.*, s.Name as ShopName, s.Type as ShopType
     FROM Employee e
@@ -20,7 +21,6 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute([$employeeId]);
 $employee = $stmt->fetch(PDO::FETCH_ASSOC);
-$shopId = $employee['ShopID'];
 
 // 仓库员工不能进行回购
 if ($employee['ShopType'] == 'Warehouse') {

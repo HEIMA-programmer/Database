@@ -11,8 +11,9 @@ require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Staff');
 
-// 获取当前员工信息
-$employeeId = $_SESSION['user']['EmployeeID'];
+// 【修复】使用正确的Session结构
+$employeeId = $_SESSION['user_id'];
+$shopId = $_SESSION['shop_id'];
 $stmt = $pdo->prepare("
     SELECT e.*, s.Name as ShopName, s.Type as ShopType
     FROM Employee e
@@ -21,7 +22,6 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute([$employeeId]);
 $employee = $stmt->fetch(PDO::FETCH_ASSOC);
-$shopId = $employee['ShopID'];
 $shopType = $employee['ShopType'];
 
 // 处理订单操作
@@ -29,12 +29,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $orderId = (int)($_POST['order_id'] ?? 0);
     $action = $_POST['action'] ?? '';
     
-    // 验证订单属于本店铺
-    $stmt = $pdo->prepare("SELECT ShopID, OrderStatus FROM CustomerOrder WHERE OrderID = ?");
+    // 【修复】验证订单属于本店铺 - 使用正确的字段名 FulfilledByShopID
+    $stmt = $pdo->prepare("SELECT FulfilledByShopID, OrderStatus FROM CustomerOrder WHERE OrderID = ?");
     $stmt->execute([$orderId]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if ($order && $order['ShopID'] == $shopId) {
+
+    if ($order && $order['FulfilledByShopID'] == $shopId) {
         try {
             switch ($action) {
                 case 'mark_paid':

@@ -306,36 +306,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         }
 
-        // 【修复】在按钮点击时，先重置状态再加载数据
-        // 这样可以避免 isLoading 导致的点击无响应问题
+        // 在按钮点击时直接加载数据并打开模态框
         document.querySelectorAll(config.buttonSelector).forEach(btn => {
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
                 const dataValue = this.dataset[config.dataKey];
-
-                // 【修复】每次点击时先取消之前的请求并重置状态
-                if (abortController) {
-                    abortController.abort();
-                    abortController = null;
-                }
-                isLoading = false;
-
                 loadData(dataValue);
                 modal.show();
             });
         });
 
-        // 模态框开始隐藏时就重置状态（比 hidden 更早）
-        modalEl.addEventListener('hide.bs.modal', function() {
+        // 模态框关闭时重置状态
+        modalEl.addEventListener('hidden.bs.modal', function() {
             if (abortController) {
                 abortController.abort();
                 abortController = null;
             }
             isLoading = false;
-        });
-
-        // 模态框完全隐藏后清理内容
-        modalEl.addEventListener('hidden.bs.modal', function() {
             document.getElementById(config.contentId).classList.add('d-none');
             document.getElementById(config.emptyId).classList.add('d-none');
             document.getElementById(config.bodyId).innerHTML = '';

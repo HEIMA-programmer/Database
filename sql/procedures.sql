@@ -131,6 +131,15 @@ BEGIN
             );
             SET v_counter = v_counter + 1;
         END WHILE;
+
+        -- 【新增】采购时同步更新所有同Release、同Condition的现有库存价格
+        -- 确保价格一致性：新采购的售价会更新到所有现有的同类库存
+        UPDATE StockItem
+        SET UnitPrice = v_unit_price
+        WHERE ReleaseID = v_release_id
+          AND ConditionGrade = v_line_condition
+          AND Status = 'Available'
+          AND UnitPrice != v_unit_price;
     END LOOP;
     CLOSE cur;
 
@@ -167,12 +176,28 @@ BEGIN
     DECLARE v_points_earned INT;
     DECLARE v_current_points INT;
     DECLARE v_new_tier_id INT;
+    DECLARE v_existing_price DECIMAL(10,2);
+    DECLARE v_final_resale_price DECIMAL(10,2);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         SET p_buyback_id = -1;
         RESIGNAL;
     END;
+
+    -- 【新增】检查是否有现有库存的价格，优先使用现有价格确保一致性
+    SELECT MAX(UnitPrice) INTO v_existing_price
+    FROM StockItem
+    WHERE ReleaseID = p_release_id
+      AND ConditionGrade = p_condition_grade
+      AND Status = 'Available';
+
+    -- 如果有现有价格则使用现有价格，否则使用传入的resale价格
+    IF v_existing_price IS NOT NULL AND v_existing_price > 0 THEN
+        SET v_final_resale_price = v_existing_price;
+    ELSE
+        SET v_final_resale_price = p_resale_price;
+    END IF;
 
     -- 计算总支付金额
     SET v_total_payment = p_quantity * p_unit_price;
@@ -190,14 +215,14 @@ BEGIN
     -- 生成批次号
     SET v_batch_no = CONCAT('BUY-', DATE_FORMAT(NOW(), '%Y%m%d'), '-', p_buyback_id);
 
-    -- 生成StockItem
+    -- 生成StockItem（使用一致的价格）
     WHILE v_counter < p_quantity DO
         INSERT INTO StockItem (
             ReleaseID, ShopID, SourceType, SourceOrderID,
             BatchNo, ConditionGrade, Status, UnitPrice
         ) VALUES (
             p_release_id, p_shop_id, 'Buyback', p_buyback_id,
-            v_batch_no, p_condition_grade, 'Available', p_resale_price
+            v_batch_no, p_condition_grade, 'Available', v_final_resale_price
         );
         SET v_counter = v_counter + 1;
     END WHILE;

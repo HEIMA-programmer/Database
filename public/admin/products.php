@@ -274,7 +274,7 @@ require_once __DIR__ . '/../../includes/header.php';
                     <div id="priceContent" class="d-none">
                         <div class="alert alert-info mb-3">
                             <i class="fa-solid fa-info-circle me-1"></i>
-                            Adjust prices by condition. Changes apply to all available stock across all shops.
+                            只需填写您想要更改的成色价格即可，留空的成色将保持原价不变。
                         </div>
                         <!-- 【修复】改用卡片布局避免rowspan造成的UI错乱 -->
                         <div id="priceCardsContainer"></div>
@@ -287,7 +287,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 </div>
                 <div class="modal-footer border-secondary">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" id="priceSubmitBtn" class="btn btn-warning fw-bold" disabled>
+                    <button type="submit" id="priceSubmitBtn" class="btn btn-warning fw-bold">
                         <i class="fa-solid fa-save me-1"></i>Update Prices
                     </button>
                 </div>
@@ -401,12 +401,10 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('priceCardsContainer').innerHTML = html;
             document.getElementById('priceContent').classList.remove('d-none');
             document.getElementById('priceEmpty').classList.add('d-none');
-            document.getElementById('priceSubmitBtn').disabled = false;
         } else {
             document.getElementById('priceContent').classList.add('d-none');
             document.getElementById('priceEmpty').textContent = 'No available stock found for this release.';
             document.getElementById('priceEmpty').classList.remove('d-none');
-            document.getElementById('priceSubmitBtn').disabled = true;
         }
     }
 
@@ -433,7 +431,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceCardsContainer').innerHTML = '';
-        document.getElementById('priceSubmitBtn').disabled = true;
         currentReleaseId = null;
         currentReleaseTitle = null;
     });

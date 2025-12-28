@@ -92,6 +92,8 @@ CREATE TABLE SupplierOrderLine (
     ReleaseID INT,
     Quantity INT NOT NULL,
     UnitCost DECIMAL(10,2) NOT NULL,
+    ConditionGrade ENUM('New', 'Mint', 'NM', 'VG+', 'VG') DEFAULT 'New', -- 成色
+    SalePrice DECIMAL(10,2) DEFAULT NULL, -- 预设售价
     PRIMARY KEY (SupplierOrderID, ReleaseID),
     FOREIGN KEY (SupplierOrderID) REFERENCES SupplierOrder(SupplierOrderID) ON DELETE CASCADE,
     FOREIGN KEY (ReleaseID) REFERENCES ReleaseAlbum(ReleaseID)

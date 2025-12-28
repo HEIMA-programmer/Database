@@ -694,11 +694,12 @@ class DBProcedures {
 
     /**
      * 添加供应商订单行
+     * 【修复】添加ConditionGrade和SalePrice参数
      */
-    public static function addSupplierOrderLine($pdo, $orderId, $releaseId, $quantity, $unitCost) {
+    public static function addSupplierOrderLine($pdo, $orderId, $releaseId, $quantity, $unitCost, $conditionGrade = 'New', $salePrice = null) {
         try {
-            $stmt = $pdo->prepare("CALL sp_add_supplier_order_line(?, ?, ?, ?)");
-            return $stmt->execute([$orderId, $releaseId, $quantity, $unitCost]);
+            $stmt = $pdo->prepare("CALL sp_add_supplier_order_line(?, ?, ?, ?, ?, ?)");
+            return $stmt->execute([$orderId, $releaseId, $quantity, $unitCost, $conditionGrade, $salePrice]);
         } catch (PDOException $e) {
             error_log("addSupplierOrderLine Error: " . $e->getMessage());
             return false;

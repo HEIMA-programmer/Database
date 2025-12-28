@@ -111,22 +111,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_po'])) {
 }
 
 // Action 2: Receive Supplier Order
-// 【修改】移除condition选择，使用订单中已保存的condition
+// 【修改】使用订单中已保存的condition
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_po'])) {
     $orderId = (int)$_POST['po_id'];
 
-    // 获取订单中已保存的condition
-    $orderStmt = $pdo->prepare("
-        SELECT sol.ConditionGrade
-        FROM SupplierOrderLine sol
-        WHERE sol.SupplierOrderID = ?
-        LIMIT 1
-    ");
-    $orderStmt->execute([$orderId]);
-    $orderData = $orderStmt->fetch(PDO::FETCH_ASSOC);
-    $condition = $orderData['ConditionGrade'] ?? 'New';
-
-    $result = handleProcurementReceivePOWithCondition($pdo, $orderId, $warehouseId, $condition);
+    // 直接调用存储过程接收订单，存储过程会使用订单行中保存的ConditionGrade和SalePrice
+    $result = handleProcurementReceivePOWithCondition($pdo, $orderId, $warehouseId, 'New');
     flash($result['message'], $result['success'] ? 'success' : 'danger');
 
     header("Location: procurement.php");
@@ -147,9 +137,14 @@ require_once __DIR__ . '/../../includes/header.php';
             <h2 class="text-warning mb-1"><i class="fa-solid fa-boxes-packing me-2"></i>Procurement & Receiving</h2>
             <p class="text-secondary mb-0">Create purchase orders and receive goods into warehouse inventory</p>
         </div>
-        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#newPOModal" <?= !$warehouseId ? 'disabled' : '' ?>>
-            <i class="fa-solid fa-plus me-2"></i>New Purchase Order
-        </button>
+        <div class="d-flex gap-2">
+            <a href="warehouse_dispatch.php" class="btn btn-info" <?= !$warehouseId ? 'disabled' : '' ?>>
+                <i class="fa-solid fa-truck me-2"></i>Warehouse Dispatch
+            </a>
+            <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#newPOModal" <?= !$warehouseId ? 'disabled' : '' ?>>
+                <i class="fa-solid fa-plus me-2"></i>New Purchase Order
+            </button>
+        </div>
     </div>
 </div>
 

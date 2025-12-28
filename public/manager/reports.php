@@ -248,8 +248,9 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Genre Detail Modal - 使用getOrCreateInstance避免重复实例化
+    // Genre Detail Modal - 使用单一实例
     const genreModalEl = document.getElementById('genreDetailModal');
+    const genreModal = new bootstrap.Modal(genreModalEl);
 
     // Reset modal state when hidden
     genreModalEl.addEventListener('hidden.bs.modal', function() {
@@ -257,15 +258,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('genreDetailContent').classList.add('d-none');
         document.getElementById('genreDetailEmpty').classList.add('d-none');
         document.getElementById('genreDetailBody').innerHTML = '';
-        
-        // 清理残留的 backdrop
-        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('padding-right');
-        document.body.style.removeProperty('overflow');
-        
     });
-
 
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -275,8 +268,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('genreDetailContent').classList.add('d-none');
             document.getElementById('genreDetailEmpty').classList.add('d-none');
 
-            // 使用getOrCreateInstance确保不重复创建实例
-            const genreModal = bootstrap.Modal.getOrCreateInstance(genreModalEl);
             genreModal.show();
 
             fetch(`reports.php?ajax=genre_detail&genre=${encodeURIComponent(genre)}`)
@@ -311,8 +302,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Month Detail Modal - 使用getOrCreateInstance避免重复实例化
+    // Month Detail Modal - 使用单一实例
     const monthModalEl = document.getElementById('monthDetailModal');
+    const monthModal = new bootstrap.Modal(monthModalEl);
 
     // Reset modal state when hidden
     monthModalEl.addEventListener('hidden.bs.modal', function() {
@@ -320,15 +312,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('monthDetailContent').classList.add('d-none');
         document.getElementById('monthDetailEmpty').classList.add('d-none');
         document.getElementById('monthDetailBody').innerHTML = '';
-        
-        // 清理残留的 backdrop
-        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('padding-right');
-        document.body.style.removeProperty('overflow');
-        
     });
-
 
     document.querySelectorAll('.btn-month-detail').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -338,8 +322,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('monthDetailContent').classList.add('d-none');
             document.getElementById('monthDetailEmpty').classList.add('d-none');
 
-            // 使用getOrCreateInstance确保不重复创建实例
-            const monthModal = bootstrap.Modal.getOrCreateInstance(monthModalEl);
             monthModal.show();
 
             fetch(`reports.php?ajax=month_detail&month=${encodeURIComponent(month)}`)

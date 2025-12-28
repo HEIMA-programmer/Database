@@ -252,157 +252,151 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Genre Detail Modal - 使用 Bootstrap 原生事件
-    const genreModalEl = document.getElementById('genreDetailModal');
-    let genreAbortController = null;
-
-    // 模态框打开时加载数据
-    genreModalEl.addEventListener('show.bs.modal', function(event) {
-        const btn = event.relatedTarget;
-        if (!btn) return; // 安全检查
-
-        const genre = btn.dataset.genre;
-
-        document.getElementById('genreTitle').textContent = genre;
-        document.getElementById('genreDetailLoading').classList.remove('d-none');
-        document.getElementById('genreDetailContent').classList.add('d-none');
-        document.getElementById('genreDetailEmpty').classList.add('d-none');
-
-        // 取消之前的请求
-        if (genreAbortController) {
-            genreAbortController.abort();
-        }
-        genreAbortController = new AbortController();
-
-        fetch(`reports.php?ajax=genre_detail&genre=${encodeURIComponent(genre)}`, {
-            signal: genreAbortController.signal
-        })
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('genreDetailLoading').classList.add('d-none');
-
-                if (data.success && data.data.length > 0) {
-                    let html = '';
-                    data.data.forEach(row => {
-                        html += `<tr>
-                            <td><span class="badge bg-info">#${row.OrderID}</span></td>
-                            <td>${row.OrderDate}</td>
-                            <td>${row.CustomerName || 'Guest'}</td>
-                            <td>${escapeHtml(row.Title)}</td>
-                            <td><small class="text-muted">${escapeHtml(row.ArtistName)}</small></td>
-                            <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
-                            <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
-                        </tr>`;
-                    });
-                    document.getElementById('genreDetailBody').innerHTML = html;
-                    document.getElementById('genreDetailContent').classList.remove('d-none');
-                } else {
-                    document.getElementById('genreDetailEmpty').classList.remove('d-none');
-                }
-            })
-            .catch(err => {
-                if (err.name === 'AbortError') return; // 请求被取消，忽略
-                document.getElementById('genreDetailLoading').classList.add('d-none');
-                document.getElementById('genreDetailEmpty').textContent = 'Error loading data.';
-                document.getElementById('genreDetailEmpty').classList.remove('d-none');
-            });
-    });
-
-    // 模态框关闭时重置状态
-    genreModalEl.addEventListener('hidden.bs.modal', function() {
-        // 取消进行中的请求
-        if (genreAbortController) {
-            genreAbortController.abort();
-            genreAbortController = null;
-        }
-        // 注意：不在这里显示loading，让show事件来控制
-        // 这样可以避免当relatedTarget为null时loading永远显示的问题
-        document.getElementById('genreDetailContent').classList.add('d-none');
-        document.getElementById('genreDetailEmpty').classList.add('d-none');
-        document.getElementById('genreDetailBody').innerHTML = '';
-    });
-
-    // Month Detail Modal - 使用 Bootstrap 原生事件
-    const monthModalEl = document.getElementById('monthDetailModal');
-    let monthAbortController = null;
-
-    // 模态框打开时加载数据
-    monthModalEl.addEventListener('show.bs.modal', function(event) {
-        const btn = event.relatedTarget;
-        if (!btn) return; // 安全检查
-
-        const month = btn.dataset.month;
-
-        document.getElementById('monthTitle').textContent = month;
-        document.getElementById('monthDetailLoading').classList.remove('d-none');
-        document.getElementById('monthDetailContent').classList.add('d-none');
-        document.getElementById('monthDetailEmpty').classList.add('d-none');
-
-        // 取消之前的请求
-        if (monthAbortController) {
-            monthAbortController.abort();
-        }
-        monthAbortController = new AbortController();
-
-        fetch(`reports.php?ajax=month_detail&month=${encodeURIComponent(month)}`, {
-            signal: monthAbortController.signal
-        })
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('monthDetailLoading').classList.add('d-none');
-
-                if (data.success && data.data.length > 0) {
-                    let html = '';
-                    const typeBadges = {
-                        'POS': '<span class="badge bg-warning text-dark">POS</span>',
-                        'OnlinePickup': '<span class="badge bg-info">Pickup</span>',
-                        'OnlineSales': '<span class="badge bg-success">Shipping</span>'
-                    };
-                    data.data.forEach(row => {
-                        const typeBadge = typeBadges[row.OrderCategory] || '<span class="badge bg-secondary">Other</span>';
-                        html += `<tr>
-                            <td><span class="badge bg-info">#${row.OrderID}</span></td>
-                            <td>${row.OrderDate}</td>
-                            <td>${typeBadge}</td>
-                            <td>${row.CustomerName || 'Guest'}</td>
-                            <td>${escapeHtml(row.Title)}</td>
-                            <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
-                            <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
-                        </tr>`;
-                    });
-                    document.getElementById('monthDetailBody').innerHTML = html;
-                    document.getElementById('monthDetailContent').classList.remove('d-none');
-                } else {
-                    document.getElementById('monthDetailEmpty').classList.remove('d-none');
-                }
-            })
-            .catch(err => {
-                if (err.name === 'AbortError') return; // 请求被取消，忽略
-                document.getElementById('monthDetailLoading').classList.add('d-none');
-                document.getElementById('monthDetailEmpty').textContent = 'Error loading data.';
-                document.getElementById('monthDetailEmpty').classList.remove('d-none');
-            });
-    });
-
-    // 模态框关闭时重置状态
-    monthModalEl.addEventListener('hidden.bs.modal', function() {
-        // 取消进行中的请求
-        if (monthAbortController) {
-            monthAbortController.abort();
-            monthAbortController = null;
-        }
-        // 注意：不在这里显示loading，让show事件来控制
-        // 这样可以避免当relatedTarget为null时loading永远显示的问题
-        document.getElementById('monthDetailContent').classList.add('d-none');
-        document.getElementById('monthDetailEmpty').classList.add('d-none');
-        document.getElementById('monthDetailBody').innerHTML = '';
-    });
-
+    // ========== 辅助函数 ==========
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text || '';
         return div.innerHTML;
     }
+
+    // 通用的模态框加载函数
+    function setupModalLoader(config) {
+        const modalEl = document.getElementById(config.modalId);
+        let abortController = null;
+        let pendingData = null;  // 保存待加载的数据
+
+        // 在按钮点击时保存数据（作为 relatedTarget 的后备）
+        document.querySelectorAll(config.buttonSelector).forEach(btn => {
+            btn.addEventListener('click', function() {
+                pendingData = this.dataset[config.dataKey];
+            });
+        });
+
+        // 模态框打开时加载数据
+        modalEl.addEventListener('show.bs.modal', function(event) {
+            // 优先使用 relatedTarget，如果不可用则使用保存的数据
+            const btn = event.relatedTarget;
+            const dataValue = btn?.dataset?.[config.dataKey] || pendingData;
+
+            if (!dataValue) {
+                // 如果无法获取数据，显示错误信息
+                document.getElementById(config.loadingId).classList.add('d-none');
+                document.getElementById(config.contentId).classList.add('d-none');
+                document.getElementById(config.emptyId).textContent = 'Unable to load data. Please close and try again.';
+                document.getElementById(config.emptyId).classList.remove('d-none');
+                return;
+            }
+
+            // 设置标题
+            document.getElementById(config.titleId).textContent = dataValue;
+
+            // 显示 loading，隐藏其他
+            document.getElementById(config.loadingId).classList.remove('d-none');
+            document.getElementById(config.contentId).classList.add('d-none');
+            document.getElementById(config.emptyId).classList.add('d-none');
+
+            // 取消之前的请求
+            if (abortController) {
+                abortController.abort();
+            }
+            abortController = new AbortController();
+
+            fetch(config.fetchUrl(dataValue), {
+                signal: abortController.signal
+            })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById(config.loadingId).classList.add('d-none');
+
+                    if (data.success && data.data.length > 0) {
+                        document.getElementById(config.bodyId).innerHTML = config.renderRows(data.data);
+                        document.getElementById(config.contentId).classList.remove('d-none');
+                    } else {
+                        document.getElementById(config.emptyId).textContent = config.emptyMessage;
+                        document.getElementById(config.emptyId).classList.remove('d-none');
+                    }
+                })
+                .catch(err => {
+                    if (err.name === 'AbortError') return;
+                    document.getElementById(config.loadingId).classList.add('d-none');
+                    document.getElementById(config.emptyId).textContent = 'Error loading data.';
+                    document.getElementById(config.emptyId).classList.remove('d-none');
+                });
+        });
+
+        // 模态框关闭时重置状态
+        modalEl.addEventListener('hidden.bs.modal', function() {
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+            }
+            // 清理数据但不改变 loading 状态
+            document.getElementById(config.contentId).classList.add('d-none');
+            document.getElementById(config.emptyId).classList.add('d-none');
+            document.getElementById(config.bodyId).innerHTML = '';
+            // 清除待处理数据
+            pendingData = null;
+        });
+    }
+
+    // ========== Genre Detail Modal ==========
+    setupModalLoader({
+        modalId: 'genreDetailModal',
+        buttonSelector: '.btn-genre-detail',
+        dataKey: 'genre',
+        titleId: 'genreTitle',
+        loadingId: 'genreDetailLoading',
+        contentId: 'genreDetailContent',
+        emptyId: 'genreDetailEmpty',
+        bodyId: 'genreDetailBody',
+        emptyMessage: 'No order details found for this genre.',
+        fetchUrl: (genre) => `reports.php?ajax=genre_detail&genre=${encodeURIComponent(genre)}`,
+        renderRows: (data) => {
+            return data.map(row => `<tr>
+                <td><span class="badge bg-info">#${row.OrderID}</span></td>
+                <td>${row.OrderDate}</td>
+                <td>${row.CustomerName || 'Guest'}</td>
+                <td>${escapeHtml(row.Title)}</td>
+                <td><small class="text-muted">${escapeHtml(row.ArtistName)}</small></td>
+                <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
+                <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
+            </tr>`).join('');
+        }
+    });
+
+    // ========== Month Detail Modal ==========
+    const typeBadges = {
+        'POS': '<span class="badge bg-warning text-dark">POS</span>',
+        'OnlinePickup': '<span class="badge bg-info">Pickup</span>',
+        'OnlineSales': '<span class="badge bg-success">Shipping</span>'
+    };
+
+    setupModalLoader({
+        modalId: 'monthDetailModal',
+        buttonSelector: '.btn-month-detail',
+        dataKey: 'month',
+        titleId: 'monthTitle',
+        loadingId: 'monthDetailLoading',
+        contentId: 'monthDetailContent',
+        emptyId: 'monthDetailEmpty',
+        bodyId: 'monthDetailBody',
+        emptyMessage: 'No order details found for this month.',
+        fetchUrl: (month) => `reports.php?ajax=month_detail&month=${encodeURIComponent(month)}`,
+        renderRows: (data) => {
+            return data.map(row => {
+                const typeBadge = typeBadges[row.OrderCategory] || '<span class="badge bg-secondary">Other</span>';
+                return `<tr>
+                    <td><span class="badge bg-info">#${row.OrderID}</span></td>
+                    <td>${row.OrderDate}</td>
+                    <td>${typeBadge}</td>
+                    <td>${row.CustomerName || 'Guest'}</td>
+                    <td>${escapeHtml(row.Title)}</td>
+                    <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
+                    <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
+                </tr>`;
+            }).join('');
+        }
+    });
 });
 </script>
 

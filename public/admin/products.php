@@ -309,6 +309,12 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
     // Edit modal
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -322,19 +328,39 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Price modal - 使用 Bootstrap 原生事件（不手动创建实例）
+    // Price modal - 使用双重数据保存机制确保可靠性
     const priceModalEl = document.getElementById('priceModal');
     let priceAbortController = null;
+    let pendingPriceData = null;  // 保存待加载的数据
+
+    // 在按钮点击时保存数据（作为 relatedTarget 的后备）
+    document.querySelectorAll('.price-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            pendingPriceData = {
+                releaseId: this.dataset.releaseId,
+                releaseTitle: this.dataset.releaseTitle
+            };
+        });
+    });
 
     // 模态框打开时加载数据
     priceModalEl.addEventListener('show.bs.modal', function(event) {
+        // 优先使用 relatedTarget，如果不可用则使用保存的数据
         const btn = event.relatedTarget;
-        if (!btn) return; // 安全检查
+        const releaseId = btn?.dataset?.releaseId || pendingPriceData?.releaseId;
+        const releaseTitle = btn?.dataset?.releaseTitle || pendingPriceData?.releaseTitle;
 
-        const releaseId = btn.dataset.releaseId;
-        const releaseTitle = btn.dataset.releaseTitle;
+        if (!releaseId) {
+            // 如果无法获取数据，显示错误信息
+            document.getElementById('priceLoading').classList.add('d-none');
+            document.getElementById('priceContent').classList.add('d-none');
+            document.getElementById('priceEmpty').textContent = 'Unable to load data. Please close and try again.';
+            document.getElementById('priceEmpty').classList.remove('d-none');
+            document.getElementById('priceSubmitBtn').disabled = true;
+            return;
+        }
 
-        document.getElementById('priceModalTitle').textContent = releaseTitle;
+        document.getElementById('priceModalTitle').textContent = releaseTitle || '';
         document.getElementById('price_release_id').value = releaseId;
         document.getElementById('priceLoading').classList.remove('d-none');
         document.getElementById('priceContent').classList.add('d-none');
@@ -401,11 +427,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('priceContent').classList.remove('d-none');
                     document.getElementById('priceSubmitBtn').disabled = false;
                 } else {
+                    document.getElementById('priceEmpty').textContent = 'No available stock found for this release.';
                     document.getElementById('priceEmpty').classList.remove('d-none');
                 }
             })
             .catch(err => {
-                if (err.name === 'AbortError') return; // 请求被取消，忽略
+                if (err.name === 'AbortError') return;
                 document.getElementById('priceLoading').classList.add('d-none');
                 document.getElementById('priceEmpty').textContent = 'Error loading stock data.';
                 document.getElementById('priceEmpty').classList.remove('d-none');
@@ -414,24 +441,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 模态框关闭时重置状态
     priceModalEl.addEventListener('hidden.bs.modal', function() {
-        // 取消进行中的请求
         if (priceAbortController) {
             priceAbortController.abort();
             priceAbortController = null;
         }
-        // 注意：不在这里显示loading，让show事件来控制
-        // 这样可以避免当relatedTarget为null时loading永远显示的问题
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceTableBody').innerHTML = '';
         document.getElementById('priceSubmitBtn').disabled = true;
+        // 清除待处理数据
+        pendingPriceData = null;
     });
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text || '';
-        return div.innerHTML;
-    }
 });
 </script>
 

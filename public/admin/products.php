@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('priceLoading').classList.remove('d-none');
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
-        document.getElementById('priceTableBody').innerHTML = '';
+        document.getElementById('priceCardsContainer').innerHTML = '';
         document.getElementById('priceSubmitBtn').disabled = true;
 
         // 取消之前的请求

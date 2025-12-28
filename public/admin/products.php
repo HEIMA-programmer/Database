@@ -9,15 +9,6 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Admin');
 
-// 处理AJAX请求 - 获取库存价格数据
-if (isset($_GET['ajax']) && $_GET['ajax'] === 'stock_prices' && isset($_GET['release_id'])) {
-    header('Content-Type: application/json');
-    $releaseId = (int)$_GET['release_id'];
-    $prices = DBProcedures::getStockPriceByCondition($pdo, $releaseId);
-    echo json_encode(['success' => true, 'data' => $prices]);
-    exit;
-}
-
 // ========== POST 请求处理 ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 处理价格更新
@@ -85,6 +76,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ========== 数据准备 ==========
 $pageData = prepareProductsPageData($pdo);
 $releases = $pageData['releases'];
+
+// 预加载所有 releases 的库存价格数据
+$allStockPrices = DBProcedures::getAllStockPrices($pdo);
+// 按 ReleaseID 分组
+$stockPricesByRelease = [];
+foreach ($allStockPrices as $price) {
+    $releaseId = $price['ReleaseID'];
+    if (!isset($stockPricesByRelease[$releaseId])) {
+        $stockPricesByRelease[$releaseId] = [];
+    }
+    $stockPricesByRelease[$releaseId][] = $price;
+}
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
@@ -295,6 +298,9 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // ========== 预加载数据 ==========
+    const stockPricesByRelease = <?= json_encode($stockPricesByRelease, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text || '';
@@ -314,139 +320,108 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Price modal - 完全由 click 事件驱动，不依赖 Bootstrap 事件
+    // ========== Price Modal（预加载方式）==========
     const priceModalEl = document.getElementById('priceModal');
     const priceModal = new bootstrap.Modal(priceModalEl);
-    let priceAbortController = null;
-    let isLoading = false;
 
-    function loadPriceData(releaseId, releaseTitle) {
-        if (!releaseId || isLoading) return;
-        isLoading = true;
-
+    function renderPriceData(releaseId, releaseTitle) {
         document.getElementById('priceModalTitle').textContent = releaseTitle || '';
         document.getElementById('price_release_id').value = releaseId;
-        document.getElementById('priceLoading').classList.remove('d-none');
-        document.getElementById('priceContent').classList.add('d-none');
-        document.getElementById('priceEmpty').classList.add('d-none');
-        document.getElementById('priceCardsContainer').innerHTML = '';
-        document.getElementById('priceSubmitBtn').disabled = true;
+        // 隐藏loading（预加载不需要）
+        document.getElementById('priceLoading').classList.add('d-none');
 
-        // 取消之前的请求
-        if (priceAbortController) {
-            priceAbortController.abort();
-        }
-        priceAbortController = new AbortController();
+        const data = stockPricesByRelease[releaseId] || [];
 
-        fetch(`products.php?ajax=stock_prices&release_id=${releaseId}`, {
-            signal: priceAbortController.signal
-        })
-            .then(res => res.json())
-            .then(data => {
-                isLoading = false;
-                document.getElementById('priceLoading').classList.add('d-none');
+        if (data.length > 0) {
+            // Group by condition
+            const byCondition = {};
+            data.forEach(row => {
+                const cond = row.ConditionGrade;
+                if (!byCondition[cond]) {
+                    byCondition[cond] = { price: row.MinPrice, totalQty: 0, shops: [] };
+                }
+                byCondition[cond].totalQty += parseInt(row.Quantity);
+                byCondition[cond].shops.push({
+                    name: row.ShopName,
+                    qty: row.Quantity,
+                    price: row.MinPrice
+                });
+            });
 
-                if (data.success && data.data.length > 0) {
-                    // 【修复】使用卡片布局替代rowspan表格，避免UI错乱
-                    // Group by condition
-                    const byCondition = {};
-                    data.data.forEach(row => {
-                        const cond = row.ConditionGrade;
-                        if (!byCondition[cond]) {
-                            byCondition[cond] = { price: row.MinPrice, totalQty: 0, shops: [] };
-                        }
-                        byCondition[cond].totalQty += parseInt(row.Quantity);
-                        byCondition[cond].shops.push({
-                            name: row.ShopName,
-                            qty: row.Quantity,
-                            price: row.MinPrice
-                        });
-                    });
+            // 按condition顺序排序
+            const condOrder = ['New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'];
+            const sortedConditions = Object.keys(byCondition).sort((a, b) =>
+                condOrder.indexOf(a) - condOrder.indexOf(b)
+            );
 
-                    // 按condition顺序排序
-                    const condOrder = ['New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'];
-                    const sortedConditions = Object.keys(byCondition).sort((a, b) =>
-                        condOrder.indexOf(a) - condOrder.indexOf(b)
-                    );
+            // Render cards
+            let html = '<div class="row g-3">';
+            sortedConditions.forEach(cond => {
+                const info = byCondition[cond];
+                const shopList = info.shops.map(s =>
+                    `<div class="d-flex justify-content-between small">
+                        <span class="text-muted">${escapeHtml(s.name)}</span>
+                        <span><span class="badge bg-info me-1">x${s.qty}</span>¥${parseFloat(s.price).toFixed(2)}</span>
+                    </div>`
+                ).join('');
 
-                    // Render cards
-                    let html = '<div class="row g-3">';
-                    sortedConditions.forEach(cond => {
-                        const info = byCondition[cond];
-                        const shopList = info.shops.map(s =>
-                            `<div class="d-flex justify-content-between small">
-                                <span class="text-muted">${escapeHtml(s.name)}</span>
-                                <span><span class="badge bg-info me-1">x${s.qty}</span>¥${parseFloat(s.price).toFixed(2)}</span>
-                            </div>`
-                        ).join('');
-
-                        html += `
-                        <div class="col-md-6">
-                            <div class="card bg-secondary bg-opacity-25 border-secondary">
-                                <div class="card-header border-secondary d-flex justify-content-between align-items-center py-2">
-                                    <span class="badge bg-secondary fs-6">${cond}</span>
-                                    <span class="badge bg-warning text-dark">Total: ${info.totalQty} units</span>
+                html += `
+                <div class="col-md-6">
+                    <div class="card bg-secondary bg-opacity-25 border-secondary">
+                        <div class="card-header border-secondary d-flex justify-content-between align-items-center py-2">
+                            <span class="badge bg-secondary fs-6">${cond}</span>
+                            <span class="badge bg-warning text-dark">Total: ${info.totalQty} units</span>
+                        </div>
+                        <div class="card-body py-2">
+                            <div class="mb-2" style="max-height: 100px; overflow-y: auto;">
+                                ${shopList}
+                            </div>
+                            <div class="row align-items-center">
+                                <div class="col-5">
+                                    <small class="text-muted">Current:</small>
+                                    <div class="text-success fw-bold">¥${parseFloat(info.price).toFixed(2)}</div>
                                 </div>
-                                <div class="card-body py-2">
-                                    <div class="mb-2" style="max-height: 100px; overflow-y: auto;">
-                                        ${shopList}
-                                    </div>
-                                    <div class="row align-items-center">
-                                        <div class="col-5">
-                                            <small class="text-muted">Current:</small>
-                                            <div class="text-success fw-bold">¥${parseFloat(info.price).toFixed(2)}</div>
-                                        </div>
-                                        <div class="col-7">
-                                            <label class="small text-muted">New Price</label>
-                                            <div class="input-group input-group-sm">
-                                                <span class="input-group-text bg-dark border-secondary text-light">¥</span>
-                                                <input type="number" step="0.01" min="0" name="prices[${cond}]"
-                                                       class="form-control bg-dark text-white border-secondary"
-                                                       placeholder="${parseFloat(info.price).toFixed(2)}">
-                                            </div>
-                                        </div>
+                                <div class="col-7">
+                                    <label class="small text-muted">New Price</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-dark border-secondary text-light">¥</span>
+                                        <input type="number" step="0.01" min="0" name="prices[${cond}]"
+                                               class="form-control bg-dark text-white border-secondary"
+                                               placeholder="${parseFloat(info.price).toFixed(2)}">
                                     </div>
                                 </div>
                             </div>
-                        </div>`;
-                    });
-                    html += '</div>';
-
-                    document.getElementById('priceCardsContainer').innerHTML = html;
-                    document.getElementById('priceContent').classList.remove('d-none');
-                    document.getElementById('priceSubmitBtn').disabled = false;
-                } else {
-                    document.getElementById('priceEmpty').textContent = 'No available stock found for this release.';
-                    document.getElementById('priceEmpty').classList.remove('d-none');
-                }
-            })
-            .catch(err => {
-                isLoading = false;
-                if (err.name === 'AbortError') return;
-                document.getElementById('priceLoading').classList.add('d-none');
-                document.getElementById('priceEmpty').textContent = 'Error loading stock data.';
-                document.getElementById('priceEmpty').classList.remove('d-none');
+                        </div>
+                    </div>
+                </div>`;
             });
+            html += '</div>';
+
+            document.getElementById('priceCardsContainer').innerHTML = html;
+            document.getElementById('priceContent').classList.remove('d-none');
+            document.getElementById('priceEmpty').classList.add('d-none');
+            document.getElementById('priceSubmitBtn').disabled = false;
+        } else {
+            document.getElementById('priceContent').classList.add('d-none');
+            document.getElementById('priceEmpty').textContent = 'No available stock found for this release.';
+            document.getElementById('priceEmpty').classList.remove('d-none');
+            document.getElementById('priceSubmitBtn').disabled = true;
+        }
     }
 
-    // 在按钮点击时直接加载数据并打开模态框
+    // 在按钮点击时直接渲染预加载数据并打开模态框
     document.querySelectorAll('.price-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             const releaseId = this.dataset.releaseId;
             const releaseTitle = this.dataset.releaseTitle;
-            loadPriceData(releaseId, releaseTitle);
+            renderPriceData(releaseId, releaseTitle);
             priceModal.show();
         });
     });
 
     // 模态框关闭时重置状态
     priceModalEl.addEventListener('hidden.bs.modal', function() {
-        if (priceAbortController) {
-            priceAbortController.abort();
-            priceAbortController = null;
-        }
-        isLoading = false;
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceCardsContainer').innerHTML = '';

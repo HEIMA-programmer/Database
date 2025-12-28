@@ -331,6 +331,12 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceTableBody').innerHTML = '';
         document.getElementById('priceSubmitBtn').disabled = true;
+
+        // 清理可能残留的 backdrop 和 body 状态
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('padding-right');
+        document.body.style.removeProperty('overflow');
     });
 
     document.querySelectorAll('.price-btn').forEach(btn => {

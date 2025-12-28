@@ -97,8 +97,6 @@ require_once __DIR__ . '/../../includes/header.php';
                         <td class="text-end text-success fw-bold"><?= formatPrice($stat['TotalRevenue']) ?></td>
                         <td class="text-center">
                             <button type="button" class="btn btn-sm btn-outline-info btn-genre-detail"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#genreDetailModal"
                                     data-genre="<?= h($stat['Genre']) ?>" title="View Orders">
                                 <i class="fa-solid fa-list"></i>
                             </button>
@@ -150,8 +148,6 @@ require_once __DIR__ . '/../../includes/header.php';
                     </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-info btn-month-detail"
-                                data-bs-toggle="modal"
-                                data-bs-target="#monthDetailModal"
                                 data-month="<?= h($trend['SalesMonth']) ?>" title="View Orders">
                             <i class="fa-solid fa-list"></i>
                         </button>
@@ -259,33 +255,16 @@ document.addEventListener('DOMContentLoaded', function() {
         return div.innerHTML;
     }
 
-    // 通用的模态框加载函数
+    // 通用的模态框加载函数 - 完全由 click 事件驱动，不依赖 Bootstrap 事件
     function setupModalLoader(config) {
         const modalEl = document.getElementById(config.modalId);
+        const modal = new bootstrap.Modal(modalEl);
         let abortController = null;
-        let pendingData = null;  // 保存待加载的数据
+        let isLoading = false;  // 防止重复加载
 
-        // 在按钮点击时保存数据（作为 relatedTarget 的后备）
-        document.querySelectorAll(config.buttonSelector).forEach(btn => {
-            btn.addEventListener('click', function() {
-                pendingData = this.dataset[config.dataKey];
-            });
-        });
-
-        // 模态框打开时加载数据
-        modalEl.addEventListener('show.bs.modal', function(event) {
-            // 优先使用 relatedTarget，如果不可用则使用保存的数据
-            const btn = event.relatedTarget;
-            const dataValue = btn?.dataset?.[config.dataKey] || pendingData;
-
-            if (!dataValue) {
-                // 如果无法获取数据，显示错误信息
-                document.getElementById(config.loadingId).classList.add('d-none');
-                document.getElementById(config.contentId).classList.add('d-none');
-                document.getElementById(config.emptyId).textContent = 'Unable to load data. Please close and try again.';
-                document.getElementById(config.emptyId).classList.remove('d-none');
-                return;
-            }
+        function loadData(dataValue) {
+            if (!dataValue || isLoading) return;
+            isLoading = true;
 
             // 设置标题
             document.getElementById(config.titleId).textContent = dataValue;
@@ -294,6 +273,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById(config.loadingId).classList.remove('d-none');
             document.getElementById(config.contentId).classList.add('d-none');
             document.getElementById(config.emptyId).classList.add('d-none');
+            document.getElementById(config.bodyId).innerHTML = '';
 
             // 取消之前的请求
             if (abortController) {
@@ -306,6 +286,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
                 .then(res => res.json())
                 .then(data => {
+                    isLoading = false;
                     document.getElementById(config.loadingId).classList.add('d-none');
 
                     if (data.success && data.data.length > 0) {
@@ -317,11 +298,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 })
                 .catch(err => {
+                    isLoading = false;
                     if (err.name === 'AbortError') return;
                     document.getElementById(config.loadingId).classList.add('d-none');
                     document.getElementById(config.emptyId).textContent = 'Error loading data.';
                     document.getElementById(config.emptyId).classList.remove('d-none');
                 });
+        }
+
+        // 在按钮点击时直接加载数据并打开模态框
+        document.querySelectorAll(config.buttonSelector).forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const dataValue = this.dataset[config.dataKey];
+                loadData(dataValue);
+                modal.show();
+            });
         });
 
         // 模态框关闭时重置状态
@@ -330,12 +322,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 abortController.abort();
                 abortController = null;
             }
-            // 清理数据但不改变 loading 状态
+            isLoading = false;
             document.getElementById(config.contentId).classList.add('d-none');
             document.getElementById(config.emptyId).classList.add('d-none');
             document.getElementById(config.bodyId).innerHTML = '';
-            // 清除待处理数据
-            pendingData = null;
         });
     }
 

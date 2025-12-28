@@ -429,37 +429,24 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    // 【修复】在按钮点击时，先重置状态再加载数据
-    // 这样可以避免 isLoading 导致的点击无响应问题
+    // 在按钮点击时直接加载数据并打开模态框
     document.querySelectorAll('.price-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             const releaseId = this.dataset.releaseId;
             const releaseTitle = this.dataset.releaseTitle;
-
-            // 【修复】每次点击时先取消之前的请求并重置状态
-            if (priceAbortController) {
-                priceAbortController.abort();
-                priceAbortController = null;
-            }
-            isLoading = false;
-
             loadPriceData(releaseId, releaseTitle);
             priceModal.show();
         });
     });
 
-    // 模态框开始隐藏时就重置状态（比 hidden 更早）
-    priceModalEl.addEventListener('hide.bs.modal', function() {
+    // 模态框关闭时重置状态
+    priceModalEl.addEventListener('hidden.bs.modal', function() {
         if (priceAbortController) {
             priceAbortController.abort();
             priceAbortController = null;
         }
         isLoading = false;
-    });
-
-    // 模态框完全隐藏后清理内容
-    priceModalEl.addEventListener('hidden.bs.modal', function() {
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceCardsContainer').innerHTML = '';

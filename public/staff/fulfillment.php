@@ -47,10 +47,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     break;
                     
                 case 'ship':
-                    if (in_array($order['OrderStatus'], ['Pending', 'Paid'])) {
+                    // 【修复】只有Paid状态才能发货，Pending状态（未支付）不能发货
+                    if ($order['OrderStatus'] == 'Paid') {
                         $stmt = $pdo->prepare("UPDATE CustomerOrder SET OrderStatus = 'Shipped' WHERE OrderID = ?");
                         $stmt->execute([$orderId]);
                         flash("Order #$orderId marked as Shipped.", 'success');
+                    } else {
+                        flash("Order must be paid before shipping.", 'warning');
                     }
                     break;
                     
@@ -261,7 +264,8 @@ require_once __DIR__ . '/../../includes/header.php';
                                 </form>
                             <?php endif; ?>
                             
-                            <?php if ($fulfillmentType == 'Shipping' && in_array($order['OrderStatus'], ['Pending', 'Paid'])): ?>
+                            <?php // 【修复】只有Paid状态才显示Ship按钮，Pending（未支付）状态不能发货 ?>
+                            <?php if ($fulfillmentType == 'Shipping' && $order['OrderStatus'] == 'Paid'): ?>
                                 <form method="POST" class="d-inline">
                                     <input type="hidden" name="order_id" value="<?= $order['OrderID'] ?>">
                                     <input type="hidden" name="action" value="ship">

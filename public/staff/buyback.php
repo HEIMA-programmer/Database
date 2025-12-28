@@ -104,8 +104,8 @@ $releases = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $stmt = $pdo->query("SELECT CustomerID, Name, Email, Points FROM Customer ORDER BY Name");
 $customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 条件等级选项
-$conditions = ['New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'];
+// 条件等级选项 - 【修复】只保留前5个标准条件
+$conditions = ['New', 'Mint', 'NM', 'VG+', 'VG'];
 
 require_once __DIR__ . '/../../includes/header.php';
 // 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单
@@ -232,38 +232,55 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
             <div class="card-body p-0">
                 <?php
+                // 【修复】获取所有buyback详细信息
                 $stmt = $pdo->prepare("
-                    SELECT bo.*, c.Name as CustomerName,
-                           (SELECT GROUP_CONCAT(r.Title SEPARATOR ', ')
-                            FROM BuybackOrderLine bol
-                            JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
-                            WHERE bol.BuybackOrderID = bo.BuybackOrderID) as Items
+                    SELECT bo.BuybackOrderID, bo.BuybackDate, bo.TotalPayment, bo.Status,
+                           c.Name as CustomerName, c.Email as CustomerEmail,
+                           r.Title, r.ArtistName,
+                           bol.Quantity, bol.UnitPrice, bol.ConditionGrade,
+                           (bol.Quantity * bol.UnitPrice) as LineTotal,
+                           e.Name as ProcessedByName
                     FROM BuybackOrder bo
                     LEFT JOIN Customer c ON bo.CustomerID = c.CustomerID
+                    JOIN BuybackOrderLine bol ON bo.BuybackOrderID = bol.BuybackOrderID
+                    JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
+                    JOIN Employee e ON bo.ProcessedByEmployeeID = e.EmployeeID
                     WHERE bo.ShopID = ?
                     ORDER BY bo.BuybackDate DESC
-                    LIMIT 10
+                    LIMIT 15
                 ");
                 $stmt->execute([$shopId]);
                 $recentBuybacks = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 ?>
-                
+
                 <?php if (empty($recentBuybacks)): ?>
                     <p class="text-muted text-center py-4">No recent buybacks</p>
                 <?php else: ?>
-                    <div class="list-group list-group-flush">
+                    <div class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
                         <?php foreach ($recentBuybacks as $bb): ?>
                             <div class="list-group-item bg-dark border-secondary">
-                                <div class="d-flex justify-content-between">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
                                     <strong class="text-warning">#<?= $bb['BuybackOrderID'] ?></strong>
                                     <small class="text-muted"><?= date('M d, H:i', strtotime($bb['BuybackDate'])) ?></small>
                                 </div>
-                                <div class="text-white small"><?= h($bb['Items']) ?></div>
-                                <div class="d-flex justify-content-between mt-1">
+                                <div class="text-white"><?= h($bb['Title']) ?></div>
+                                <div class="text-muted small"><?= h($bb['ArtistName']) ?></div>
+                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                    <span class="badge bg-secondary"><?= h($bb['ConditionGrade']) ?></span>
+                                    <span class="badge bg-info text-dark">x<?= $bb['Quantity'] ?></span>
+                                    <span class="badge bg-dark border border-secondary">Buy: <?= formatPrice($bb['UnitPrice']) ?></span>
+                                </div>
+                                <div class="d-flex justify-content-between mt-2 pt-2 border-top border-secondary">
                                     <small class="text-muted">
-                                        <?= $bb['CustomerName'] ? h($bb['CustomerName']) : 'Walk-in' ?>
+                                        <i class="fa-solid fa-user me-1"></i><?= $bb['CustomerName'] ? h($bb['CustomerName']) : 'Walk-in' ?>
+                                        <?php if ($bb['CustomerEmail']): ?>
+                                            <br><small class="text-muted ps-3"><?= h($bb['CustomerEmail']) ?></small>
+                                        <?php endif; ?>
                                     </small>
-                                    <span class="text-success"><?= formatPrice($bb['TotalPayment']) ?></span>
+                                    <span class="text-success fw-bold"><?= formatPrice($bb['TotalPayment']) ?></span>
+                                </div>
+                                <div class="text-muted small mt-1">
+                                    <i class="fa-solid fa-user-check me-1"></i>By: <?= h($bb['ProcessedByName']) ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>

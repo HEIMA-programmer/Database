@@ -144,7 +144,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </li>
             <?php endif; ?>
 
-            <?php if (isset($_SESSION['shop_name'])): ?>
+            <?php if (isset($_SESSION['shop_name']) && !hasRole('Admin')): ?>
                 <li class="nav-item me-3">
                     <span class="nav-link text-info">
                         <i class="fa-solid fa-store me-1"></i><?= h($_SESSION['shop_name']) ?>
@@ -160,7 +160,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <li><span class="dropdown-header text-muted">
                         <i class="fa-solid fa-user-tag me-1"></i>Role: <?= h($_SESSION['role']) ?>
                     </span></li>
-                    <?php if (isset($_SESSION['shop_name'])): ?>
+                    <?php if (isset($_SESSION['shop_name']) && !hasRole('Admin')): ?>
                         <li><span class="dropdown-header text-muted small">
                             <i class="fa-solid fa-location-dot me-1"></i><?= h($_SESSION['shop_name']) ?>
                         </span></li>

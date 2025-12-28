@@ -1068,11 +1068,11 @@ BEGIN
             LIMIT v_quantity;
         ELSEIF v_request_type = 'TransferRequest' THEN
             -- 执行调货（逐个库存项）
-            -- 注意：这里简化处理，实际调货需要创建InventoryTransfer记录
-            -- 但用户要求将调货功能迁移到admin，所以这里直接更新库存位置
+            -- 【修复】FromShopID是目标店铺(Manager的店)，ToShopID是源店铺(Admin选择的)
+            -- 所以应该从ToShopID调货到FromShopID
             UPDATE StockItem
-            SET ShopID = v_to_shop_id
-            WHERE ShopID = v_from_shop_id
+            SET ShopID = v_from_shop_id
+            WHERE ShopID = v_to_shop_id
               AND ReleaseID = v_release_id
               AND ConditionGrade = v_condition_grade
               AND Status = 'Available'

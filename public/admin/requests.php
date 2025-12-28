@@ -16,9 +16,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $requestId = (int)($_POST['request_id'] ?? 0);
     $action = $_POST['action'] ?? '';
     $responseNote = trim($_POST['response_note'] ?? '');
+    $sourceShopId = (int)($_POST['source_shop_id'] ?? 0);
 
     if ($requestId && in_array($action, ['approve', 'reject'])) {
         $approved = ($action === 'approve');
+
+        // 【新增】对于调货申请的批准，需要先设置源店铺
+        if ($approved && $sourceShopId > 0) {
+            $updateStmt = $pdo->prepare("UPDATE ManagerRequest SET ToShopID = ? WHERE RequestID = ? AND RequestType = 'TransferRequest'");
+            $updateStmt->execute([$sourceShopId, $requestId]);
+        }
+
         $result = DBProcedures::respondToRequest($pdo, $requestId, $employeeId, $approved, $responseNote);
 
         if ($result) {
@@ -45,6 +53,26 @@ if (!in_array($filter, $validFilters)) {
 // 获取请求列表
 $pendingRequests = DBProcedures::getAdminPendingRequests($pdo);
 $allRequests = DBProcedures::getAdminAllRequests($pdo);
+
+// 【新增】获取所有店铺信息（用于调货申请的源店铺选择）
+$shops = DBProcedures::getShopList($pdo);
+
+// 【新增】为每个调货申请查询其他店铺的库存情况
+function getOtherShopsInventory($pdo, $releaseId, $conditionGrade, $excludeShopId) {
+    $stmt = $pdo->prepare("
+        SELECT si.ShopID, s.Name as ShopName, s.Type as ShopType,
+               COUNT(*) as AvailableQuantity, MIN(si.UnitPrice) as UnitPrice
+        FROM StockItem si
+        JOIN Shop s ON si.ShopID = s.ShopID
+        WHERE si.ReleaseID = ? AND si.ConditionGrade = ? AND si.Status = 'Available'
+        AND si.ShopID != ?
+        GROUP BY si.ShopID, s.Name, s.Type
+        HAVING AvailableQuantity > 0
+        ORDER BY AvailableQuantity DESC
+    ");
+    $stmt->execute([$releaseId, $conditionGrade, $excludeShopId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 // 根据过滤条件筛选
 $displayRequests = [];
@@ -243,8 +271,70 @@ require_once __DIR__ . '/../../includes/header.php';
                                 <div class="col-md-6">
                                     <?php if ($isPending): ?>
                                     <h6 class="text-warning">Take Action</h6>
+
+                                    <?php
+                                    // 【新增】对于调货申请，显示其他店铺的库存情况
+                                    if (!$isPrice):
+                                        $otherShopsInventory = getOtherShopsInventory($pdo, $req['ReleaseID'], $req['ConditionGrade'], $req['FromShopID']);
+                                    ?>
+                                    <div class="mb-3">
+                                        <label class="form-label text-info"><i class="fa-solid fa-warehouse me-1"></i>Available Stock in Other Shops</label>
+                                        <?php if (empty($otherShopsInventory)): ?>
+                                            <div class="alert alert-warning py-2">
+                                                <i class="fa-solid fa-exclamation-triangle me-1"></i>
+                                                No matching stock found in other shops for this album/condition.
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
+                                                <table class="table table-sm table-dark mb-0">
+                                                    <thead class="sticky-top bg-dark">
+                                                        <tr>
+                                                            <th>Shop</th>
+                                                            <th class="text-center">Qty</th>
+                                                            <th class="text-end">Price</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <?php foreach ($otherShopsInventory as $inv): ?>
+                                                        <tr>
+                                                            <td>
+                                                                <?= h($inv['ShopName']) ?>
+                                                                <?php if ($inv['ShopType'] === 'Warehouse'): ?>
+                                                                    <span class="badge bg-secondary ms-1">WH</span>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td class="text-center"><span class="badge bg-success"><?= $inv['AvailableQuantity'] ?></span></td>
+                                                            <td class="text-end text-warning"><?= formatPrice($inv['UnitPrice']) ?></td>
+                                                        </tr>
+                                                        <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php endif; ?>
+
                                     <form method="POST" class="mt-3">
                                         <input type="hidden" name="request_id" value="<?= $req['RequestID'] ?>">
+
+                                        <?php
+                                        // 【新增】调货申请需要选择源店铺
+                                        if (!$isPrice && !empty($otherShopsInventory)):
+                                        ?>
+                                        <div class="mb-3">
+                                            <label class="form-label">Select Source Shop <span class="text-danger">*</span></label>
+                                            <select name="source_shop_id" class="form-select bg-dark text-white border-secondary" required>
+                                                <option value="">-- Choose source shop --</option>
+                                                <?php foreach ($otherShopsInventory as $inv): ?>
+                                                <option value="<?= $inv['ShopID'] ?>">
+                                                    <?= h($inv['ShopName']) ?>
+                                                    (<?= $inv['AvailableQuantity'] ?> available @ <?= formatPrice($inv['UnitPrice']) ?>)
+                                                </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <small class="text-muted">Stock will be transferred from the selected shop</small>
+                                        </div>
+                                        <?php endif; ?>
 
                                         <div class="mb-3">
                                             <label class="form-label">Response Note (Optional)</label>
@@ -253,9 +343,15 @@ require_once __DIR__ . '/../../includes/header.php';
                                         </div>
 
                                         <div class="d-grid gap-2">
-                                            <button type="submit" name="action" value="approve" class="btn btn-success">
-                                                <i class="fa-solid fa-check me-1"></i>Approve Request
-                                            </button>
+                                            <?php if (!$isPrice && empty($otherShopsInventory)): ?>
+                                                <button type="button" class="btn btn-secondary" disabled>
+                                                    <i class="fa-solid fa-ban me-1"></i>Cannot Approve (No Stock Available)
+                                                </button>
+                                            <?php else: ?>
+                                                <button type="submit" name="action" value="approve" class="btn btn-success">
+                                                    <i class="fa-solid fa-check me-1"></i>Approve Request
+                                                </button>
+                                            <?php endif; ?>
                                             <button type="submit" name="action" value="reject" class="btn btn-outline-danger">
                                                 <i class="fa-solid fa-times me-1"></i>Reject Request
                                             </button>

@@ -273,20 +273,8 @@ require_once __DIR__ . '/../../includes/header.php';
                             <i class="fa-solid fa-info-circle me-1"></i>
                             Adjust prices by condition. Changes apply to all available stock across all shops.
                         </div>
-                        <div class="table-responsive">
-                            <table class="table table-dark table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Condition</th>
-                                        <th>Shop</th>
-                                        <th class="text-center">Available Qty</th>
-                                        <th>Current Price</th>
-                                        <th>New Price</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="priceTableBody"></tbody>
-                            </table>
-                        </div>
+                        <!-- 【修复】改用卡片布局避免rowspan造成的UI错乱 -->
+                        <div id="priceCardsContainer"></div>
                     </div>
 
                     <div id="priceEmpty" class="d-none alert alert-warning">
@@ -359,49 +347,72 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('priceLoading').classList.add('d-none');
 
                 if (data.success && data.data.length > 0) {
-                    let html = '';
-
-                    // Group by condition for form input
+                    // 【修复】使用卡片布局替代rowspan表格，避免UI错乱
+                    // Group by condition
                     const byCondition = {};
                     data.data.forEach(row => {
                         const cond = row.ConditionGrade;
                         if (!byCondition[cond]) {
-                            byCondition[cond] = { price: row.MinPrice, rows: [] };
+                            byCondition[cond] = { price: row.MinPrice, totalQty: 0, shops: [] };
                         }
-                        byCondition[cond].rows.push(row);
+                        byCondition[cond].totalQty += parseInt(row.Quantity);
+                        byCondition[cond].shops.push({
+                            name: row.ShopName,
+                            qty: row.Quantity,
+                            price: row.MinPrice
+                        });
                     });
 
-                    // Render rows
-                    data.data.forEach((row, idx) => {
-                        const cond = row.ConditionGrade;
-                        const isFirst = byCondition[cond].rows[0] === row;
-                        const rowCount = byCondition[cond].rows.length;
+                    // 按condition顺序排序
+                    const condOrder = ['New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'];
+                    const sortedConditions = Object.keys(byCondition).sort((a, b) =>
+                        condOrder.indexOf(a) - condOrder.indexOf(b)
+                    );
 
-                        html += `<tr>`;
-                        if (isFirst) {
-                            html += `<td rowspan="${rowCount}" class="align-middle">
-                                <span class="badge bg-secondary fs-6">${cond}</span>
-                            </td>`;
-                        }
+                    // Render cards
+                    let html = '<div class="row g-3">';
+                    sortedConditions.forEach(cond => {
+                        const info = byCondition[cond];
+                        const shopList = info.shops.map(s =>
+                            `<div class="d-flex justify-content-between small">
+                                <span class="text-muted">${escapeHtml(s.name)}</span>
+                                <span><span class="badge bg-info me-1">x${s.qty}</span>¥${parseFloat(s.price).toFixed(2)}</span>
+                            </div>`
+                        ).join('');
+
                         html += `
-                            <td>${escapeHtml(row.ShopName)}</td>
-                            <td class="text-center"><span class="badge bg-info">${row.Quantity}</span></td>
-                            <td class="text-success">¥${parseFloat(row.MinPrice).toFixed(2)}</td>
-                        `;
-                        if (isFirst) {
-                            html += `<td rowspan="${rowCount}" class="align-middle">
-                                <div class="input-group">
-                                    <span class="input-group-text bg-dark border-secondary text-light">¥</span>
-                                    <input type="number" step="0.01" min="0" name="prices[${cond}]"
-                                           class="form-control bg-dark text-white border-secondary"
-                                           placeholder="${parseFloat(row.MinPrice).toFixed(2)}">
+                        <div class="col-md-6">
+                            <div class="card bg-secondary bg-opacity-25 border-secondary">
+                                <div class="card-header border-secondary d-flex justify-content-between align-items-center py-2">
+                                    <span class="badge bg-secondary fs-6">${cond}</span>
+                                    <span class="badge bg-warning text-dark">Total: ${info.totalQty} units</span>
                                 </div>
-                            </td>`;
-                        }
-                        html += `</tr>`;
+                                <div class="card-body py-2">
+                                    <div class="mb-2" style="max-height: 100px; overflow-y: auto;">
+                                        ${shopList}
+                                    </div>
+                                    <div class="row align-items-center">
+                                        <div class="col-5">
+                                            <small class="text-muted">Current:</small>
+                                            <div class="text-success fw-bold">¥${parseFloat(info.price).toFixed(2)}</div>
+                                        </div>
+                                        <div class="col-7">
+                                            <label class="small text-muted">New Price</label>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text bg-dark border-secondary text-light">¥</span>
+                                                <input type="number" step="0.01" min="0" name="prices[${cond}]"
+                                                       class="form-control bg-dark text-white border-secondary"
+                                                       placeholder="${parseFloat(info.price).toFixed(2)}">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
                     });
+                    html += '</div>';
 
-                    document.getElementById('priceTableBody').innerHTML = html;
+                    document.getElementById('priceCardsContainer').innerHTML = html;
                     document.getElementById('priceContent').classList.remove('d-none');
                     document.getElementById('priceSubmitBtn').disabled = false;
                 } else {
@@ -438,7 +449,7 @@ document.addEventListener('DOMContentLoaded', function() {
         isLoading = false;
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
-        document.getElementById('priceTableBody').innerHTML = '';
+        document.getElementById('priceCardsContainer').innerHTML = '';
         document.getElementById('priceSubmitBtn').disabled = true;
     });
 });

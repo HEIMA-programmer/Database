@@ -136,6 +136,8 @@ require_once __DIR__ . '/../../includes/header.php';
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
                         <button class="btn btn-sm btn-outline-warning price-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#priceModal"
                                 data-release-id="<?= $r['ReleaseID'] ?>"
                                 data-release-title="<?= h($r['Title']) ?>"
                                 title="Adjust Prices">
@@ -320,101 +322,91 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Price modal - 使用单一实例
+    // Price modal - 使用 Bootstrap 原生事件（不手动创建实例）
     const priceModalEl = document.getElementById('priceModal');
-    const priceModal = new bootstrap.Modal(priceModalEl);
 
-    // Reset modal state when hidden
+    // 模态框打开时加载数据
+    priceModalEl.addEventListener('show.bs.modal', function(event) {
+        const btn = event.relatedTarget;
+        const releaseId = btn.dataset.releaseId;
+        const releaseTitle = btn.dataset.releaseTitle;
+
+        document.getElementById('priceModalTitle').textContent = releaseTitle;
+        document.getElementById('price_release_id').value = releaseId;
+        document.getElementById('priceLoading').classList.remove('d-none');
+        document.getElementById('priceContent').classList.add('d-none');
+        document.getElementById('priceEmpty').classList.add('d-none');
+        document.getElementById('priceSubmitBtn').disabled = true;
+
+        fetch(`products.php?ajax=stock_prices&release_id=${releaseId}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('priceLoading').classList.add('d-none');
+
+                if (data.success && data.data.length > 0) {
+                    let html = '';
+
+                    // Group by condition for form input
+                    const byCondition = {};
+                    data.data.forEach(row => {
+                        const cond = row.ConditionGrade;
+                        if (!byCondition[cond]) {
+                            byCondition[cond] = { price: row.MinPrice, rows: [] };
+                        }
+                        byCondition[cond].rows.push(row);
+                    });
+
+                    // Render rows
+                    data.data.forEach((row, idx) => {
+                        const cond = row.ConditionGrade;
+                        const isFirst = byCondition[cond].rows[0] === row;
+                        const rowCount = byCondition[cond].rows.length;
+
+                        html += `<tr>`;
+                        if (isFirst) {
+                            html += `<td rowspan="${rowCount}" class="align-middle">
+                                <span class="badge bg-secondary fs-6">${cond}</span>
+                            </td>`;
+                        }
+                        html += `
+                            <td>${escapeHtml(row.ShopName)}</td>
+                            <td class="text-center"><span class="badge bg-info">${row.Quantity}</span></td>
+                            <td class="text-success">¥${parseFloat(row.MinPrice).toFixed(2)}</td>
+                        `;
+                        if (isFirst) {
+                            html += `<td rowspan="${rowCount}" class="align-middle">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-dark border-secondary text-light">¥</span>
+                                    <input type="number" step="0.01" min="0" name="prices[${cond}]"
+                                           class="form-control bg-dark text-white border-secondary"
+                                           placeholder="${parseFloat(row.MinPrice).toFixed(2)}">
+                                </div>
+                            </td>`;
+                        }
+                        html += `</tr>`;
+                    });
+
+                    document.getElementById('priceTableBody').innerHTML = html;
+                    document.getElementById('priceContent').classList.remove('d-none');
+                    document.getElementById('priceSubmitBtn').disabled = false;
+                } else {
+                    document.getElementById('priceEmpty').classList.remove('d-none');
+                }
+            })
+            .catch(err => {
+                document.getElementById('priceLoading').classList.add('d-none');
+                document.getElementById('priceEmpty').textContent = 'Error loading stock data.';
+                document.getElementById('priceEmpty').classList.remove('d-none');
+            });
+    });
+
+    // 模态框关闭时重置状态
     priceModalEl.addEventListener('hidden.bs.modal', function() {
         document.getElementById('priceLoading').classList.remove('d-none');
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceTableBody').innerHTML = '';
         document.getElementById('priceSubmitBtn').disabled = true;
-
-        // 清理可能残留的 backdrop 和 body 状态
-        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('padding-right');
-        document.body.style.removeProperty('overflow');
-    });
-
-    document.querySelectorAll('.price-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const releaseId = this.dataset.releaseId;
-            const releaseTitle = this.dataset.releaseTitle;
-
-            document.getElementById('priceModalTitle').textContent = releaseTitle;
-            document.getElementById('price_release_id').value = releaseId;
-            document.getElementById('priceLoading').classList.remove('d-none');
-            document.getElementById('priceContent').classList.add('d-none');
-            document.getElementById('priceEmpty').classList.add('d-none');
-            document.getElementById('priceSubmitBtn').disabled = true;
-
-            priceModal.show();
-
-            fetch(`products.php?ajax=stock_prices&release_id=${releaseId}`)
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('priceLoading').classList.add('d-none');
-
-                    if (data.success && data.data.length > 0) {
-                        let html = '';
-                        const conditionOrder = ['New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'];
-
-                        // Group by condition for form input
-                        const byCondition = {};
-                        data.data.forEach(row => {
-                            const cond = row.ConditionGrade;
-                            if (!byCondition[cond]) {
-                                byCondition[cond] = { price: row.MinPrice, rows: [] };
-                            }
-                            byCondition[cond].rows.push(row);
-                        });
-
-                        // Render rows
-                        data.data.forEach((row, idx) => {
-                            const cond = row.ConditionGrade;
-                            const isFirst = byCondition[cond].rows[0] === row;
-                            const rowCount = byCondition[cond].rows.length;
-
-                            html += `<tr>`;
-                            if (isFirst) {
-                                html += `<td rowspan="${rowCount}" class="align-middle">
-                                    <span class="badge bg-secondary fs-6">${cond}</span>
-                                </td>`;
-                            }
-                            html += `
-                                <td>${escapeHtml(row.ShopName)}</td>
-                                <td class="text-center"><span class="badge bg-info">${row.Quantity}</span></td>
-                                <td class="text-success">¥${parseFloat(row.MinPrice).toFixed(2)}</td>
-                            `;
-                            if (isFirst) {
-                                html += `<td rowspan="${rowCount}" class="align-middle">
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-dark border-secondary text-light">¥</span>
-                                        <input type="number" step="0.01" min="0" name="prices[${cond}]"
-                                               class="form-control bg-dark text-white border-secondary"
-                                               placeholder="${parseFloat(row.MinPrice).toFixed(2)}">
-                                    </div>
-                                </td>`;
-                            }
-                            html += `</tr>`;
-                        });
-
-                        document.getElementById('priceTableBody').innerHTML = html;
-                        document.getElementById('priceContent').classList.remove('d-none');
-                        document.getElementById('priceSubmitBtn').disabled = false;
-                    } else {
-                        document.getElementById('priceEmpty').classList.remove('d-none');
-                    }
-                })
-                .catch(err => {
-                    document.getElementById('priceLoading').classList.add('d-none');
-                    document.getElementById('priceEmpty').textContent = 'Error loading stock data.';
-                    document.getElementById('priceEmpty').classList.remove('d-none');
-                });
-        });
     });
 
     function escapeHtml(text) {

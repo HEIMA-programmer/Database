@@ -322,7 +322,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ========== Price Modal（预加载方式）==========
     const priceModalEl = document.getElementById('priceModal');
-    const priceModal = new bootstrap.Modal(priceModalEl);
+    let currentReleaseId = null;
+    let currentReleaseTitle = null;
 
     function renderPriceData(releaseId, releaseTitle) {
         document.getElementById('priceModalTitle').textContent = releaseTitle || '';
@@ -409,14 +410,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 在按钮点击时直接渲染预加载数据并打开模态框
+    // 使用 show.bs.modal 事件在模态框显示前渲染数据
+    priceModalEl.addEventListener('show.bs.modal', function() {
+        if (currentReleaseId) {
+            renderPriceData(currentReleaseId, currentReleaseTitle);
+        }
+    });
+
+    // 在按钮点击时设置数据并打开模态框
     document.querySelectorAll('.price-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
-            const releaseId = this.dataset.releaseId;
-            const releaseTitle = this.dataset.releaseTitle;
-            renderPriceData(releaseId, releaseTitle);
-            priceModal.show();
+            currentReleaseId = this.dataset.releaseId;
+            currentReleaseTitle = this.dataset.releaseTitle;
+            const modal = bootstrap.Modal.getOrCreateInstance(priceModalEl);
+            modal.show();
         });
     });
 
@@ -426,6 +434,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceCardsContainer').innerHTML = '';
         document.getElementById('priceSubmitBtn').disabled = true;
+        currentReleaseId = null;
+        currentReleaseTitle = null;
     });
 });
 </script>

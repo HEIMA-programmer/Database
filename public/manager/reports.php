@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ========== Genre Detail Modal（预加载方式）==========
     const genreModalEl = document.getElementById('genreDetailModal');
-    const genreModal = new bootstrap.Modal(genreModalEl);
+    let currentGenre = null;
 
     function renderGenreDetail(genre) {
         document.getElementById('genreTitle').textContent = genre;
@@ -280,12 +280,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // 使用 show.bs.modal 事件在模态框显示前渲染数据
+    genreModalEl.addEventListener('show.bs.modal', function() {
+        if (currentGenre) {
+            renderGenreDetail(currentGenre);
+        }
+    });
+
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
-            const genre = this.dataset.genre;
-            renderGenreDetail(genre);
-            genreModal.show();
+            currentGenre = this.dataset.genre;
+            const modal = bootstrap.Modal.getOrCreateInstance(genreModalEl);
+            modal.show();
         });
     });
 
@@ -293,11 +300,12 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('genreDetailContent').classList.add('d-none');
         document.getElementById('genreDetailEmpty').classList.add('d-none');
         document.getElementById('genreDetailBody').innerHTML = '';
+        currentGenre = null;
     });
 
     // ========== Month Detail Modal（预加载方式）==========
     const monthModalEl = document.getElementById('monthDetailModal');
-    const monthModal = new bootstrap.Modal(monthModalEl);
+    let currentMonth = null;
 
     const typeBadges = {
         'POS': '<span class="badge bg-warning text-dark">POS</span>',
@@ -334,12 +342,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // 使用 show.bs.modal 事件在模态框显示前渲染数据
+    monthModalEl.addEventListener('show.bs.modal', function() {
+        if (currentMonth) {
+            renderMonthDetail(currentMonth);
+        }
+    });
+
     document.querySelectorAll('.btn-month-detail').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
-            const month = this.dataset.month;
-            renderMonthDetail(month);
-            monthModal.show();
+            currentMonth = this.dataset.month;
+            const modal = bootstrap.Modal.getOrCreateInstance(monthModalEl);
+            modal.show();
         });
     });
 
@@ -347,6 +362,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('monthDetailContent').classList.add('d-none');
         document.getElementById('monthDetailEmpty').classList.add('d-none');
         document.getElementById('monthDetailBody').innerHTML = '';
+        currentMonth = null;
     });
 });
 </script>

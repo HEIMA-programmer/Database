@@ -57,14 +57,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $toShopId = (int)$_POST['to_shop_id']; // 0表示未指定，由Admin决定
         $reason = trim($_POST['reason']);
 
-        if ($toShopId !== 0 && $toShopId === $shopId) {
-            $error = 'Cannot request transfer to the same shop.';
-        } elseif ($quantity <= 0) {
+if ($quantity <= 0) {
+
             $error = 'Quantity must be greater than 0.';
+
         } else {
-            // 【修复】当to_shop_id为0时，传入NULL让Admin决定
+
+            // 【修复】参数顺序：fromShopId 是 Manager 的店铺（请求方），toShopId 是源店铺（由 Admin 决定，传 NULL）
+
+            // 数据库约束：FromShopID NOT NULL, ToShopID 可为 NULL
+
             $result = DBProcedures::createTransferRequest(
-                $pdo, $employeeId, $toShopId ?: null, $shopId, $releaseId, $conditionGrade, $quantity, $reason
+
+                $pdo, $employeeId, $shopId, null, $releaseId, $conditionGrade, $quantity, $reason
             );
             if ($result) {
                 $message = 'Transfer request submitted successfully! Admin will assign a source store.';

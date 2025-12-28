@@ -315,7 +315,8 @@ document.addEventListener('DOMContentLoaded', function() {
             genreAbortController.abort();
             genreAbortController = null;
         }
-        document.getElementById('genreDetailLoading').classList.remove('d-none');
+        // 注意：不在这里显示loading，让show事件来控制
+        // 这样可以避免当relatedTarget为null时loading永远显示的问题
         document.getElementById('genreDetailContent').classList.add('d-none');
         document.getElementById('genreDetailEmpty').classList.add('d-none');
         document.getElementById('genreDetailBody').innerHTML = '';
@@ -390,7 +391,8 @@ document.addEventListener('DOMContentLoaded', function() {
             monthAbortController.abort();
             monthAbortController = null;
         }
-        document.getElementById('monthDetailLoading').classList.remove('d-none');
+        // 注意：不在这里显示loading，让show事件来控制
+        // 这样可以避免当relatedTarget为null时loading永远显示的问题
         document.getElementById('monthDetailContent').classList.add('d-none');
         document.getElementById('monthDetailEmpty').classList.add('d-none');
         document.getElementById('monthDetailBody').innerHTML = '';

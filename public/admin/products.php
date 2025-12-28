@@ -419,7 +419,8 @@ document.addEventListener('DOMContentLoaded', function() {
             priceAbortController.abort();
             priceAbortController = null;
         }
-        document.getElementById('priceLoading').classList.remove('d-none');
+        // 注意：不在这里显示loading，让show事件来控制
+        // 这样可以避免当relatedTarget为null时loading永远显示的问题
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceTableBody').innerHTML = '';

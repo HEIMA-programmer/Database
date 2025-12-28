@@ -254,10 +254,13 @@ require_once __DIR__ . '/../../includes/header.php';
 document.addEventListener('DOMContentLoaded', function() {
     // Genre Detail Modal - 使用 Bootstrap 原生事件
     const genreModalEl = document.getElementById('genreDetailModal');
+    let genreAbortController = null;
 
     // 模态框打开时加载数据
     genreModalEl.addEventListener('show.bs.modal', function(event) {
         const btn = event.relatedTarget;
+        if (!btn) return; // 安全检查
+
         const genre = btn.dataset.genre;
 
         document.getElementById('genreTitle').textContent = genre;
@@ -265,7 +268,15 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('genreDetailContent').classList.add('d-none');
         document.getElementById('genreDetailEmpty').classList.add('d-none');
 
-        fetch(`reports.php?ajax=genre_detail&genre=${encodeURIComponent(genre)}`)
+        // 取消之前的请求
+        if (genreAbortController) {
+            genreAbortController.abort();
+        }
+        genreAbortController = new AbortController();
+
+        fetch(`reports.php?ajax=genre_detail&genre=${encodeURIComponent(genre)}`, {
+            signal: genreAbortController.signal
+        })
             .then(res => res.json())
             .then(data => {
                 document.getElementById('genreDetailLoading').classList.add('d-none');
@@ -290,6 +301,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(err => {
+                if (err.name === 'AbortError') return; // 请求被取消，忽略
                 document.getElementById('genreDetailLoading').classList.add('d-none');
                 document.getElementById('genreDetailEmpty').textContent = 'Error loading data.';
                 document.getElementById('genreDetailEmpty').classList.remove('d-none');
@@ -298,6 +310,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 模态框关闭时重置状态
     genreModalEl.addEventListener('hidden.bs.modal', function() {
+        // 取消进行中的请求
+        if (genreAbortController) {
+            genreAbortController.abort();
+            genreAbortController = null;
+        }
         document.getElementById('genreDetailLoading').classList.remove('d-none');
         document.getElementById('genreDetailContent').classList.add('d-none');
         document.getElementById('genreDetailEmpty').classList.add('d-none');
@@ -306,10 +323,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Month Detail Modal - 使用 Bootstrap 原生事件
     const monthModalEl = document.getElementById('monthDetailModal');
+    let monthAbortController = null;
 
     // 模态框打开时加载数据
     monthModalEl.addEventListener('show.bs.modal', function(event) {
         const btn = event.relatedTarget;
+        if (!btn) return; // 安全检查
+
         const month = btn.dataset.month;
 
         document.getElementById('monthTitle').textContent = month;
@@ -317,7 +337,15 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('monthDetailContent').classList.add('d-none');
         document.getElementById('monthDetailEmpty').classList.add('d-none');
 
-        fetch(`reports.php?ajax=month_detail&month=${encodeURIComponent(month)}`)
+        // 取消之前的请求
+        if (monthAbortController) {
+            monthAbortController.abort();
+        }
+        monthAbortController = new AbortController();
+
+        fetch(`reports.php?ajax=month_detail&month=${encodeURIComponent(month)}`, {
+            signal: monthAbortController.signal
+        })
             .then(res => res.json())
             .then(data => {
                 document.getElementById('monthDetailLoading').classList.add('d-none');
@@ -348,6 +376,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(err => {
+                if (err.name === 'AbortError') return; // 请求被取消，忽略
                 document.getElementById('monthDetailLoading').classList.add('d-none');
                 document.getElementById('monthDetailEmpty').textContent = 'Error loading data.';
                 document.getElementById('monthDetailEmpty').classList.remove('d-none');
@@ -356,6 +385,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 模态框关闭时重置状态
     monthModalEl.addEventListener('hidden.bs.modal', function() {
+        // 取消进行中的请求
+        if (monthAbortController) {
+            monthAbortController.abort();
+            monthAbortController = null;
+        }
         document.getElementById('monthDetailLoading').classList.remove('d-none');
         document.getElementById('monthDetailContent').classList.add('d-none');
         document.getElementById('monthDetailEmpty').classList.add('d-none');

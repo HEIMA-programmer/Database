@@ -320,30 +320,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Price modal - 使用getOrCreateInstance避免重复实例化
+    // Price modal - 使用单一实例
     const priceModalEl = document.getElementById('priceModal');
+    const priceModal = new bootstrap.Modal(priceModalEl);
 
-    // 重置modal状态
+    // Reset modal state when hidden
     priceModalEl.addEventListener('hidden.bs.modal', function() {
         document.getElementById('priceLoading').classList.remove('d-none');
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceTableBody').innerHTML = '';
         document.getElementById('priceSubmitBtn').disabled = true;
-        
-        // 清理残留的 backdrop
-        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('padding-right');
-        document.body.style.removeProperty('overflow');
-        
-        // 销毁实例
-        const instance = bootstrap.Modal.getInstance(priceModalEl);
-        if (instance) {
-            instance.dispose();
-        }
     });
-
 
     document.querySelectorAll('.price-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -357,8 +345,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('priceEmpty').classList.add('d-none');
             document.getElementById('priceSubmitBtn').disabled = true;
 
-            // 使用getOrCreateInstance确保不重复创建实例
-            const priceModal = bootstrap.Modal.getOrCreateInstance(priceModalEl);
             priceModal.show();
 
             fetch(`products.php?ajax=stock_prices&release_id=${releaseId}`)

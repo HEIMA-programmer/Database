@@ -789,6 +789,7 @@ GROUP BY bo.ShopID, sh.Name;
 
 -- 42. 店铺收入明细视图 - 按类型分组（在线售卖/线下取货/POS/Buyback）
 -- 【修复】处理FulfillmentType为NULL的旧订单，默认按OrderType推断
+-- 【修复】添加COLLATE解决字符集排序规则冲突问题
 CREATE OR REPLACE VIEW vw_shop_revenue_by_type AS
 SELECT
     co.FulfilledByShopID AS ShopID,
@@ -799,7 +800,7 @@ SELECT
         WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
         WHEN co.OrderType = 'InStore' THEN 'POS'
         ELSE 'Other'
-    END AS RevenueType,
+    END COLLATE utf8mb4_unicode_ci AS RevenueType,
     COUNT(co.OrderID) AS OrderCount,
     SUM(co.TotalAmount) AS Revenue,
     SUM(COALESCE(co.ShippingCost, 0)) AS TotalShipping
@@ -857,6 +858,7 @@ ORDER BY AvailableQuantity ASC;
 
 -- 45. 客户在特定店铺的消费历史视图
 -- 【修复】处理FulfillmentType为NULL的旧订单
+-- 【修复】添加COLLATE解决字符集排序规则冲突问题
 CREATE OR REPLACE VIEW vw_customer_shop_orders AS
 SELECT
     co.OrderID,
@@ -877,7 +879,7 @@ SELECT
         WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
         WHEN co.OrderType = 'InStore' THEN 'POS'
         ELSE 'Other'
-    END AS OrderCategory
+    END COLLATE utf8mb4_unicode_ci AS OrderCategory
 FROM CustomerOrder co
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
@@ -909,6 +911,7 @@ WHERE bo.Status = 'Completed';
 -- 47. 店铺在特定类型的订单明细视图
 -- 【修复】处理FulfillmentType为NULL的旧订单
 -- 【修复】使用LEFT JOIN确保即使缺少明细数据也能显示订单
+-- 【修复】添加COLLATE解决字符集排序规则冲突问题
 CREATE OR REPLACE VIEW vw_shop_order_details AS
 SELECT
     co.OrderID,
@@ -927,7 +930,7 @@ SELECT
         WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
         WHEN co.OrderType = 'InStore' THEN 'POS'
         ELSE 'Other'
-    END AS OrderCategory,
+    END COLLATE utf8mb4_unicode_ci AS OrderCategory,
     ol.StockItemID,
     COALESCE(ol.PriceAtSale, 0) AS PriceAtSale,
     COALESCE(r.Title, 'Unknown Album') AS Title,
@@ -987,6 +990,7 @@ WHERE co.OrderStatus IN ('Paid', 'Completed');
 
 -- 50. 月度销售明细视图
 -- 【修复】处理FulfillmentType为NULL的旧订单
+-- 【修复】添加COLLATE解决字符集排序规则冲突问题
 CREATE OR REPLACE VIEW vw_monthly_sales_detail AS
 SELECT
     DATE_FORMAT(co.OrderDate, '%Y-%m') AS SalesMonth,
@@ -1005,7 +1009,7 @@ SELECT
         WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
         WHEN co.OrderType = 'InStore' THEN 'POS'
         ELSE 'Other'
-    END AS OrderCategory,
+    END COLLATE utf8mb4_unicode_ci AS OrderCategory,
     r.ReleaseID,
     r.Title,
     r.ArtistName,

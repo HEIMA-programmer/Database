@@ -97,6 +97,8 @@ require_once __DIR__ . '/../../includes/header.php';
                         <td class="text-end text-success fw-bold"><?= formatPrice($stat['TotalRevenue']) ?></td>
                         <td class="text-center">
                             <button type="button" class="btn btn-sm btn-outline-info btn-genre-detail"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#genreDetailModal"
                                     data-genre="<?= h($stat['Genre']) ?>" title="View Orders">
                                 <i class="fa-solid fa-list"></i>
                             </button>
@@ -148,6 +150,8 @@ require_once __DIR__ . '/../../includes/header.php';
                     </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-info btn-month-detail"
+                                data-bs-toggle="modal"
+                                data-bs-target="#monthDetailModal"
                                 data-month="<?= h($trend['SalesMonth']) ?>" title="View Orders">
                             <i class="fa-solid fa-list"></i>
                         </button>
@@ -248,130 +252,114 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Genre Detail Modal - 使用单一实例
+    // Genre Detail Modal - 使用 Bootstrap 原生事件
     const genreModalEl = document.getElementById('genreDetailModal');
-    const genreModal = new bootstrap.Modal(genreModalEl);
 
-    // Reset modal state when hidden
+    // 模态框打开时加载数据
+    genreModalEl.addEventListener('show.bs.modal', function(event) {
+        const btn = event.relatedTarget;
+        const genre = btn.dataset.genre;
+
+        document.getElementById('genreTitle').textContent = genre;
+        document.getElementById('genreDetailLoading').classList.remove('d-none');
+        document.getElementById('genreDetailContent').classList.add('d-none');
+        document.getElementById('genreDetailEmpty').classList.add('d-none');
+
+        fetch(`reports.php?ajax=genre_detail&genre=${encodeURIComponent(genre)}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('genreDetailLoading').classList.add('d-none');
+
+                if (data.success && data.data.length > 0) {
+                    let html = '';
+                    data.data.forEach(row => {
+                        html += `<tr>
+                            <td><span class="badge bg-info">#${row.OrderID}</span></td>
+                            <td>${row.OrderDate}</td>
+                            <td>${row.CustomerName || 'Guest'}</td>
+                            <td>${escapeHtml(row.Title)}</td>
+                            <td><small class="text-muted">${escapeHtml(row.ArtistName)}</small></td>
+                            <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
+                            <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
+                        </tr>`;
+                    });
+                    document.getElementById('genreDetailBody').innerHTML = html;
+                    document.getElementById('genreDetailContent').classList.remove('d-none');
+                } else {
+                    document.getElementById('genreDetailEmpty').classList.remove('d-none');
+                }
+            })
+            .catch(err => {
+                document.getElementById('genreDetailLoading').classList.add('d-none');
+                document.getElementById('genreDetailEmpty').textContent = 'Error loading data.';
+                document.getElementById('genreDetailEmpty').classList.remove('d-none');
+            });
+    });
+
+    // 模态框关闭时重置状态
     genreModalEl.addEventListener('hidden.bs.modal', function() {
         document.getElementById('genreDetailLoading').classList.remove('d-none');
         document.getElementById('genreDetailContent').classList.add('d-none');
         document.getElementById('genreDetailEmpty').classList.add('d-none');
         document.getElementById('genreDetailBody').innerHTML = '';
-
-        // 清理可能残留的 backdrop 和 body 状态
-        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('padding-right');
-        document.body.style.removeProperty('overflow');
     });
 
-    document.querySelectorAll('.btn-genre-detail').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const genre = this.dataset.genre;
-            document.getElementById('genreTitle').textContent = genre;
-            document.getElementById('genreDetailLoading').classList.remove('d-none');
-            document.getElementById('genreDetailContent').classList.add('d-none');
-            document.getElementById('genreDetailEmpty').classList.add('d-none');
-
-            genreModal.show();
-
-            fetch(`reports.php?ajax=genre_detail&genre=${encodeURIComponent(genre)}`)
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('genreDetailLoading').classList.add('d-none');
-
-                    if (data.success && data.data.length > 0) {
-                        let html = '';
-                        data.data.forEach(row => {
-                            html += `<tr>
-                                <td><span class="badge bg-info">#${row.OrderID}</span></td>
-                                <td>${row.OrderDate}</td>
-                                <td>${row.CustomerName || 'Guest'}</td>
-                                <td>${escapeHtml(row.Title)}</td>
-                                <td><small class="text-muted">${escapeHtml(row.ArtistName)}</small></td>
-                                <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
-                                <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
-                            </tr>`;
-                        });
-                        document.getElementById('genreDetailBody').innerHTML = html;
-                        document.getElementById('genreDetailContent').classList.remove('d-none');
-                    } else {
-                        document.getElementById('genreDetailEmpty').classList.remove('d-none');
-                    }
-                })
-                .catch(err => {
-                    document.getElementById('genreDetailLoading').classList.add('d-none');
-                    document.getElementById('genreDetailEmpty').textContent = 'Error loading data.';
-                    document.getElementById('genreDetailEmpty').classList.remove('d-none');
-                });
-        });
-    });
-
-    // Month Detail Modal - 使用单一实例
+    // Month Detail Modal - 使用 Bootstrap 原生事件
     const monthModalEl = document.getElementById('monthDetailModal');
-    const monthModal = new bootstrap.Modal(monthModalEl);
 
-    // Reset modal state when hidden
+    // 模态框打开时加载数据
+    monthModalEl.addEventListener('show.bs.modal', function(event) {
+        const btn = event.relatedTarget;
+        const month = btn.dataset.month;
+
+        document.getElementById('monthTitle').textContent = month;
+        document.getElementById('monthDetailLoading').classList.remove('d-none');
+        document.getElementById('monthDetailContent').classList.add('d-none');
+        document.getElementById('monthDetailEmpty').classList.add('d-none');
+
+        fetch(`reports.php?ajax=month_detail&month=${encodeURIComponent(month)}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('monthDetailLoading').classList.add('d-none');
+
+                if (data.success && data.data.length > 0) {
+                    let html = '';
+                    const typeBadges = {
+                        'POS': '<span class="badge bg-warning text-dark">POS</span>',
+                        'OnlinePickup': '<span class="badge bg-info">Pickup</span>',
+                        'OnlineSales': '<span class="badge bg-success">Shipping</span>'
+                    };
+                    data.data.forEach(row => {
+                        const typeBadge = typeBadges[row.OrderCategory] || '<span class="badge bg-secondary">Other</span>';
+                        html += `<tr>
+                            <td><span class="badge bg-info">#${row.OrderID}</span></td>
+                            <td>${row.OrderDate}</td>
+                            <td>${typeBadge}</td>
+                            <td>${row.CustomerName || 'Guest'}</td>
+                            <td>${escapeHtml(row.Title)}</td>
+                            <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
+                            <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
+                        </tr>`;
+                    });
+                    document.getElementById('monthDetailBody').innerHTML = html;
+                    document.getElementById('monthDetailContent').classList.remove('d-none');
+                } else {
+                    document.getElementById('monthDetailEmpty').classList.remove('d-none');
+                }
+            })
+            .catch(err => {
+                document.getElementById('monthDetailLoading').classList.add('d-none');
+                document.getElementById('monthDetailEmpty').textContent = 'Error loading data.';
+                document.getElementById('monthDetailEmpty').classList.remove('d-none');
+            });
+    });
+
+    // 模态框关闭时重置状态
     monthModalEl.addEventListener('hidden.bs.modal', function() {
         document.getElementById('monthDetailLoading').classList.remove('d-none');
         document.getElementById('monthDetailContent').classList.add('d-none');
         document.getElementById('monthDetailEmpty').classList.add('d-none');
         document.getElementById('monthDetailBody').innerHTML = '';
-
-        // 清理可能残留的 backdrop 和 body 状态
-        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('padding-right');
-        document.body.style.removeProperty('overflow');
-    });
-
-    document.querySelectorAll('.btn-month-detail').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const month = this.dataset.month;
-            document.getElementById('monthTitle').textContent = month;
-            document.getElementById('monthDetailLoading').classList.remove('d-none');
-            document.getElementById('monthDetailContent').classList.add('d-none');
-            document.getElementById('monthDetailEmpty').classList.add('d-none');
-
-            monthModal.show();
-
-            fetch(`reports.php?ajax=month_detail&month=${encodeURIComponent(month)}`)
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('monthDetailLoading').classList.add('d-none');
-
-                    if (data.success && data.data.length > 0) {
-                        let html = '';
-                        const typeBadges = {
-                            'POS': '<span class="badge bg-warning text-dark">POS</span>',
-                            'OnlinePickup': '<span class="badge bg-info">Pickup</span>',
-                            'OnlineSales': '<span class="badge bg-success">Shipping</span>'
-                        };
-                        data.data.forEach(row => {
-                            const typeBadge = typeBadges[row.OrderCategory] || '<span class="badge bg-secondary">Other</span>';
-                            html += `<tr>
-                                <td><span class="badge bg-info">#${row.OrderID}</span></td>
-                                <td>${row.OrderDate}</td>
-                                <td>${typeBadge}</td>
-                                <td>${row.CustomerName || 'Guest'}</td>
-                                <td>${escapeHtml(row.Title)}</td>
-                                <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
-                                <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
-                            </tr>`;
-                        });
-                        document.getElementById('monthDetailBody').innerHTML = html;
-                        document.getElementById('monthDetailContent').classList.remove('d-none');
-                    } else {
-                        document.getElementById('monthDetailEmpty').classList.remove('d-none');
-                    }
-                })
-                .catch(err => {
-                    document.getElementById('monthDetailLoading').classList.add('d-none');
-                    document.getElementById('monthDetailEmpty').textContent = 'Error loading data.';
-                    document.getElementById('monthDetailEmpty').classList.remove('d-none');
-                });
-        });
     });
 
     function escapeHtml(text) {

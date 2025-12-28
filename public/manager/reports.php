@@ -258,6 +258,12 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('genreDetailContent').classList.add('d-none');
         document.getElementById('genreDetailEmpty').classList.add('d-none');
         document.getElementById('genreDetailBody').innerHTML = '';
+
+        // 清理可能残留的 backdrop 和 body 状态
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('padding-right');
+        document.body.style.removeProperty('overflow');
     });
 
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
@@ -312,6 +318,12 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('monthDetailContent').classList.add('d-none');
         document.getElementById('monthDetailEmpty').classList.add('d-none');
         document.getElementById('monthDetailBody').innerHTML = '';
+
+        // 清理可能残留的 backdrop 和 body 状态
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('padding-right');
+        document.body.style.removeProperty('overflow');
     });
 
     document.querySelectorAll('.btn-month-detail').forEach(btn => {

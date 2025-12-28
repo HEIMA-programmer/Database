@@ -192,7 +192,7 @@ $transferStmt = $pdo->prepare("
         it.FromShopID,
         it.ToShopID,
         it.Status,
-        it.CreatedDate,
+        it.TransferDate,
         from_shop.Name as FromShopName,
         to_shop.Name as ToShopName,
         r.Title as ReleaseTitle,
@@ -205,7 +205,7 @@ $transferStmt = $pdo->prepare("
     JOIN StockItem si ON it.StockItemID = si.StockItemID
     JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
     WHERE it.FromShopID = ? AND it.Status = 'Pending'
-    ORDER BY it.CreatedDate DESC
+    ORDER BY it.TransferDate DESC
 ");
 $transferStmt->execute([$shopId]);
 $pendingTransfers = $transferStmt->fetchAll(PDO::FETCH_ASSOC);

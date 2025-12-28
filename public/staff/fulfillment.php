@@ -470,7 +470,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 <?php endif; ?>
 
-<?php else: ?>
+<?php elseif ($currentTab == 'transfers'): ?>
 <!-- 店铺间调货部分 -->
 <div class="alert alert-info mb-4">
     <i class="fa-solid fa-info-circle me-2"></i>
@@ -483,7 +483,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <h3 class="text-white">没有待发货的调货请求</h3>
         <p class="text-muted">当有新的调货请求时会显示在这里。</p>
     </div>
-<?php elseif ($currentTab == 'transfers'): ?>
+<?php else: ?>
     <div class="row row-cols-1 row-cols-lg-2 g-4">
         <?php foreach ($pendingTransfers as $transfer): ?>
             <div class="col">
@@ -554,6 +554,7 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
         <?php endforeach; ?>
     </div>
+<?php endif; ?>
 
 <?php elseif ($currentTab == 'receiving'): ?>
 <!-- 【新增】待接收调货部分 -->

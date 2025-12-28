@@ -664,14 +664,39 @@ function prepareDashboardData($pdo, $shopId = null) {
         $expense = DBProcedures::getShopTotalExpense($pdo, $shopId);
         $popularItems = DBProcedures::getPopularItems($pdo, $shopId, 1);
 
+        // 【新增】获取Walk-in customer（CustomerID为NULL）的收入统计
+        $walkInStmt = $pdo->prepare("
+            SELECT COUNT(DISTINCT OrderID) as OrderCount, COALESCE(SUM(TotalAmount), 0) as TotalSpent
+            FROM CustomerOrder
+            WHERE FulfilledByShopID = ? AND CustomerID IS NULL AND OrderStatus IN ('Paid', 'Completed')
+        ");
+        $walkInStmt->execute([$shopId]);
+        $walkInRevenue = $walkInStmt->fetch(PDO::FETCH_ASSOC);
+
+        // 【新增】获取采购成本 - 从供应商订单中获取本店铺的采购成本
+        $procurementStmt = $pdo->prepare("
+            SELECT COALESCE(SUM(so.TotalCost), 0) as ProcurementCost, COUNT(so.SupplierOrderID) as ProcurementCount
+            FROM SupplierOrder so
+            WHERE so.DestinationShopID = ? AND so.Status = 'Received'
+        ");
+        $procurementStmt->execute([$shopId]);
+        $procurementExpense = $procurementStmt->fetch(PDO::FETCH_ASSOC);
+
+        // 计算总支出 = Buyback支出 + 采购成本
+        $totalExpense = ($expense['TotalExpense'] ?? 0) + ($procurementExpense['ProcurementCost'] ?? 0);
+
         return [
             'total_sales'      => $kpi['TotalSales'] ?? 0,
             'active_orders'    => $kpi['ActiveOrders'] ?? 0,
-            'total_expense'    => $expense['TotalExpense'] ?? 0,
+            'total_expense'    => $totalExpense,
+            'buyback_expense'  => $expense['TotalExpense'] ?? 0,
             'buyback_count'    => $expense['BuybackCount'] ?? 0,
+            'procurement_cost' => $procurementExpense['ProcurementCost'] ?? 0,
+            'procurement_count'=> $procurementExpense['ProcurementCount'] ?? 0,
             'popular_item'     => !empty($popularItems) ? $popularItems[0] : null,
             'top_spender_name' => !empty($topCustomers) ? $topCustomers[0]['CustomerName'] : 'No Data',
             'top_customers'    => $topCustomers,
+            'walk_in_revenue'  => $walkInRevenue,
             'dead_stock'       => $deadStock,
             'low_stock'        => $lowStock,
             'revenue_by_type'  => $revenueByType,
@@ -1142,12 +1167,12 @@ function handleEmployeeAction($pdo, $action, $data) {
             if ($data['employee_id'] == $data['current_user_id']) {
                 return ['success' => false, 'message' => 'You cannot delete your own account.'];
             }
-            try {
-                $result = DBProcedures::deleteEmployee($pdo, $data['employee_id'], $data['current_user_id']);
+            // 【修复】正确检查删除结果
+            $result = DBProcedures::deleteEmployee($pdo, $data['employee_id'], $data['current_user_id']);
+            if ($result) {
                 return ['success' => true, 'message' => 'Employee record deleted.'];
-            } catch (Exception $e) {
-                return ['success' => false, 'message' => 'Cannot delete employee. They may be linked to transaction records.'];
             }
+            return ['success' => false, 'message' => 'Cannot delete employee. They may be linked to transaction records.'];
 
         default:
             return ['success' => false, 'message' => 'Unknown action.'];

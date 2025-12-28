@@ -27,9 +27,12 @@ $dashboardData = prepareDashboardData($pdo, $shopId);
 // 提取变量供模板使用
 $totalSales = $dashboardData['total_sales'];
 $totalExpense = $dashboardData['total_expense'];
+$buybackExpense = $dashboardData['buyback_expense'] ?? 0;
+$procurementCost = $dashboardData['procurement_cost'] ?? 0;
 $popularItem = $dashboardData['popular_item'];
 $topSpenderName = $dashboardData['top_spender_name'];
 $topCustomers = $dashboardData['top_customers'];
+$walkInRevenue = $dashboardData['walk_in_revenue'] ?? ['TotalSpent' => 0, 'OrderCount' => 0];
 $deadStock = $dashboardData['dead_stock'];
 $lowStock = $dashboardData['low_stock'];
 $revenueByType = $dashboardData['revenue_by_type'];
@@ -83,13 +86,14 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
         </div>
     </div>
-    <!-- 4. Total Expense (Buyback) -->
+    <!-- 4. Total Expense (Buyback + Procurement) -->
     <div class="col-md-6 col-lg-3">
         <div class="card bg-dark border-danger h-100">
             <div class="card-body">
                 <h6 class="text-danger text-uppercase mb-2"><i class="fa-solid fa-money-bill-transfer me-1"></i>Total Expense</h6>
                 <h3 class="text-white fw-bold"><?= formatPrice($totalExpense) ?></h3>
-                <small class="text-muted">Buyback payments</small>
+                <small class="text-muted d-block">Buyback: <?= formatPrice($buybackExpense) ?></small>
+                <small class="text-muted">Procurement: <?= formatPrice($procurementCost) ?></small>
             </div>
         </div>
     </div>
@@ -102,9 +106,9 @@ require_once __DIR__ . '/../../includes/header.php';
             <div class="card-header border-secondary bg-transparent">
                 <h5 class="card-title text-warning mb-0"><i class="fa-solid fa-trophy me-2"></i>Top Spenders</h5>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
                 <table class="table table-dark table-sm mb-0">
-                    <thead>
+                    <thead class="sticky-top bg-dark">
                         <tr>
                             <th>#</th>
                             <th>Customer</th>
@@ -128,9 +132,23 @@ require_once __DIR__ . '/../../includes/header.php';
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($topCustomers)): ?>
-                            <tr><td colspan="5" class="text-center text-muted py-3">No sales data available yet.</td></tr>
+                            <tr><td colspan="5" class="text-center text-muted py-3">No registered customer sales yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
+                    <!-- 【新增】Walk-in Customer单独一行（不参与排名） -->
+                    <tfoot class="border-top border-secondary">
+                        <tr class="table-secondary bg-opacity-25">
+                            <td><span class="badge bg-secondary">-</span></td>
+                            <td>
+                                <i class="fa-solid fa-user-slash me-1 text-muted"></i>Walk-in Customers
+                            </td>
+                            <td><small class="text-muted">N/A</small></td>
+                            <td class="text-end text-info fw-bold"><?= formatPrice($walkInRevenue['TotalSpent'] ?? 0) ?></td>
+                            <td class="text-center">
+                                <span class="badge bg-info text-dark"><?= $walkInRevenue['OrderCount'] ?? 0 ?> orders</span>
+                            </td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
@@ -142,9 +160,9 @@ require_once __DIR__ . '/../../includes/header.php';
             <div class="card-header border-secondary bg-transparent">
                 <h5 class="card-title text-danger mb-0"><i class="fa-solid fa-triangle-exclamation me-2"></i>Stagnant Inventory (>60 Days)</h5>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
                 <table class="table table-dark table-sm mb-0">
-                    <thead>
+                    <thead class="sticky-top bg-dark">
                         <tr>
                             <th>Days</th>
                             <th>Album</th>
@@ -164,8 +182,9 @@ require_once __DIR__ . '/../../includes/header.php';
                             <td><span class="badge bg-secondary"><?= h($d['ConditionGrade']) ?></span></td>
                             <td class="text-center"><span class="badge bg-warning text-dark"><?= $d['Quantity'] ?></span></td>
                             <td class="text-center">
-                                <a href="requests.php?action=price&release_id=<?= $d['ReleaseID'] ?>&condition=<?= urlencode($d['ConditionGrade']) ?>&qty=<?= $d['Quantity'] ?>&price=<?= $d['UnitPrice'] ?>"
-                                   class="btn btn-sm btn-outline-warning" title="Request Price Adjustment">
+                                <!-- 【修复】强制调整该condition的全部数量，移除qty参数 -->
+                                <a href="requests.php?action=price&release_id=<?= $d['ReleaseID'] ?>&condition=<?= urlencode($d['ConditionGrade']) ?>&price=<?= $d['UnitPrice'] ?>"
+                                   class="btn btn-sm btn-outline-warning" title="Request Price Adjustment for ALL <?= $d['Quantity'] ?> units">
                                     <i class="fa-solid fa-tag"></i>
                                 </a>
                             </td>
@@ -188,9 +207,9 @@ require_once __DIR__ . '/../../includes/header.php';
             <div class="card-header border-secondary bg-transparent">
                 <h5 class="card-title text-danger mb-0"><i class="fa-solid fa-boxes-stacked me-2"></i>Low Stock Alert (< 3 Units)</h5>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
                 <table class="table table-dark table-sm mb-0">
-                    <thead>
+                    <thead class="sticky-top bg-dark">
                         <tr>
                             <th>Album</th>
                             <th>Condition</th>
@@ -208,8 +227,9 @@ require_once __DIR__ . '/../../includes/header.php';
                             <td><span class="badge bg-secondary"><?= h($ls['ConditionGrade']) ?></span></td>
                             <td class="text-center"><span class="badge bg-danger"><?= $ls['AvailableQuantity'] ?></span></td>
                             <td class="text-center">
-                                <a href="requests.php?action=transfer&release_id=<?= $ls['ReleaseID'] ?>&condition=<?= urlencode($ls['ConditionGrade']) ?>&qty=<?= $ls['AvailableQuantity'] ?>"
-                                   class="btn btn-sm btn-outline-primary" title="Request Transfer">
+                                <!-- 【修复】移除店铺选择，由Admin决定从哪个店调货 -->
+                                <a href="requests.php?action=transfer&release_id=<?= $ls['ReleaseID'] ?>&condition=<?= urlencode($ls['ConditionGrade']) ?>"
+                                   class="btn btn-sm btn-outline-primary" title="Request Stock Transfer (Admin will decide source)">
                                     <i class="fa-solid fa-truck"></i>
                                 </a>
                             </td>
@@ -230,12 +250,12 @@ require_once __DIR__ . '/../../includes/header.php';
             <div class="card-header border-secondary bg-transparent">
                 <h5 class="card-title text-info mb-0"><i class="fa-solid fa-chart-pie me-2"></i>Revenue & Expense Breakdown</h5>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
                 <table class="table table-dark table-sm mb-0">
-                    <thead>
+                    <thead class="sticky-top bg-dark">
                         <tr>
                             <th>Type</th>
-                            <th class="text-center">Orders</th>
+                            <th class="text-center">Count</th>
                             <th class="text-end">Amount</th>
                             <th class="text-center">Details</th>
                         </tr>
@@ -293,7 +313,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                 Buyback Expense
                             </td>
                             <td class="text-center"><?= $dashboardData['buyback_count'] ?? 0 ?></td>
-                            <td class="text-end text-danger fw-bold">-<?= formatPrice($totalExpense) ?></td>
+                            <td class="text-end text-danger fw-bold">-<?= formatPrice($buybackExpense) ?></td>
                             <td class="text-center">
                                 <a href="order_details.php?type=buyback" class="btn btn-sm btn-outline-danger">
                                     <i class="fa-solid fa-list"></i>
@@ -301,6 +321,19 @@ require_once __DIR__ . '/../../includes/header.php';
                             </td>
                         </tr>
                         <?php endif; ?>
+
+                        <!-- 【新增】Procurement采购支出 -->
+                        <tr class="table-secondary">
+                            <td>
+                                <i class="fa-solid fa-boxes-packing me-2 text-danger"></i>
+                                Procurement Cost
+                            </td>
+                            <td class="text-center"><?= $dashboardData['procurement_count'] ?? 0 ?></td>
+                            <td class="text-end text-danger fw-bold">-<?= formatPrice($procurementCost) ?></td>
+                            <td class="text-center">
+                                <span class="text-muted small">Supplier Orders</span>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>

@@ -346,6 +346,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <th>Items</th>
                                     <th>Total</th>
                                     <th>Status</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -361,6 +362,13 @@ require_once __DIR__ . '/../../includes/header.php';
                                             <?= h($order['OrderStatus']) ?>
                                         </span>
                                     </td>
+                                    <td>
+                                        <button type="button" class="btn btn-outline-info btn-sm"
+                                                data-bs-toggle="modal" data-bs-target="#orderDetailModal"
+                                                onclick="loadOrderDetail(<?= $order['OrderID'] ?>)">
+                                            <i class="fa-solid fa-eye me-1"></i>Detail
+                                        </button>
+                                    </td>
                                 </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -371,5 +379,100 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+
+<!-- 订单详情模态框 -->
+<div class="modal fade" id="orderDetailModal" tabindex="-1" aria-labelledby="orderDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark border-warning">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-warning" id="orderDetailModalLabel">
+                    <i class="fa-solid fa-receipt me-2"></i>Order Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="orderDetailContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-warning" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php
+// 预加载订单详情数据
+$orderDetailsData = [];
+foreach ($posHistory as $order) {
+    $orderId = $order['OrderID'];
+    $stmt = $pdo->prepare("
+        SELECT
+            ol.PriceAtSale,
+            r.Title,
+            r.ArtistName,
+            si.ConditionGrade,
+            r.Genre,
+            r.ReleaseYear
+        FROM OrderLine ol
+        JOIN StockItem si ON ol.StockItemID = si.StockItemID
+        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+        WHERE ol.OrderID = ?
+    ");
+    $stmt->execute([$orderId]);
+    $orderDetailsData[$orderId] = [
+        'info' => $order,
+        'items' => $stmt->fetchAll(PDO::FETCH_ASSOC)
+    ];
+}
+?>
+
+<script>
+const orderDetailsData = <?= json_encode($orderDetailsData) ?>;
+
+function loadOrderDetail(orderId) {
+    const contentEl = document.getElementById('orderDetailContent');
+    const titleEl = document.getElementById('orderDetailModalLabel');
+
+    if (orderDetailsData[orderId]) {
+        const data = orderDetailsData[orderId];
+        titleEl.innerHTML = '<i class="fa-solid fa-receipt me-2"></i>Order #' + orderId + ' Details';
+
+        let html = '<div class="mb-3 p-3 bg-secondary bg-opacity-25 rounded">';
+        html += '<div class="row">';
+        html += '<div class="col-6"><strong class="text-muted">Customer:</strong> <span class="text-white">' + (data.info.CustomerName || 'Walk-in') + '</span></div>';
+        html += '<div class="col-6"><strong class="text-muted">Date:</strong> <span class="text-white">' + data.info.OrderDate + '</span></div>';
+        html += '</div>';
+        html += '<div class="row mt-2">';
+        html += '<div class="col-6"><strong class="text-muted">Status:</strong> <span class="badge bg-' + (data.info.OrderStatus == 'Completed' ? 'success' : 'info') + '">' + data.info.OrderStatus + '</span></div>';
+        html += '<div class="col-6"><strong class="text-muted">Total:</strong> <span class="text-warning fw-bold">¥' + parseFloat(data.info.TotalAmount).toFixed(2) + '</span></div>';
+        html += '</div></div>';
+
+        html += '<h6 class="text-warning mt-3 mb-2"><i class="fa-solid fa-compact-disc me-2"></i>Items (' + data.items.length + ')</h6>';
+        html += '<div class="table-responsive"><table class="table table-dark table-sm mb-0">';
+        html += '<thead><tr><th>Release</th><th>Artist</th><th>Condition</th><th>Genre</th><th>Year</th><th>Price</th></tr></thead>';
+        html += '<tbody>';
+
+        data.items.forEach(function(item) {
+            html += '<tr>';
+            html += '<td class="text-white">' + item.Title + '</td>';
+            html += '<td class="text-muted">' + item.ArtistName + '</td>';
+            html += '<td><span class="badge bg-secondary">' + item.ConditionGrade + '</span></td>';
+            html += '<td class="text-muted">' + (item.Genre || '-') + '</td>';
+            html += '<td class="text-muted">' + (item.ReleaseYear || '-') + '</td>';
+            html += '<td class="text-warning">¥' + parseFloat(item.PriceAtSale).toFixed(2) + '</td>';
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        contentEl.innerHTML = html;
+    } else {
+        contentEl.innerHTML = '<div class="text-center py-4 text-danger"><i class="fa-solid fa-exclamation-circle fa-3x mb-3 d-block"></i>Order not found</div>';
+    }
+}
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

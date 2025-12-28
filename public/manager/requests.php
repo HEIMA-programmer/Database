@@ -50,23 +50,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif ($postAction === 'submit_transfer') {
-        // 提交调货申请
+        // 提交调货申请 - 【修复】to_shop_id可以为0，表示由Admin决定从哪个店调货
         $releaseId = (int)$_POST['release_id'];
         $conditionGrade = $_POST['condition_grade'];
         $quantity = (int)$_POST['quantity'];
-        $toShopId = (int)$_POST['to_shop_id'];
+        $toShopId = (int)$_POST['to_shop_id']; // 0表示未指定，由Admin决定
         $reason = trim($_POST['reason']);
 
-        if ($toShopId === $shopId) {
+        if ($toShopId !== 0 && $toShopId === $shopId) {
             $error = 'Cannot request transfer to the same shop.';
         } elseif ($quantity <= 0) {
             $error = 'Quantity must be greater than 0.';
         } else {
+            // 【修复】当to_shop_id为0时，传入NULL让Admin决定
             $result = DBProcedures::createTransferRequest(
-                $pdo, $employeeId, $toShopId, $shopId, $releaseId, $conditionGrade, $quantity, $reason
+                $pdo, $employeeId, $toShopId ?: null, $shopId, $releaseId, $conditionGrade, $quantity, $reason
             );
             if ($result) {
-                $message = 'Transfer request submitted successfully!';
+                $message = 'Transfer request submitted successfully! Admin will assign a source store.';
                 $action = 'sent';
             } else {
                 $error = 'Failed to submit request. Please try again.';
@@ -87,6 +88,29 @@ $otherShops = array_filter($shops, fn($s) => $s['ShopID'] != $shopId);
 
 // 获取专辑列表（用于新建申请）
 $releases = DBProcedures::getReleaseList($pdo);
+
+// 【新增】获取当前店铺的库存信息（用于调价申请的album和condition选项）
+$shopInventoryStmt = $pdo->prepare("
+    SELECT DISTINCT si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade,
+           si.UnitPrice, COUNT(*) as Quantity
+    FROM StockItem si
+    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+    WHERE si.ShopID = ? AND si.Status = 'Available'
+    GROUP BY si.ReleaseID, si.ConditionGrade, si.UnitPrice
+    ORDER BY r.Title, si.ConditionGrade
+");
+$shopInventoryStmt->execute([$shopId]);
+$shopInventory = $shopInventoryStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// 构建库存价格映射（用于JS自动填充）
+$inventoryPriceMap = [];
+foreach ($shopInventory as $inv) {
+    $key = $inv['ReleaseID'] . '_' . $inv['ConditionGrade'];
+    $inventoryPriceMap[$key] = [
+        'price' => $inv['UnitPrice'],
+        'quantity' => $inv['Quantity']
+    ];
+}
 
 // 从URL参数预填表单
 $prefillReleaseId = isset($_GET['release_id']) ? (int)$_GET['release_id'] : 0;
@@ -153,21 +177,34 @@ require_once __DIR__ . '/../../includes/header.php';
     <!-- 右侧内容 -->
     <div class="col-md-9">
         <?php if ($action === 'price'): ?>
-        <!-- 新建调价申请表单 -->
+        <!-- 新建调价申请表单 - 【修复】基于当前店铺库存，自动填充价格和数量 -->
         <div class="card bg-dark border-info">
             <div class="card-header border-info">
                 <h5 class="mb-0"><i class="fa-solid fa-tag me-2"></i>Submit Price Adjustment Request</h5>
             </div>
             <div class="card-body">
-                <form method="POST">
+                <?php if (empty($shopInventory)): ?>
+                <div class="alert alert-warning">
+                    <i class="fa-solid fa-exclamation-triangle me-2"></i>No available inventory in your store to adjust prices.
+                </div>
+                <?php else: ?>
+                <form method="POST" id="priceAdjustForm">
                     <input type="hidden" name="action" value="submit_price">
 
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label class="form-label">Album</label>
-                            <select name="release_id" class="form-select bg-dark text-light border-secondary" required>
+                            <label class="form-label">Album <small class="text-muted">(from your store's inventory)</small></label>
+                            <select name="release_id" id="priceReleaseSelect" class="form-select bg-dark text-light border-secondary" required>
                                 <option value="">-- Select Album --</option>
-                                <?php foreach ($releases as $r): ?>
+                                <?php
+                                $uniqueReleases = [];
+                                foreach ($shopInventory as $inv) {
+                                    if (!isset($uniqueReleases[$inv['ReleaseID']])) {
+                                        $uniqueReleases[$inv['ReleaseID']] = $inv;
+                                    }
+                                }
+                                foreach ($uniqueReleases as $r):
+                                ?>
                                 <option value="<?= $r['ReleaseID'] ?>" <?= $prefillReleaseId == $r['ReleaseID'] ? 'selected' : '' ?>>
                                     <?= h($r['Title']) ?> - <?= h($r['ArtistName']) ?>
                                 </option>
@@ -175,35 +212,35 @@ require_once __DIR__ . '/../../includes/header.php';
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Condition</label>
-                            <select name="condition_grade" class="form-select bg-dark text-light border-secondary" required>
-                                <?php foreach (['New', 'Mint', 'NM', 'VG+', 'VG'] as $cond): ?>
-                                <option value="<?= $cond ?>" <?= $prefillCondition === $cond ? 'selected' : '' ?>><?= $cond ?></option>
-                                <?php endforeach; ?>
+                            <label class="form-label">Condition <small class="text-muted">(based on album selection)</small></label>
+                            <select name="condition_grade" id="priceConditionSelect" class="form-select bg-dark text-light border-secondary" required>
+                                <option value="">-- Select Album First --</option>
                             </select>
                         </div>
                     </div>
 
                     <div class="row mb-3">
                         <div class="col-md-4">
-                            <label class="form-label">Quantity</label>
-                            <input type="number" name="quantity" class="form-control bg-dark text-light border-secondary"
-                                   value="<?= $prefillQty ?>" min="1" required>
+                            <label class="form-label">Quantity <small class="text-muted">(all units will be adjusted)</small></label>
+                            <input type="number" name="quantity" id="priceQuantity" class="form-control bg-dark text-light border-secondary"
+                                   value="<?= $prefillQty ?>" min="1" readonly required>
+                            <small class="text-info">Auto-filled based on available stock</small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Current Price</label>
+                            <label class="form-label">Current Price <small class="text-muted">(from inventory)</small></label>
                             <div class="input-group">
-                                <span class="input-group-text bg-secondary border-secondary">$</span>
-                                <input type="number" step="0.01" name="current_price"
+                                <span class="input-group-text bg-secondary border-secondary">¥</span>
+                                <input type="number" step="0.01" name="current_price" id="priceCurrentPrice"
                                        class="form-control bg-dark text-light border-secondary"
-                                       value="<?= $prefillPrice ?>" min="0" required>
+                                       value="<?= $prefillPrice ?>" min="0" readonly required>
                             </div>
+                            <small class="text-info">Auto-filled from inventory</small>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Requested Price</label>
                             <div class="input-group">
-                                <span class="input-group-text bg-success text-white">$</span>
-                                <input type="number" step="0.01" name="requested_price"
+                                <span class="input-group-text bg-success text-white">¥</span>
+                                <input type="number" step="0.01" name="requested_price" id="priceRequestedPrice"
                                        class="form-control bg-dark text-light border-secondary" min="0.01" required>
                             </div>
                         </div>
@@ -220,18 +257,93 @@ require_once __DIR__ . '/../../includes/header.php';
                     </button>
                     <a href="?action=inbox" class="btn btn-outline-secondary ms-2">Cancel</a>
                 </form>
+
+                <script>
+                // 库存价格映射数据
+                const inventoryPriceMap = <?= json_encode($inventoryPriceMap) ?>;
+                const shopInventory = <?= json_encode($shopInventory) ?>;
+                const prefillReleaseId = <?= $prefillReleaseId ?>;
+                const prefillCondition = "<?= $prefillCondition ?>";
+
+                document.addEventListener('DOMContentLoaded', function() {
+                    const releaseSelect = document.getElementById('priceReleaseSelect');
+                    const conditionSelect = document.getElementById('priceConditionSelect');
+                    const quantityInput = document.getElementById('priceQuantity');
+                    const currentPriceInput = document.getElementById('priceCurrentPrice');
+
+                    function updateConditionOptions() {
+                        const releaseId = releaseSelect.value;
+                        conditionSelect.innerHTML = '<option value="">-- Select Condition --</option>';
+
+                        if (!releaseId) {
+                            quantityInput.value = '';
+                            currentPriceInput.value = '';
+                            return;
+                        }
+
+                        // 获取该专辑在当前店铺可用的condition
+                        const conditions = shopInventory.filter(inv => inv.ReleaseID == releaseId);
+                        conditions.forEach(inv => {
+                            const option = document.createElement('option');
+                            option.value = inv.ConditionGrade;
+                            option.textContent = inv.ConditionGrade + ' (x' + inv.Quantity + ')';
+                            if (inv.ConditionGrade === prefillCondition) {
+                                option.selected = true;
+                            }
+                            conditionSelect.appendChild(option);
+                        });
+
+                        // 如果有预填的condition，触发更新
+                        if (prefillCondition) {
+                            updatePriceAndQuantity();
+                        }
+                    }
+
+                    function updatePriceAndQuantity() {
+                        const releaseId = releaseSelect.value;
+                        const condition = conditionSelect.value;
+
+                        if (!releaseId || !condition) {
+                            return;
+                        }
+
+                        const key = releaseId + '_' + condition;
+                        if (inventoryPriceMap[key]) {
+                            currentPriceInput.value = inventoryPriceMap[key].price;
+                            quantityInput.value = inventoryPriceMap[key].quantity;
+                        }
+                    }
+
+                    releaseSelect.addEventListener('change', updateConditionOptions);
+                    conditionSelect.addEventListener('change', updatePriceAndQuantity);
+
+                    // 初始化
+                    if (prefillReleaseId) {
+                        updateConditionOptions();
+                    }
+                });
+                </script>
+                <?php endif; ?>
             </div>
         </div>
 
         <?php elseif ($action === 'transfer'): ?>
-        <!-- 新建调货申请表单 -->
+        <!-- 新建调货申请表单 - 【修复】移除店铺选择，由Admin决定从哪个店调货 -->
         <div class="card bg-dark border-primary">
             <div class="card-header border-primary">
                 <h5 class="mb-0"><i class="fa-solid fa-truck me-2"></i>Submit Transfer Request</h5>
             </div>
             <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="fa-solid fa-info-circle me-2"></i>
+                    <strong>Note:</strong> Admin will determine which store has available inventory and fulfill your request.
+                    Items will be transferred TO your store (<?= h($_SESSION['shop_name']) ?>).
+                </div>
+
                 <form method="POST">
                     <input type="hidden" name="action" value="submit_transfer">
+                    <!-- 【修复】设置to_shop_id为0，表示由Admin决定 -->
+                    <input type="hidden" name="to_shop_id" value="0">
 
                     <div class="row mb-3">
                         <div class="col-md-6">
@@ -262,16 +374,10 @@ require_once __DIR__ . '/../../includes/header.php';
                                    value="<?= $prefillQty ?>" min="1" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Request From Shop</label>
-                            <select name="to_shop_id" class="form-select bg-dark text-light border-secondary" required>
-                                <option value="">-- Select Source Shop --</option>
-                                <?php foreach ($otherShops as $s): ?>
-                                <option value="<?= $s['ShopID'] ?>">
-                                    <?= h($s['Name']) ?> (<?= $s['Type'] ?>)
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <small class="text-muted">Items will be transferred TO your store (<?= h($_SESSION['shop_name']) ?>)</small>
+                            <label class="form-label">Destination</label>
+                            <input type="text" class="form-control bg-dark text-light border-secondary"
+                                   value="<?= h($_SESSION['shop_name']) ?>" readonly>
+                            <small class="text-muted">Your store - this cannot be changed</small>
                         </div>
                     </div>
 

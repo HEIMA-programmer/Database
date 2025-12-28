@@ -281,8 +281,8 @@ require_once __DIR__ . '/../../includes/header.php';
                         <label class="form-label">调配数量</label>
                         <input type="number" name="quantity" id="dispatch_quantity"
                                class="form-control bg-dark text-white border-secondary"
-                               min="1" max="1" value="1" required>
-                        <small class="text-muted">最大可调配: <span id="dispatch_max_qty_hint">1</span></small>
+                               min="1" value="1" required>
+                        <small class="text-muted">最大可调配: <span id="dispatch_max_qty_hint">-</span></small>
                     </div>
 
                     <div class="alert alert-warning">

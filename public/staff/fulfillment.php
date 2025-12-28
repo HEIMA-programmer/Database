@@ -33,11 +33,11 @@ $shopType = $employee['ShopType'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    // 【新增】处理店铺间调货确认
+    // 【新增】处理店铺间调货确认（源店铺发货）
     if ($action === 'confirm_transfer' || $action === 'cancel_transfer') {
         $transferId = (int)($_POST['transfer_id'] ?? 0);
 
-        // 验证调拨记录属于本店铺
+        // 验证调拨记录属于本店铺（作为源店铺）
         $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND FromShopID = ?");
         $stmt->execute([$transferId, $shopId]);
         $transfer = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -72,6 +72,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         header('Location: fulfillment.php?tab=transfers');
+        exit;
+    }
+
+    // 【新增】处理目标店铺收货确认
+    if ($action === 'receive_transfer') {
+        $transferId = (int)($_POST['transfer_id'] ?? 0);
+
+        // 验证调拨记录属于本店铺（作为目标店铺）
+        $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND ToShopID = ?");
+        $stmt->execute([$transferId, $shopId]);
+        $transfer = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($transfer && $transfer['Status'] === 'InTransit') {
+            try {
+                $pdo->beginTransaction();
+
+                // 调用存储过程完成调拨（触发器会自动更新库存位置和状态）
+                DBProcedures::completeTransfer($pdo, $transferId, $employeeId);
+
+                $pdo->commit();
+                flash("Transfer #$transferId received successfully. Stock has been added to your inventory.", 'success');
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                flash("Error: " . $e->getMessage(), 'danger');
+            }
+        } else {
+            flash("Transfer not found, not addressed to your store, or not in transit.", 'danger');
+        }
+
+        header('Location: fulfillment.php?tab=receiving');
         exit;
     }
 
@@ -183,7 +213,7 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $statusCounts[$row['OrderStatus']] = $row['cnt'];
 }
 
-// 【新增】获取待发货的店铺间调货记录
+// 【新增】获取待发货的店铺间调货记录（本店作为源店铺）
 $pendingTransfers = [];
 $transferStmt = $pdo->prepare("
     SELECT
@@ -211,6 +241,34 @@ $transferStmt->execute([$shopId]);
 $pendingTransfers = $transferStmt->fetchAll(PDO::FETCH_ASSOC);
 $pendingTransferCount = count($pendingTransfers);
 
+// 【新增】获取待接收的店铺间调货记录（本店作为目标店铺）
+$incomingTransfers = [];
+$incomingStmt = $pdo->prepare("
+    SELECT
+        it.TransferID,
+        it.StockItemID,
+        it.FromShopID,
+        it.ToShopID,
+        it.Status,
+        it.TransferDate,
+        from_shop.Name as FromShopName,
+        to_shop.Name as ToShopName,
+        r.Title as ReleaseTitle,
+        r.ArtistName,
+        si.ConditionGrade,
+        si.UnitPrice
+    FROM InventoryTransfer it
+    JOIN Shop from_shop ON it.FromShopID = from_shop.ShopID
+    JOIN Shop to_shop ON it.ToShopID = to_shop.ShopID
+    JOIN StockItem si ON it.StockItemID = si.StockItemID
+    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+    WHERE it.ToShopID = ? AND it.Status = 'InTransit'
+    ORDER BY it.TransferDate DESC
+");
+$incomingStmt->execute([$shopId]);
+$incomingTransfers = $incomingStmt->fetchAll(PDO::FETCH_ASSOC);
+$incomingTransferCount = count($incomingTransfers);
+
 // 当前标签页
 $currentTab = $_GET['tab'] ?? 'orders';
 
@@ -229,7 +287,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<!-- 【新增】主标签页切换：顾客订单 / 店铺间调货 -->
+<!-- 【新增】主标签页切换：顾客订单 / 待发货调货 / 待接收调货 -->
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
         <a class="nav-link <?= $currentTab == 'orders' ? 'active bg-dark text-warning' : 'text-light' ?>" href="?tab=orders">
@@ -241,9 +299,17 @@ require_once __DIR__ . '/../../includes/header.php';
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $currentTab == 'transfers' ? 'active bg-dark text-info' : 'text-light' ?>" href="?tab=transfers">
-            <i class="fa-solid fa-truck-arrow-right me-1"></i>店铺间调货
+            <i class="fa-solid fa-truck-arrow-right me-1"></i>待发货
             <?php if ($pendingTransferCount > 0): ?>
                 <span class="badge bg-info"><?= $pendingTransferCount ?></span>
+            <?php endif; ?>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= $currentTab == 'receiving' ? 'active bg-dark text-success' : 'text-light' ?>" href="?tab=receiving">
+            <i class="fa-solid fa-box-open me-1"></i>待接收
+            <?php if ($incomingTransferCount > 0): ?>
+                <span class="badge bg-success"><?= $incomingTransferCount ?></span>
             <?php endif; ?>
         </a>
     </li>
@@ -427,7 +493,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             <strong class="text-info">调货 #<?= $transfer['TransferID'] ?></strong>
                             <span class="badge bg-warning text-dark ms-2">待发货</span>
                         </div>
-                        <small class="text-muted"><?= date('M d, H:i', strtotime($transfer['CreatedDate'])) ?></small>
+                        <small class="text-muted"><?= date('M d, H:i', strtotime($transfer['TransferDate'])) ?></small>
                     </div>
                     <div class="card-body">
                         <div class="row mb-3">
@@ -483,6 +549,82 @@ require_once __DIR__ . '/../../includes/header.php';
                                 </button>
                             </form>
                         </div>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
+<?php elseif ($currentTab == 'receiving'): ?>
+<!-- 【新增】待接收调货部分 -->
+<div class="alert alert-success mb-4">
+    <i class="fa-solid fa-info-circle me-2"></i>
+    这里显示从其他店铺调拨过来、等待您确认收货的库存。确认收货后，库存将正式入库到您的店铺。
+</div>
+
+<?php if (empty($incomingTransfers)): ?>
+    <div class="text-center py-5">
+        <div class="display-1 text-secondary mb-3"><i class="fa-solid fa-box-open"></i></div>
+        <h3 class="text-white">没有待接收的调货</h3>
+        <p class="text-muted">当有从其他店铺调拨过来的货物时会显示在这里。</p>
+    </div>
+<?php else: ?>
+    <div class="row row-cols-1 row-cols-lg-2 g-4">
+        <?php foreach ($incomingTransfers as $transfer): ?>
+            <div class="col">
+                <div class="card bg-dark border-success h-100">
+                    <div class="card-header bg-dark border-success d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong class="text-success">调货 #<?= $transfer['TransferID'] ?></strong>
+                            <span class="badge bg-primary ms-2">运输中</span>
+                        </div>
+                        <small class="text-muted"><?= date('M d, H:i', strtotime($transfer['TransferDate'])) ?></small>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <small class="text-muted">来源店铺</small>
+                                <div class="text-white">
+                                    <i class="fa-solid fa-store me-1 text-info"></i>
+                                    <?= h($transfer['FromShopName']) ?>
+                                </div>
+                            </div>
+                            <div class="col-6 text-end">
+                                <small class="text-muted">目标店铺</small>
+                                <div class="text-success">
+                                    <i class="fa-solid fa-arrow-right me-1"></i>
+                                    <?= h($transfer['ToShopName']) ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <small class="text-muted d-block">专辑信息</small>
+                            <div class="text-white fw-bold"><?= h($transfer['ReleaseTitle']) ?></div>
+                            <small class="text-muted"><?= h($transfer['ArtistName']) ?></small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">成色</small>
+                                <div><span class="badge bg-secondary"><?= h($transfer['ConditionGrade']) ?></span></div>
+                            </div>
+                            <div class="col-6 text-end">
+                                <small class="text-muted">价格</small>
+                                <div class="text-success fw-bold"><?= formatPrice($transfer['UnitPrice']) ?></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer bg-dark border-success">
+                        <form method="POST" class="d-grid">
+                            <input type="hidden" name="transfer_id" value="<?= $transfer['TransferID'] ?>">
+                            <input type="hidden" name="action" value="receive_transfer">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fa-solid fa-check me-1"></i>确认收货
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>

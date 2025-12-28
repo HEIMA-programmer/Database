@@ -21,8 +21,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($requestId && in_array($action, ['approve', 'reject'])) {
         $approved = ($action === 'approve');
 
-        // 【新增】对于调货申请的批准，需要先设置源店铺
+        // 【新增】对于调货申请的批准，需要先验证并设置源店铺
         if ($approved && $sourceShopId > 0) {
+            // 获取申请的详细信息
+            $reqStmt = $pdo->prepare("SELECT ReleaseID, ConditionGrade, Quantity, RequestType FROM ManagerRequest WHERE RequestID = ?");
+            $reqStmt->execute([$requestId]);
+            $reqInfo = $reqStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($reqInfo && $reqInfo['RequestType'] === 'TransferRequest') {
+                // 【边界检查】验证源店铺的可用库存数量是否足够
+                $stockStmt = $pdo->prepare("
+                    SELECT COUNT(*) as available
+                    FROM StockItem
+                    WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ? AND Status = 'Available'
+                ");
+                $stockStmt->execute([$sourceShopId, $reqInfo['ReleaseID'], $reqInfo['ConditionGrade']]);
+                $stockCount = $stockStmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$stockCount || $stockCount['available'] < $reqInfo['Quantity']) {
+                    flash("Cannot approve: Source shop only has " . ($stockCount['available'] ?? 0) . " available item(s), but " . $reqInfo['Quantity'] . " requested.", 'danger');
+                    header("Location: requests.php");
+                    exit();
+                }
+            }
+
             $updateStmt = $pdo->prepare("UPDATE ManagerRequest SET ToShopID = ? WHERE RequestID = ? AND RequestType = 'TransferRequest'");
             $updateStmt->execute([$sourceShopId, $requestId]);
         }

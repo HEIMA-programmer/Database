@@ -107,6 +107,20 @@ $customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // 条件等级选项 - 【修复】只保留前5个标准条件
 $conditions = ['New', 'Mint', 'NM', 'VG+', 'VG'];
 
+// 【新增】获取当前库存价格映射（按Release和Condition分组）
+// 用于在回购时自动填充resale价格，确保价格一致性
+$stmt = $pdo->query("
+    SELECT ReleaseID, ConditionGrade, MAX(UnitPrice) as CurrentPrice
+    FROM StockItem
+    WHERE Status = 'Available'
+    GROUP BY ReleaseID, ConditionGrade
+");
+$priceMap = [];
+while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+    $key = $row['ReleaseID'] . '_' . $row['ConditionGrade'];
+    $priceMap[$key] = $row['CurrentPrice'];
+}
+
 require_once __DIR__ . '/../../includes/header.php';
 // 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单
 ?>
@@ -295,17 +309,23 @@ require_once __DIR__ . '/../../includes/header.php';
 document.addEventListener('DOMContentLoaded', function() {
     const quantityInput = document.getElementById('quantity');
     const priceInput = document.getElementById('unit_price');
+    const resalePriceInput = document.getElementById('resale_price');
     const totalDisplay = document.getElementById('total-payment');
     const pointsDisplay = document.getElementById('points-preview');
     const customerSelect = document.getElementById('customer_id');
-    
+    const releaseSelect = document.getElementById('release_id');
+    const conditionSelect = document.querySelector('select[name="condition"]');
+
+    // 【新增】当前库存价格映射（从PHP传入）
+    const priceMap = <?= json_encode($priceMap) ?>;
+
     function updateTotal() {
         const quantity = parseInt(quantityInput.value) || 0;
         const price = parseFloat(priceInput.value) || 0;
         const total = quantity * price;
-        
+
         totalDisplay.textContent = '¥' + total.toFixed(2);
-        
+
         // 计算积分预览
         const customerId = customerSelect.value;
         if (customerId && total > 0) {
@@ -315,11 +335,34 @@ document.addEventListener('DOMContentLoaded', function() {
             pointsDisplay.textContent = '';
         }
     }
-    
+
+    // 【新增】自动填充resale价格
+    function updateResalePrice() {
+        const releaseId = releaseSelect.value;
+        const condition = conditionSelect.value;
+
+        if (releaseId && condition) {
+            const key = releaseId + '_' + condition;
+            if (priceMap[key]) {
+                resalePriceInput.value = parseFloat(priceMap[key]).toFixed(2);
+                resalePriceInput.classList.add('border-success');
+                resalePriceInput.title = '已自动填充当前库存售价';
+            } else {
+                // 没有现有价格时，清空并允许手动输入
+                resalePriceInput.classList.remove('border-success');
+                resalePriceInput.title = '请设置转售价格';
+            }
+        }
+    }
+
     quantityInput.addEventListener('input', updateTotal);
     priceInput.addEventListener('input', updateTotal);
     customerSelect.addEventListener('change', updateTotal);
-    
+
+    // 【新增】监听Release和Condition变化，自动更新resale价格
+    releaseSelect.addEventListener('change', updateResalePrice);
+    conditionSelect.addEventListener('change', updateResalePrice);
+
     updateTotal();
 });
 </script>

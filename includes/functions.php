@@ -1528,6 +1528,7 @@ function handleBuybackSubmission($pdo, $data) {
 
 /**
  * 处理采购订单创建
+ * 【修复】添加ConditionGrade和SalePrice参数
  */
 function handleProcurementCreatePO($pdo, $data, $warehouseId) {
     require_once __DIR__ . '/db_procedures.php';
@@ -1545,7 +1546,10 @@ function handleProcurementCreatePO($pdo, $data, $warehouseId) {
             throw new Exception('Failed to create supplier order.');
         }
 
-        $lineSuccess = DBProcedures::addSupplierOrderLine($pdo, $orderId, $data['release_id'], $data['quantity'], $data['unit_cost']);
+        // 【修复】传递ConditionGrade和SalePrice参数
+        $conditionGrade = $data['condition'] ?? 'New';
+        $salePrice = $data['sale_price'] ?? null;
+        $lineSuccess = DBProcedures::addSupplierOrderLine($pdo, $orderId, $data['release_id'], $data['quantity'], $data['unit_cost'], $conditionGrade, $salePrice);
 
         if (!$lineSuccess) {
             throw new Exception('Failed to add order line.');

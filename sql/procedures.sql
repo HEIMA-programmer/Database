@@ -32,13 +32,15 @@ BEGIN
 END$$
 
 -- 添加订单行项目
--- 【修复】移除内部事务控制，由调用方管理事务
+-- 【修复】添加ConditionGrade和SalePrice参数
 DROP PROCEDURE IF EXISTS sp_add_supplier_order_line$$
 CREATE PROCEDURE sp_add_supplier_order_line(
     IN p_order_id INT,
     IN p_release_id INT,
     IN p_quantity INT,
-    IN p_unit_cost DECIMAL(10,2)
+    IN p_unit_cost DECIMAL(10,2),
+    IN p_condition_grade VARCHAR(10),
+    IN p_sale_price DECIMAL(10,2)
 )
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -46,23 +48,25 @@ BEGIN
         RESIGNAL;
     END;
 
-    INSERT INTO SupplierOrderLine (SupplierOrderID, ReleaseID, Quantity, UnitCost)
-    VALUES (p_order_id, p_release_id, p_quantity, p_unit_cost);
+    INSERT INTO SupplierOrderLine (SupplierOrderID, ReleaseID, Quantity, UnitCost, ConditionGrade, SalePrice)
+    VALUES (p_order_id, p_release_id, p_quantity, p_unit_cost, COALESCE(p_condition_grade, 'New'), p_sale_price);
 END$$
 
 -- 接收供应商订单并生成库存
--- 【修复】移除内部事务控制，由调用方管理事务
+-- 【修复】使用订单行中保存的ConditionGrade和SalePrice
 DROP PROCEDURE IF EXISTS sp_receive_supplier_order$$
 CREATE PROCEDURE sp_receive_supplier_order(
     IN p_order_id INT,
     IN p_batch_no VARCHAR(50),
-    IN p_condition_grade VARCHAR(10),
+    IN p_condition_grade VARCHAR(10), -- 保留参数用于兼容，但优先使用订单行中的值
     IN p_markup_rate DECIMAL(3,2) -- 加价率,例如 0.50 表示成本价的150%
 )
 BEGIN
     DECLARE v_release_id INT;
     DECLARE v_quantity INT;
     DECLARE v_unit_cost DECIMAL(10,2);
+    DECLARE v_line_condition VARCHAR(10);
+    DECLARE v_line_sale_price DECIMAL(10,2);
     DECLARE v_unit_price DECIMAL(10,2);
     DECLARE v_shop_id INT;
     DECLARE v_counter INT;
@@ -70,7 +74,7 @@ BEGIN
     DECLARE done INT DEFAULT FALSE;
 
     DECLARE cur CURSOR FOR
-        SELECT ReleaseID, Quantity, UnitCost
+        SELECT ReleaseID, Quantity, UnitCost, ConditionGrade, SalePrice
         FROM SupplierOrderLine
         WHERE SupplierOrderID = p_order_id;
 
@@ -98,13 +102,22 @@ BEGIN
     -- 遍历订单行，生成StockItem
     OPEN cur;
     read_loop: LOOP
-        FETCH cur INTO v_release_id, v_quantity, v_unit_cost;
+        FETCH cur INTO v_release_id, v_quantity, v_unit_cost, v_line_condition, v_line_sale_price;
         IF done THEN
             LEAVE read_loop;
         END IF;
 
-        -- 计算售价
-        SET v_unit_price = v_unit_cost * (1 + p_markup_rate);
+        -- 使用订单行中的SalePrice，如果没有则用加价率计算
+        IF v_line_sale_price IS NOT NULL AND v_line_sale_price > 0 THEN
+            SET v_unit_price = v_line_sale_price;
+        ELSE
+            SET v_unit_price = v_unit_cost * (1 + p_markup_rate);
+        END IF;
+
+        -- 使用订单行中的ConditionGrade，如果没有则使用参数值
+        IF v_line_condition IS NULL OR v_line_condition = '' THEN
+            SET v_line_condition = COALESCE(p_condition_grade, 'New');
+        END IF;
 
         -- 为每个数量创建独立的StockItem
         SET v_counter = 0;
@@ -114,7 +127,7 @@ BEGIN
                 BatchNo, ConditionGrade, Status, UnitPrice
             ) VALUES (
                 v_release_id, v_shop_id, 'Supplier', p_order_id,
-                p_batch_no, p_condition_grade, 'Available', v_unit_price
+                p_batch_no, v_line_condition, 'Available', v_unit_price
             );
             SET v_counter = v_counter + 1;
         END WHILE;
@@ -1012,6 +1025,7 @@ BEGIN
 END$$
 
 -- Admin审批申请
+-- 【修改】批准调货申请时创建调拨记录，需要源店铺员工确认后才完成调拨
 DROP PROCEDURE IF EXISTS sp_respond_to_request$$
 CREATE PROCEDURE sp_respond_to_request(
     IN p_request_id INT,
@@ -1029,6 +1043,20 @@ BEGIN
     DECLARE v_quantity INT;
     DECLARE v_requested_price DECIMAL(10,2);
     DECLARE v_current_status VARCHAR(10);
+    DECLARE v_stock_item_id INT;
+    DECLARE v_counter INT DEFAULT 0;
+    DECLARE done INT DEFAULT FALSE;
+
+    DECLARE stock_cursor CURSOR FOR
+        SELECT StockItemID
+        FROM StockItem
+        WHERE ShopID = v_to_shop_id
+          AND ReleaseID = v_release_id
+          AND ConditionGrade = v_condition_grade
+          AND Status = 'Available'
+        LIMIT 100; -- 安全限制
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -1067,16 +1095,33 @@ BEGIN
               AND Status = 'Available'
             LIMIT v_quantity;
         ELSEIF v_request_type = 'TransferRequest' THEN
-            -- 执行调货（逐个库存项）
-            -- 【修复】FromShopID是目标店铺(Manager的店)，ToShopID是源店铺(Admin选择的)
-            -- 所以应该从ToShopID调货到FromShopID
-            UPDATE StockItem
-            SET ShopID = v_from_shop_id
-            WHERE ShopID = v_to_shop_id
-              AND ReleaseID = v_release_id
-              AND ConditionGrade = v_condition_grade
-              AND Status = 'Available'
-            LIMIT v_quantity;
+            -- 【修改】创建调拨记录，需要源店铺员工确认发货
+            -- FromShopID是目标店铺(Manager的店)，ToShopID是源店铺(Admin选择的)
+            -- 从ToShopID调货到FromShopID
+
+            OPEN stock_cursor;
+            transfer_loop: LOOP
+                IF v_counter >= v_quantity THEN
+                    LEAVE transfer_loop;
+                END IF;
+
+                FETCH stock_cursor INTO v_stock_item_id;
+                IF done THEN
+                    LEAVE transfer_loop;
+                END IF;
+
+                -- 创建调拨记录（状态为Pending，等待源店铺员工确认）
+                INSERT INTO InventoryTransfer (
+                    StockItemID, FromShopID, ToShopID,
+                    AuthorizedByEmployeeID, Status
+                ) VALUES (
+                    v_stock_item_id, v_to_shop_id, v_from_shop_id,
+                    p_admin_id, 'Pending'
+                );
+
+                SET v_counter = v_counter + 1;
+            END LOOP;
+            CLOSE stock_cursor;
         END IF;
     END IF;
 END$$

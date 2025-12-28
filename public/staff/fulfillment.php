@@ -554,7 +554,6 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
         <?php endforeach; ?>
     </div>
-<?php endif; ?>
 
 <?php elseif ($currentTab == 'receiving'): ?>
 <!-- 【新增】待接收调货部分 -->

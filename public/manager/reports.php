@@ -17,32 +17,23 @@ if (!$shopId) {
     die('Error: Shop ID not found in session.');
 }
 
-// 处理AJAX请求 - 获取明细数据
-if (isset($_GET['ajax'])) {
-    header('Content-Type: application/json');
-
-    if ($_GET['ajax'] === 'genre_detail' && isset($_GET['genre'])) {
-        $genre = $_GET['genre'];
-        $details = DBProcedures::getSalesByGenreDetail($pdo, $shopId, $genre);
-        echo json_encode(['success' => true, 'data' => $details, 'genre' => $genre]);
-        exit;
-    }
-
-    if ($_GET['ajax'] === 'month_detail' && isset($_GET['month'])) {
-        $month = $_GET['month'];
-        $details = DBProcedures::getMonthlySalesDetail($pdo, $shopId, $month);
-        echo json_encode(['success' => true, 'data' => $details, 'month' => $month]);
-        exit;
-    }
-
-    echo json_encode(['success' => false, 'message' => 'Invalid request']);
-    exit;
-}
-
 // 获取报表数据
 $pageData = prepareReportsPageData($pdo, $shopId);
 $turnoverStats = $pageData['turnover_stats'];
 $salesTrend = $pageData['sales_trend'];
+
+// 预加载所有 genre 和 month 的详情数据
+$genreDetails = [];
+foreach ($turnoverStats as $stat) {
+    $genre = $stat['Genre'];
+    $genreDetails[$genre] = DBProcedures::getSalesByGenreDetail($pdo, $shopId, $genre);
+}
+
+$monthDetails = [];
+foreach ($salesTrend as $trend) {
+    $month = $trend['SalesMonth'];
+    $monthDetails[$month] = DBProcedures::getMonthlySalesDetail($pdo, $shopId, $month);
+}
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
@@ -248,6 +239,10 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // ========== 预加载数据 ==========
+    const genreDetailsData = <?= json_encode($genreDetails, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    const monthDetailsData = <?= json_encode($monthDetails, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
     // ========== 辅助函数 ==========
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -255,94 +250,18 @@ document.addEventListener('DOMContentLoaded', function() {
         return div.innerHTML;
     }
 
-    // 通用的模态框加载函数 - 完全由 click 事件驱动，不依赖 Bootstrap 事件
-    function setupModalLoader(config) {
-        const modalEl = document.getElementById(config.modalId);
-        const modal = new bootstrap.Modal(modalEl);
-        let abortController = null;
-        let isLoading = false;  // 防止重复加载
+    // ========== Genre Detail Modal（预加载方式）==========
+    const genreModalEl = document.getElementById('genreDetailModal');
+    const genreModal = new bootstrap.Modal(genreModalEl);
 
-        function loadData(dataValue) {
-            if (!dataValue || isLoading) return;
-            isLoading = true;
+    function renderGenreDetail(genre) {
+        document.getElementById('genreTitle').textContent = genre;
+        // 隐藏loading（预加载不需要）
+        document.getElementById('genreDetailLoading').classList.add('d-none');
 
-            // 设置标题
-            document.getElementById(config.titleId).textContent = dataValue;
-
-            // 显示 loading，隐藏其他
-            document.getElementById(config.loadingId).classList.remove('d-none');
-            document.getElementById(config.contentId).classList.add('d-none');
-            document.getElementById(config.emptyId).classList.add('d-none');
-            document.getElementById(config.bodyId).innerHTML = '';
-
-            // 取消之前的请求
-            if (abortController) {
-                abortController.abort();
-            }
-            abortController = new AbortController();
-
-            fetch(config.fetchUrl(dataValue), {
-                signal: abortController.signal
-            })
-                .then(res => res.json())
-                .then(data => {
-                    isLoading = false;
-                    document.getElementById(config.loadingId).classList.add('d-none');
-
-                    if (data.success && data.data.length > 0) {
-                        document.getElementById(config.bodyId).innerHTML = config.renderRows(data.data);
-                        document.getElementById(config.contentId).classList.remove('d-none');
-                    } else {
-                        document.getElementById(config.emptyId).textContent = config.emptyMessage;
-                        document.getElementById(config.emptyId).classList.remove('d-none');
-                    }
-                })
-                .catch(err => {
-                    isLoading = false;
-                    if (err.name === 'AbortError') return;
-                    document.getElementById(config.loadingId).classList.add('d-none');
-                    document.getElementById(config.emptyId).textContent = 'Error loading data.';
-                    document.getElementById(config.emptyId).classList.remove('d-none');
-                });
-        }
-
-        // 在按钮点击时直接加载数据并打开模态框
-        document.querySelectorAll(config.buttonSelector).forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                const dataValue = this.dataset[config.dataKey];
-                loadData(dataValue);
-                modal.show();
-            });
-        });
-
-        // 模态框关闭时重置状态
-        modalEl.addEventListener('hidden.bs.modal', function() {
-            if (abortController) {
-                abortController.abort();
-                abortController = null;
-            }
-            isLoading = false;
-            document.getElementById(config.contentId).classList.add('d-none');
-            document.getElementById(config.emptyId).classList.add('d-none');
-            document.getElementById(config.bodyId).innerHTML = '';
-        });
-    }
-
-    // ========== Genre Detail Modal ==========
-    setupModalLoader({
-        modalId: 'genreDetailModal',
-        buttonSelector: '.btn-genre-detail',
-        dataKey: 'genre',
-        titleId: 'genreTitle',
-        loadingId: 'genreDetailLoading',
-        contentId: 'genreDetailContent',
-        emptyId: 'genreDetailEmpty',
-        bodyId: 'genreDetailBody',
-        emptyMessage: 'No order details found for this genre.',
-        fetchUrl: (genre) => `reports.php?ajax=genre_detail&genre=${encodeURIComponent(genre)}`,
-        renderRows: (data) => {
-            return data.map(row => `<tr>
+        const data = genreDetailsData[genre] || [];
+        if (data.length > 0) {
+            const html = data.map(row => `<tr>
                 <td><span class="badge bg-info">#${row.OrderID}</span></td>
                 <td>${row.OrderDate}</td>
                 <td>${row.CustomerName || 'Guest'}</td>
@@ -351,29 +270,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td><span class="badge bg-secondary">${row.ConditionGrade}</span></td>
                 <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
             </tr>`).join('');
+            document.getElementById('genreDetailBody').innerHTML = html;
+            document.getElementById('genreDetailContent').classList.remove('d-none');
+            document.getElementById('genreDetailEmpty').classList.add('d-none');
+        } else {
+            document.getElementById('genreDetailContent').classList.add('d-none');
+            document.getElementById('genreDetailEmpty').textContent = 'No order details found for this genre.';
+            document.getElementById('genreDetailEmpty').classList.remove('d-none');
         }
+    }
+
+    document.querySelectorAll('.btn-genre-detail').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const genre = this.dataset.genre;
+            renderGenreDetail(genre);
+            genreModal.show();
+        });
     });
 
-    // ========== Month Detail Modal ==========
+    genreModalEl.addEventListener('hidden.bs.modal', function() {
+        document.getElementById('genreDetailContent').classList.add('d-none');
+        document.getElementById('genreDetailEmpty').classList.add('d-none');
+        document.getElementById('genreDetailBody').innerHTML = '';
+    });
+
+    // ========== Month Detail Modal（预加载方式）==========
+    const monthModalEl = document.getElementById('monthDetailModal');
+    const monthModal = new bootstrap.Modal(monthModalEl);
+
     const typeBadges = {
         'POS': '<span class="badge bg-warning text-dark">POS</span>',
         'OnlinePickup': '<span class="badge bg-info">Pickup</span>',
         'OnlineSales': '<span class="badge bg-success">Shipping</span>'
     };
 
-    setupModalLoader({
-        modalId: 'monthDetailModal',
-        buttonSelector: '.btn-month-detail',
-        dataKey: 'month',
-        titleId: 'monthTitle',
-        loadingId: 'monthDetailLoading',
-        contentId: 'monthDetailContent',
-        emptyId: 'monthDetailEmpty',
-        bodyId: 'monthDetailBody',
-        emptyMessage: 'No order details found for this month.',
-        fetchUrl: (month) => `reports.php?ajax=month_detail&month=${encodeURIComponent(month)}`,
-        renderRows: (data) => {
-            return data.map(row => {
+    function renderMonthDetail(month) {
+        document.getElementById('monthTitle').textContent = month;
+        // 隐藏loading（预加载不需要）
+        document.getElementById('monthDetailLoading').classList.add('d-none');
+
+        const data = monthDetailsData[month] || [];
+        if (data.length > 0) {
+            const html = data.map(row => {
                 const typeBadge = typeBadges[row.OrderCategory] || '<span class="badge bg-secondary">Other</span>';
                 return `<tr>
                     <td><span class="badge bg-info">#${row.OrderID}</span></td>
@@ -385,7 +324,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td class="text-end text-success">¥${parseFloat(row.PriceAtSale).toFixed(2)}</td>
                 </tr>`;
             }).join('');
+            document.getElementById('monthDetailBody').innerHTML = html;
+            document.getElementById('monthDetailContent').classList.remove('d-none');
+            document.getElementById('monthDetailEmpty').classList.add('d-none');
+        } else {
+            document.getElementById('monthDetailContent').classList.add('d-none');
+            document.getElementById('monthDetailEmpty').textContent = 'No order details found for this month.';
+            document.getElementById('monthDetailEmpty').classList.remove('d-none');
         }
+    }
+
+    document.querySelectorAll('.btn-month-detail').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const month = this.dataset.month;
+            renderMonthDetail(month);
+            monthModal.show();
+        });
+    });
+
+    monthModalEl.addEventListener('hidden.bs.modal', function() {
+        document.getElementById('monthDetailContent').classList.add('d-none');
+        document.getElementById('monthDetailEmpty').classList.add('d-none');
+        document.getElementById('monthDetailBody').innerHTML = '';
     });
 });
 </script>

@@ -14,6 +14,7 @@ $shopType = $_SESSION['user']['ShopType'] ?? 'Retail';
 $isWarehouse = ($shopType === 'Warehouse');
 $type = $_GET['type'] ?? 'all';
 
+
 if (!$shopId) {
     header('Location: dashboard.php');
     exit;
@@ -40,6 +41,7 @@ switch ($type) {
         $color = 'info';
         break;
     case 'POS':
+
         $orders = DBProcedures::getShopOrderDetails($pdo, $shopId, 'POS');
         $title = 'POS In-Store Sales';
         $icon = 'fa-cash-register';

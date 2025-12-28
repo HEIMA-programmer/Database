@@ -324,10 +324,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Price modal - 使用 Bootstrap 原生事件（不手动创建实例）
     const priceModalEl = document.getElementById('priceModal');
+    let priceAbortController = null;
 
     // 模态框打开时加载数据
     priceModalEl.addEventListener('show.bs.modal', function(event) {
         const btn = event.relatedTarget;
+        if (!btn) return; // 安全检查
+
         const releaseId = btn.dataset.releaseId;
         const releaseTitle = btn.dataset.releaseTitle;
 
@@ -338,7 +341,15 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceSubmitBtn').disabled = true;
 
-        fetch(`products.php?ajax=stock_prices&release_id=${releaseId}`)
+        // 取消之前的请求
+        if (priceAbortController) {
+            priceAbortController.abort();
+        }
+        priceAbortController = new AbortController();
+
+        fetch(`products.php?ajax=stock_prices&release_id=${releaseId}`, {
+            signal: priceAbortController.signal
+        })
             .then(res => res.json())
             .then(data => {
                 document.getElementById('priceLoading').classList.add('d-none');
@@ -394,6 +405,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(err => {
+                if (err.name === 'AbortError') return; // 请求被取消，忽略
                 document.getElementById('priceLoading').classList.add('d-none');
                 document.getElementById('priceEmpty').textContent = 'Error loading stock data.';
                 document.getElementById('priceEmpty').classList.remove('d-none');
@@ -402,6 +414,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 模态框关闭时重置状态
     priceModalEl.addEventListener('hidden.bs.modal', function() {
+        // 取消进行中的请求
+        if (priceAbortController) {
+            priceAbortController.abort();
+            priceAbortController = null;
+        }
         document.getElementById('priceLoading').classList.remove('d-none');
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');

@@ -136,8 +136,6 @@ require_once __DIR__ . '/../../includes/header.php';
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
                         <button class="btn btn-sm btn-outline-warning price-btn"
-                                data-bs-toggle="modal"
-                                data-bs-target="#priceModal"
                                 data-release-id="<?= $r['ReleaseID'] ?>"
                                 data-release-title="<?= h($r['Title']) ?>"
                                 title="Adjust Prices">
@@ -328,43 +326,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Price modal - 使用双重数据保存机制确保可靠性
+    // Price modal - 完全由 click 事件驱动，不依赖 Bootstrap 事件
     const priceModalEl = document.getElementById('priceModal');
+    const priceModal = new bootstrap.Modal(priceModalEl);
     let priceAbortController = null;
-    let pendingPriceData = null;  // 保存待加载的数据
+    let isLoading = false;
 
-    // 在按钮点击时保存数据（作为 relatedTarget 的后备）
-    document.querySelectorAll('.price-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            pendingPriceData = {
-                releaseId: this.dataset.releaseId,
-                releaseTitle: this.dataset.releaseTitle
-            };
-        });
-    });
-
-    // 模态框打开时加载数据
-    priceModalEl.addEventListener('show.bs.modal', function(event) {
-        // 优先使用 relatedTarget，如果不可用则使用保存的数据
-        const btn = event.relatedTarget;
-        const releaseId = btn?.dataset?.releaseId || pendingPriceData?.releaseId;
-        const releaseTitle = btn?.dataset?.releaseTitle || pendingPriceData?.releaseTitle;
-
-        if (!releaseId) {
-            // 如果无法获取数据，显示错误信息
-            document.getElementById('priceLoading').classList.add('d-none');
-            document.getElementById('priceContent').classList.add('d-none');
-            document.getElementById('priceEmpty').textContent = 'Unable to load data. Please close and try again.';
-            document.getElementById('priceEmpty').classList.remove('d-none');
-            document.getElementById('priceSubmitBtn').disabled = true;
-            return;
-        }
+    function loadPriceData(releaseId, releaseTitle) {
+        if (!releaseId || isLoading) return;
+        isLoading = true;
 
         document.getElementById('priceModalTitle').textContent = releaseTitle || '';
         document.getElementById('price_release_id').value = releaseId;
         document.getElementById('priceLoading').classList.remove('d-none');
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
+        document.getElementById('priceTableBody').innerHTML = '';
         document.getElementById('priceSubmitBtn').disabled = true;
 
         // 取消之前的请求
@@ -378,6 +355,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
             .then(res => res.json())
             .then(data => {
+                isLoading = false;
                 document.getElementById('priceLoading').classList.add('d-none');
 
                 if (data.success && data.data.length > 0) {
@@ -432,11 +410,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(err => {
+                isLoading = false;
                 if (err.name === 'AbortError') return;
                 document.getElementById('priceLoading').classList.add('d-none');
                 document.getElementById('priceEmpty').textContent = 'Error loading stock data.';
                 document.getElementById('priceEmpty').classList.remove('d-none');
             });
+    }
+
+    // 在按钮点击时直接加载数据并打开模态框
+    document.querySelectorAll('.price-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const releaseId = this.dataset.releaseId;
+            const releaseTitle = this.dataset.releaseTitle;
+            loadPriceData(releaseId, releaseTitle);
+            priceModal.show();
+        });
     });
 
     // 模态框关闭时重置状态
@@ -445,12 +435,11 @@ document.addEventListener('DOMContentLoaded', function() {
             priceAbortController.abort();
             priceAbortController = null;
         }
+        isLoading = false;
         document.getElementById('priceContent').classList.add('d-none');
         document.getElementById('priceEmpty').classList.add('d-none');
         document.getElementById('priceTableBody').innerHTML = '';
         document.getElementById('priceSubmitBtn').disabled = true;
-        // 清除待处理数据
-        pendingPriceData = null;
     });
 });
 </script>

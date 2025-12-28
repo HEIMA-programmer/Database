@@ -264,11 +264,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.style.removeProperty('padding-right');
         document.body.style.removeProperty('overflow');
         
-        // 销毁实例，下次点击时重新创建
-        const instance = bootstrap.Modal.getInstance(genreModalEl);
-        if (instance) {
-            instance.dispose();
-        }
     });
 
 
@@ -332,11 +327,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.style.removeProperty('padding-right');
         document.body.style.removeProperty('overflow');
         
-        // 销毁实例
-        const instance = bootstrap.Modal.getInstance(monthModalEl);
-        if (instance) {
-            instance.dispose();
-        }
     });
 
 

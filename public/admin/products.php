@@ -337,11 +337,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.style.removeProperty('padding-right');
         document.body.style.removeProperty('overflow');
         
-        // 销毁实例
-        const instance = bootstrap.Modal.getInstance(priceModalEl);
-        if (instance) {
-            instance.dispose();
-        }
     });
 
 

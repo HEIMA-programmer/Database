@@ -34,41 +34,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     // 【新增】处理店铺间调货确认（源店铺发货）
+    // 【修复】支持批量处理多个TransferID
     if ($action === 'confirm_transfer' || $action === 'cancel_transfer') {
-        $transferId = (int)($_POST['transfer_id'] ?? 0);
+        $transferIds = $_POST['transfer_ids'] ?? '';
+        $transferIdArray = array_filter(array_map('intval', explode(',', $transferIds)));
 
-        // 验证调拨记录属于本店铺（作为源店铺）
-        $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND FromShopID = ?");
-        $stmt->execute([$transferId, $shopId]);
-        $transfer = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (empty($transferIdArray)) {
+            flash("No transfer IDs provided.", 'danger');
+            header('Location: fulfillment.php?tab=transfers');
+            exit;
+        }
 
-        if ($transfer) {
-            try {
-                if ($action === 'confirm_transfer' && $transfer['Status'] === 'Pending') {
-                    $pdo->beginTransaction();
+        try {
+            $pdo->beginTransaction();
+            $processedCount = 0;
 
-                    // 更新调拨状态为InTransit
-                    $stmt = $pdo->prepare("UPDATE InventoryTransfer SET Status = 'InTransit' WHERE TransferID = ?");
-                    $stmt->execute([$transferId]);
+            foreach ($transferIdArray as $transferId) {
+                // 验证调拨记录属于本店铺（作为源店铺）
+                $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND FromShopID = ?");
+                $stmt->execute([$transferId, $shopId]);
+                $transfer = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                    // 更新库存状态为InTransit
-                    $stmt = $pdo->prepare("UPDATE StockItem SET Status = 'InTransit' WHERE StockItemID = ?");
-                    $stmt->execute([$transfer['StockItemID']]);
+                if ($transfer && $transfer['Status'] === 'Pending') {
+                    if ($action === 'confirm_transfer') {
+                        // 更新调拨状态为InTransit
+                        $stmt = $pdo->prepare("UPDATE InventoryTransfer SET Status = 'InTransit' WHERE TransferID = ?");
+                        $stmt->execute([$transferId]);
 
-                    $pdo->commit();
-                    flash("Transfer #$transferId confirmed and shipped.", 'success');
-                } elseif ($action === 'cancel_transfer' && $transfer['Status'] === 'Pending') {
-                    // 取消调拨（删除记录）
-                    $stmt = $pdo->prepare("DELETE FROM InventoryTransfer WHERE TransferID = ?");
-                    $stmt->execute([$transferId]);
-                    flash("Transfer #$transferId cancelled.", 'info');
+                        // 更新库存状态为InTransit
+                        $stmt = $pdo->prepare("UPDATE StockItem SET Status = 'InTransit' WHERE StockItemID = ?");
+                        $stmt->execute([$transfer['StockItemID']]);
+                        $processedCount++;
+                    } elseif ($action === 'cancel_transfer') {
+                        // 取消调拨（删除记录）
+                        $stmt = $pdo->prepare("DELETE FROM InventoryTransfer WHERE TransferID = ?");
+                        $stmt->execute([$transferId]);
+                        $processedCount++;
+                    }
                 }
-            } catch (Exception $e) {
-                if ($pdo->inTransaction()) $pdo->rollBack();
-                flash("Error: " . $e->getMessage(), 'danger');
             }
-        } else {
-            flash("Transfer not found or not from your store.", 'danger');
+
+            $pdo->commit();
+            if ($action === 'confirm_transfer') {
+                flash("$processedCount item(s) confirmed and shipped.", 'success');
+            } else {
+                flash("$processedCount transfer(s) cancelled.", 'info');
+            }
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            flash("Error: " . $e->getMessage(), 'danger');
         }
 
         header('Location: fulfillment.php?tab=transfers');
@@ -76,29 +90,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // 【新增】处理目标店铺收货确认
+    // 【修复】支持批量处理多个TransferID
     if ($action === 'receive_transfer') {
-        $transferId = (int)($_POST['transfer_id'] ?? 0);
+        $transferIds = $_POST['transfer_ids'] ?? '';
+        $transferIdArray = array_filter(array_map('intval', explode(',', $transferIds)));
 
-        // 验证调拨记录属于本店铺（作为目标店铺）
-        $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND ToShopID = ?");
-        $stmt->execute([$transferId, $shopId]);
-        $transfer = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (empty($transferIdArray)) {
+            flash("No transfer IDs provided.", 'danger');
+            header('Location: fulfillment.php?tab=receiving');
+            exit;
+        }
 
-        if ($transfer && $transfer['Status'] === 'InTransit') {
-            try {
-                $pdo->beginTransaction();
+        try {
+            $pdo->beginTransaction();
+            $processedCount = 0;
 
-                // 调用存储过程完成调拨（触发器会自动更新库存位置和状态）
-                DBProcedures::completeTransfer($pdo, $transferId, $employeeId);
+            foreach ($transferIdArray as $transferId) {
+                // 验证调拨记录属于本店铺（作为目标店铺）
+                $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND ToShopID = ?");
+                $stmt->execute([$transferId, $shopId]);
+                $transfer = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                $pdo->commit();
-                flash("Transfer #$transferId received successfully. Stock has been added to your inventory.", 'success');
-            } catch (Exception $e) {
-                if ($pdo->inTransaction()) $pdo->rollBack();
-                flash("Error: " . $e->getMessage(), 'danger');
+                if ($transfer && $transfer['Status'] === 'InTransit') {
+                    // 调用存储过程完成调拨（触发器会自动更新库存位置和状态）
+                    DBProcedures::completeTransfer($pdo, $transferId, $employeeId);
+                    $processedCount++;
+                }
             }
-        } else {
-            flash("Transfer not found, not addressed to your store, or not in transit.", 'danger');
+
+            $pdo->commit();
+            flash("$processedCount item(s) received successfully. Stock has been added to your inventory.", 'success');
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            flash("Error: " . $e->getMessage(), 'danger');
         }
 
         header('Location: fulfillment.php?tab=receiving');
@@ -214,60 +238,70 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 }
 
 // 【新增】获取待发货的店铺间调货记录（本店作为源店铺）
+// 【修复】按专辑+条件+目标店铺合并显示，而不是每个StockItem单独显示
 $pendingTransfers = [];
 $transferStmt = $pdo->prepare("
     SELECT
-        it.TransferID,
-        it.StockItemID,
+        MIN(it.TransferID) as FirstTransferID,
+        GROUP_CONCAT(it.TransferID) as TransferIDs,
         it.FromShopID,
         it.ToShopID,
         it.Status,
-        it.TransferDate,
+        MIN(it.TransferDate) as TransferDate,
         from_shop.Name as FromShopName,
         to_shop.Name as ToShopName,
+        r.ReleaseID,
         r.Title as ReleaseTitle,
         r.ArtistName,
         si.ConditionGrade,
-        si.UnitPrice
+        MIN(si.UnitPrice) as UnitPrice,
+        COUNT(*) as Quantity
     FROM InventoryTransfer it
     JOIN Shop from_shop ON it.FromShopID = from_shop.ShopID
     JOIN Shop to_shop ON it.ToShopID = to_shop.ShopID
     JOIN StockItem si ON it.StockItemID = si.StockItemID
     JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
     WHERE it.FromShopID = ? AND it.Status = 'Pending'
-    ORDER BY it.TransferDate DESC
+    GROUP BY it.FromShopID, it.ToShopID, r.ReleaseID, si.ConditionGrade, it.Status,
+             from_shop.Name, to_shop.Name, r.Title, r.ArtistName
+    ORDER BY MIN(it.TransferDate) DESC
 ");
 $transferStmt->execute([$shopId]);
 $pendingTransfers = $transferStmt->fetchAll(PDO::FETCH_ASSOC);
-$pendingTransferCount = count($pendingTransfers);
+$pendingTransferCount = array_sum(array_column($pendingTransfers, 'Quantity'));
 
 // 【新增】获取待接收的店铺间调货记录（本店作为目标店铺）
+// 【修复】按专辑+条件+来源店铺合并显示
 $incomingTransfers = [];
 $incomingStmt = $pdo->prepare("
     SELECT
-        it.TransferID,
-        it.StockItemID,
+        MIN(it.TransferID) as FirstTransferID,
+        GROUP_CONCAT(it.TransferID) as TransferIDs,
         it.FromShopID,
         it.ToShopID,
         it.Status,
-        it.TransferDate,
+        MIN(it.TransferDate) as TransferDate,
         from_shop.Name as FromShopName,
         to_shop.Name as ToShopName,
+        r.ReleaseID,
         r.Title as ReleaseTitle,
         r.ArtistName,
         si.ConditionGrade,
-        si.UnitPrice
+        MIN(si.UnitPrice) as UnitPrice,
+        COUNT(*) as Quantity
     FROM InventoryTransfer it
     JOIN Shop from_shop ON it.FromShopID = from_shop.ShopID
     JOIN Shop to_shop ON it.ToShopID = to_shop.ShopID
     JOIN StockItem si ON it.StockItemID = si.StockItemID
     JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
     WHERE it.ToShopID = ? AND it.Status = 'InTransit'
-    ORDER BY it.TransferDate DESC
+    GROUP BY it.FromShopID, it.ToShopID, r.ReleaseID, si.ConditionGrade, it.Status,
+             from_shop.Name, to_shop.Name, r.Title, r.ArtistName
+    ORDER BY MIN(it.TransferDate) DESC
 ");
 $incomingStmt->execute([$shopId]);
 $incomingTransfers = $incomingStmt->fetchAll(PDO::FETCH_ASSOC);
-$incomingTransferCount = count($incomingTransfers);
+$incomingTransferCount = array_sum(array_column($incomingTransfers, 'Quantity'));
 
 // 当前标签页
 $currentTab = $_GET['tab'] ?? 'orders';
@@ -490,8 +524,9 @@ require_once __DIR__ . '/../../includes/header.php';
                 <div class="card bg-dark border-info h-100">
                     <div class="card-header bg-dark border-info d-flex justify-content-between align-items-center">
                         <div>
-                            <strong class="text-info">调货 #<?= $transfer['TransferID'] ?></strong>
+                            <strong class="text-info">调货批次</strong>
                             <span class="badge bg-warning text-dark ms-2">待发货</span>
+                            <span class="badge bg-info ms-1"><?= $transfer['Quantity'] ?> 张</span>
                         </div>
                         <small class="text-muted"><?= date('M d, H:i', strtotime($transfer['TransferDate'])) ?></small>
                     </div>
@@ -520,12 +555,16 @@ require_once __DIR__ . '/../../includes/header.php';
                         </div>
 
                         <div class="row">
-                            <div class="col-6">
+                            <div class="col-4">
                                 <small class="text-muted">成色</small>
                                 <div><span class="badge bg-secondary"><?= h($transfer['ConditionGrade']) ?></span></div>
                             </div>
-                            <div class="col-6 text-end">
-                                <small class="text-muted">价格</small>
+                            <div class="col-4 text-center">
+                                <small class="text-muted">数量</small>
+                                <div class="text-warning fw-bold fs-5"><?= $transfer['Quantity'] ?></div>
+                            </div>
+                            <div class="col-4 text-end">
+                                <small class="text-muted">单价</small>
                                 <div class="text-success fw-bold"><?= formatPrice($transfer['UnitPrice']) ?></div>
                             </div>
                         </div>
@@ -534,17 +573,17 @@ require_once __DIR__ . '/../../includes/header.php';
                     <div class="card-footer bg-dark border-info">
                         <div class="d-flex gap-2">
                             <form method="POST" class="flex-grow-1">
-                                <input type="hidden" name="transfer_id" value="<?= $transfer['TransferID'] ?>">
+                                <input type="hidden" name="transfer_ids" value="<?= h($transfer['TransferIDs']) ?>">
                                 <input type="hidden" name="action" value="confirm_transfer">
                                 <button type="submit" class="btn btn-info btn-sm w-100">
-                                    <i class="fa-solid fa-truck me-1"></i>确认发货
+                                    <i class="fa-solid fa-truck me-1"></i>确认发货 (<?= $transfer['Quantity'] ?> 张)
                                 </button>
                             </form>
                             <form method="POST">
-                                <input type="hidden" name="transfer_id" value="<?= $transfer['TransferID'] ?>">
+                                <input type="hidden" name="transfer_ids" value="<?= h($transfer['TransferIDs']) ?>">
                                 <input type="hidden" name="action" value="cancel_transfer">
                                 <button type="submit" class="btn btn-outline-danger btn-sm"
-                                        onclick="return confirm('确定要取消此调货请求吗？')">
+                                        onclick="return confirm('确定要取消这 <?= $transfer['Quantity'] ?> 张的调货请求吗？')">
                                     <i class="fa-solid fa-ban me-1"></i>取消
                                 </button>
                             </form>
@@ -576,8 +615,9 @@ require_once __DIR__ . '/../../includes/header.php';
                 <div class="card bg-dark border-success h-100">
                     <div class="card-header bg-dark border-success d-flex justify-content-between align-items-center">
                         <div>
-                            <strong class="text-success">调货 #<?= $transfer['TransferID'] ?></strong>
+                            <strong class="text-success">调货批次</strong>
                             <span class="badge bg-primary ms-2">运输中</span>
+                            <span class="badge bg-success ms-1"><?= $transfer['Quantity'] ?> 张</span>
                         </div>
                         <small class="text-muted"><?= date('M d, H:i', strtotime($transfer['TransferDate'])) ?></small>
                     </div>
@@ -606,12 +646,16 @@ require_once __DIR__ . '/../../includes/header.php';
                         </div>
 
                         <div class="row">
-                            <div class="col-6">
+                            <div class="col-4">
                                 <small class="text-muted">成色</small>
                                 <div><span class="badge bg-secondary"><?= h($transfer['ConditionGrade']) ?></span></div>
                             </div>
-                            <div class="col-6 text-end">
-                                <small class="text-muted">价格</small>
+                            <div class="col-4 text-center">
+                                <small class="text-muted">数量</small>
+                                <div class="text-warning fw-bold fs-5"><?= $transfer['Quantity'] ?></div>
+                            </div>
+                            <div class="col-4 text-end">
+                                <small class="text-muted">单价</small>
                                 <div class="text-success fw-bold"><?= formatPrice($transfer['UnitPrice']) ?></div>
                             </div>
                         </div>
@@ -619,10 +663,10 @@ require_once __DIR__ . '/../../includes/header.php';
 
                     <div class="card-footer bg-dark border-success">
                         <form method="POST" class="d-grid">
-                            <input type="hidden" name="transfer_id" value="<?= $transfer['TransferID'] ?>">
+                            <input type="hidden" name="transfer_ids" value="<?= h($transfer['TransferIDs']) ?>">
                             <input type="hidden" name="action" value="receive_transfer">
                             <button type="submit" class="btn btn-success">
-                                <i class="fa-solid fa-check me-1"></i>确认收货
+                                <i class="fa-solid fa-check me-1"></i>确认收货 (<?= $transfer['Quantity'] ?> 张)
                             </button>
                         </form>
                     </div>

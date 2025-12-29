@@ -144,63 +144,93 @@ require_once __DIR__ . '/../../includes/header.php';
     <?php if (empty($items)): ?>
         <div class="col-12 text-center py-5">
             <div class="display-1 text-secondary mb-3"><i class="fa-solid fa-compact-disc"></i></div>
-            <h3 class="text-white">No records found at this location.</h3>
-            <p class="text-muted">Try a different store or adjust your search filters.</p>
+            <h3 class="text-white">No records found.</h3>
+            <p class="text-muted">Try adjusting your search filters.</p>
             <a href="catalog.php?shop_id=<?= $selectedShopId ?>" class="btn btn-warning mt-3">Clear Filters</a>
         </div>
     <?php else: ?>
         <?php foreach ($items as $item): ?>
+            <?php
+            // 判断是否有库存
+            $hasStock = $item['TotalAvailable'] > 0;
+            $cardClass = $hasStock ? 'catalog-card' : 'catalog-card out-of-stock';
+            ?>
             <div class="col">
                 <a href="release.php?id=<?= $item['ReleaseID'] ?>&shop_id=<?= $selectedShopId ?>" class="text-decoration-none">
-                    <div class="card h-100 border-0 catalog-card">
+                    <div class="card h-100 border-0 <?= $cardClass ?>">
                         <div class="position-relative pt-3">
-                            <div class="vinyl-placeholder">
+                            <div class="vinyl-placeholder <?= $hasStock ? '' : 'vinyl-disabled' ?>">
                                 <div class="vinyl-center">
                                     <div>Retro<br>Echo</div>
                                 </div>
                             </div>
-                            <span class="position-absolute top-0 end-0 m-2 badge bg-dark border border-secondary text-warning">
+                            <span class="position-absolute top-0 end-0 m-2 badge bg-dark border border-secondary <?= $hasStock ? 'text-warning' : 'text-muted' ?>">
                                 <?= h($item['Genre']) ?>
                             </span>
+                            <?php if (!$hasStock): ?>
+                                <span class="position-absolute top-0 start-0 m-2 badge bg-danger">
+                                    <i class="fa-solid fa-ban me-1"></i>无库存
+                                </span>
+                            <?php endif; ?>
                         </div>
 
                         <div class="card-body text-center">
-                            <h5 class="card-title text-white mb-1 text-truncate" title="<?= h($item['Title']) ?>">
+                            <h5 class="card-title <?= $hasStock ? 'text-white' : 'text-muted' ?> mb-1 text-truncate" title="<?= h($item['Title']) ?>">
                                 <?= h($item['Title']) ?>
                             </h5>
-                            <p class="card-text text-warning small mb-3"><?= h($item['ArtistName']) ?></p>
+                            <p class="card-text <?= $hasStock ? 'text-warning' : 'text-secondary' ?> small mb-3"><?= h($item['ArtistName']) ?></p>
 
-                            <div class="d-flex justify-content-center gap-1 mb-3 flex-wrap">
-                                <?php
-                                    $conditions = explode(', ', $item['AvailableConditions']);
-                                    foreach ($conditions as $cond):
-                                        $condClass = match($cond) {
-                                            'New', 'Mint' => 'bg-success text-white',
-                                            'NM', 'VG+'   => 'bg-info text-dark',
-                                            default       => 'bg-secondary text-light'
-                                        };
-                                ?>
-                                    <span class="badge <?= $condClass ?> border border-dark rounded-pill" style="font-size: 0.65rem;">
-                                        <?= h($cond) ?>
+                            <?php if ($hasStock): ?>
+                                <div class="d-flex justify-content-center gap-1 mb-3 flex-wrap">
+                                    <?php
+                                        $conditions = explode(',', $item['AvailableConditions']);
+                                        foreach ($conditions as $cond):
+                                            $cond = trim($cond);
+                                            if (!$cond) continue;
+                                            $condClass = match($cond) {
+                                                'New', 'Mint' => 'bg-success text-white',
+                                                'NM', 'VG+'   => 'bg-info text-dark',
+                                                default       => 'bg-secondary text-light'
+                                            };
+                                    ?>
+                                        <span class="badge <?= $condClass ?> border border-dark rounded-pill" style="font-size: 0.65rem;">
+                                            <?= h($cond) ?>
+                                        </span>
+                                    <?php endforeach; ?>
+                                </div>
+
+                                <?php if ($item['MinPrice'] == $item['MaxPrice']): ?>
+                                    <h4 class="fw-bold mb-2"><?= formatPrice($item['MinPrice']) ?></h4>
+                                <?php else: ?>
+                                    <h4 class="fw-bold mb-2"><?= formatPrice($item['MinPrice']) ?> - <?= formatPrice($item['MaxPrice']) ?></h4>
+                                <?php endif; ?>
+
+                                <div class="text-success small mb-2">
+                                    <i class="fa-solid fa-box me-1"></i><?= $item['TotalAvailable'] ?> in stock
+                                </div>
+
+                                <div class="d-grid">
+                                    <span class="btn btn-outline-warning btn-sm">
+                                        <i class="fa-solid fa-eye me-1"></i> View Details
                                     </span>
-                                <?php endforeach; ?>
-                            </div>
-
-                            <?php if ($item['MinPrice'] == $item['MaxPrice']): ?>
-                                <h4 class="fw-bold mb-2"><?= formatPrice($item['MinPrice']) ?></h4>
+                                </div>
                             <?php else: ?>
-                                <h4 class="fw-bold mb-2"><?= formatPrice($item['MinPrice']) ?> - <?= formatPrice($item['MaxPrice']) ?></h4>
+                                <div class="mb-3">
+                                    <span class="badge bg-secondary text-muted">--</span>
+                                </div>
+
+                                <h4 class="fw-bold mb-2 text-muted">--</h4>
+
+                                <div class="text-danger small mb-2">
+                                    <i class="fa-solid fa-box-open me-1"></i>0 in stock
+                                </div>
+
+                                <div class="d-grid">
+                                    <span class="btn btn-outline-secondary btn-sm disabled">
+                                        <i class="fa-solid fa-eye me-1"></i> View Details
+                                    </span>
+                                </div>
                             <?php endif; ?>
-
-                            <div class="text-muted small mb-2">
-                                <i class="fa-solid fa-box me-1"></i><?= $item['TotalAvailable'] ?> in stock
-                            </div>
-
-                            <div class="d-grid">
-                                <span class="btn btn-outline-warning btn-sm">
-                                    <i class="fa-solid fa-eye me-1"></i> View Details
-                                </span>
-                            </div>
                         </div>
                     </div>
                 </a>
@@ -216,6 +246,19 @@ require_once __DIR__ . '/../../includes/header.php';
 .catalog-card:hover {
     transform: translateY(-5px);
     box-shadow: 0 8px 25px rgba(255, 193, 7, 0.15);
+}
+/* 无库存专辑样式 */
+.catalog-card.out-of-stock {
+    opacity: 0.6;
+    background-color: #1a1a1a !important;
+}
+.catalog-card.out-of-stock:hover {
+    transform: none;
+    box-shadow: none;
+}
+.vinyl-disabled {
+    filter: grayscale(100%);
+    opacity: 0.5;
 }
 </style>
 

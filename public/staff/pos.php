@@ -184,35 +184,51 @@ if (!empty($_SESSION['pos_cart'])) {
     $_SESSION['pos_cart'] = array_values(array_intersect($_SESSION['pos_cart'], $availableIds));
 }
 
-// 获取可用库存（用于搜索添加）
-// 【重构】按专辑和成色分组，显示数量
+// 【修改】获取所有专辑（默认显示，无需搜索）
+// 按专辑和成色分组，显示数量，有库存的优先显示
 $search = $_GET['q'] ?? '';
-$availableStock = [];
-$availableStockGrouped = [];
-if ($search) {
-    // 获取分组后的库存（排除已在购物车中的）
-    $stmt = $pdo->prepare("
-        SELECT
-            r.ReleaseID,
-            r.Title,
-            r.ArtistName,
-            si.ConditionGrade,
-            si.UnitPrice,
-            COUNT(*) as AvailableQuantity
-        FROM StockItem si
-        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-        WHERE si.ShopID = ? AND si.Status = 'Available'
-        AND (r.Title LIKE ? OR r.ArtistName LIKE ?)
-        GROUP BY r.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade, si.UnitPrice
-        ORDER BY r.Title, FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG')
-        LIMIT 50
-    ");
-    $searchParam = "%$search%";
-    $stmt->execute([$shopId, $searchParam, $searchParam]);
-    $availableStockGrouped = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 计算每组中已在购物车的数量
-    foreach ($availableStockGrouped as &$group) {
+// 构建搜索条件
+$searchWhere = "";
+$searchParams = [$shopId];
+if ($search) {
+    $searchWhere = "AND (r.Title LIKE ? OR r.ArtistName LIKE ?)";
+    $searchParam = "%$search%";
+    $searchParams[] = $searchParam;
+    $searchParams[] = $searchParam;
+}
+
+// 【修改】获取所有专辑，包括无库存的，按库存数量排序
+$stmt = $pdo->prepare("
+    SELECT
+        r.ReleaseID,
+        r.Title,
+        r.ArtistName,
+        r.Genre,
+        COALESCE(stock.ConditionGrade, '-') as ConditionGrade,
+        COALESCE(stock.UnitPrice, 0) as UnitPrice,
+        COALESCE(stock.AvailableQuantity, 0) as AvailableQuantity
+    FROM ReleaseAlbum r
+    LEFT JOIN (
+        SELECT
+            ReleaseID,
+            ConditionGrade,
+            UnitPrice,
+            COUNT(*) as AvailableQuantity
+        FROM StockItem
+        WHERE ShopID = ? AND Status = 'Available'
+        GROUP BY ReleaseID, ConditionGrade, UnitPrice
+    ) stock ON r.ReleaseID = stock.ReleaseID
+    WHERE 1=1 $searchWhere
+    ORDER BY stock.AvailableQuantity DESC, r.Title ASC, FIELD(stock.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG')
+    LIMIT 100
+");
+$stmt->execute($searchParams);
+$availableStockGrouped = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// 计算每组中已在购物车的数量
+foreach ($availableStockGrouped as &$group) {
+    if ($group['AvailableQuantity'] > 0 && $group['ConditionGrade'] !== '-') {
         // 获取该组的所有库存ID
         $idsStmt = $pdo->prepare("
             SELECT StockItemID FROM StockItem
@@ -226,9 +242,13 @@ if ($search) {
         $group['InCartCount'] = $inCartCount;
         $group['RemainingQuantity'] = $group['AvailableQuantity'] - $inCartCount;
         $group['AllStockIds'] = $allIds;
+    } else {
+        $group['InCartCount'] = 0;
+        $group['RemainingQuantity'] = 0;
+        $group['AllStockIds'] = [];
     }
-    unset($group);
 }
+unset($group);
 
 // 【修复】获取客户列表（移除不存在的Phone字段）
 $stmt = $pdo->prepare("SELECT CustomerID, Name, Email FROM Customer ORDER BY Name LIMIT 100");
@@ -263,51 +283,69 @@ require_once __DIR__ . '/../../includes/header.php';
             <div class="card-body">
                 <form method="GET" class="mb-3">
                     <div class="input-group">
-                        <input type="text" name="q" class="form-control bg-dark text-white border-secondary" 
-                               placeholder="Search by title or artist..." value="<?= h($search) ?>">
+                        <input type="text" name="q" class="form-control bg-dark text-white border-secondary"
+                               placeholder="Search to filter by title or artist..." value="<?= h($search) ?>">
                         <button type="submit" class="btn btn-warning">
                             <i class="fa-solid fa-search"></i>
                         </button>
+                        <?php if ($search): ?>
+                            <a href="pos.php" class="btn btn-outline-secondary">
+                                <i class="fa-solid fa-times"></i>
+                            </a>
+                        <?php endif; ?>
                     </div>
+                    <small class="text-muted">Showing all albums. Use search to filter results.</small>
                 </form>
-                
-                <?php if ($search && !empty($availableStockGrouped)): ?>
-                    <!-- 【重构】分组显示，支持数量选择 -->
-                    <div class="list-group" id="searchResults">
+
+                <?php if (!empty($availableStockGrouped)): ?>
+                    <!-- 【重构】分组显示，支持数量选择，默认显示所有 -->
+                    <div class="list-group" id="searchResults" style="max-height: 500px; overflow-y: auto;">
                         <?php foreach ($availableStockGrouped as $group): ?>
-                            <?php if ($group['RemainingQuantity'] > 0): ?>
-                            <div class="list-group-item bg-dark border-secondary">
+                            <?php
+                            $hasStock = $group['RemainingQuantity'] > 0;
+                            $itemClass = $hasStock ? '' : 'opacity-50';
+                            ?>
+                            <div class="list-group-item bg-dark border-secondary <?= $itemClass ?>">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <strong class="text-white"><?= h($group['Title']) ?></strong>
-                                        <span class="text-warning">- <?= h($group['ArtistName']) ?></span>
-                                        <span class="badge bg-secondary ms-2"><?= h($group['ConditionGrade']) ?></span>
-                                        <span class="badge bg-info ms-1"><?= $group['RemainingQuantity'] ?> available</span>
-                                        <?php if ($group['InCartCount'] > 0): ?>
-                                            <span class="badge bg-success ms-1"><?= $group['InCartCount'] ?> in cart</span>
+                                        <strong class="<?= $hasStock ? 'text-white' : 'text-muted' ?>"><?= h($group['Title']) ?></strong>
+                                        <span class="<?= $hasStock ? 'text-warning' : 'text-secondary' ?>">- <?= h($group['ArtistName']) ?></span>
+                                        <?php if ($group['ConditionGrade'] !== '-'): ?>
+                                            <span class="badge bg-secondary ms-2"><?= h($group['ConditionGrade']) ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($hasStock): ?>
+                                            <span class="badge bg-info ms-1"><?= $group['RemainingQuantity'] ?> available</span>
+                                            <?php if ($group['InCartCount'] > 0): ?>
+                                                <span class="badge bg-success ms-1"><?= $group['InCartCount'] ?> in cart</span>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <span class="badge bg-danger ms-1">0 in stock</span>
                                         <?php endif; ?>
                                     </div>
-                                    <div class="text-warning fw-bold"><?= formatPrice($group['UnitPrice']) ?></div>
-                                </div>
-                                <form method="POST" class="mt-2 add-item-form">
-                                    <input type="hidden" name="action" value="add_multiple">
-                                    <input type="hidden" name="release_id" value="<?= $group['ReleaseID'] ?>">
-                                    <input type="hidden" name="condition" value="<?= h($group['ConditionGrade']) ?>">
-                                    <input type="hidden" name="unit_price" value="<?= $group['UnitPrice'] ?>">
-                                    <div class="input-group input-group-sm" style="max-width: 200px; margin-left: auto;">
-                                        <span class="input-group-text bg-secondary text-white border-secondary">Qty</span>
-                                        <select name="quantity" class="form-select bg-dark text-white border-secondary">
-                                            <?php for ($i = 1; $i <= $group['RemainingQuantity']; $i++): ?>
-                                                <option value="<?= $i ?>"><?= $i ?></option>
-                                            <?php endfor; ?>
-                                        </select>
-                                        <button type="submit" class="btn btn-success">
-                                            <i class="fa-solid fa-plus me-1"></i>Add
-                                        </button>
+                                    <div class="<?= $hasStock ? 'text-warning' : 'text-muted' ?> fw-bold">
+                                        <?= $group['UnitPrice'] > 0 ? formatPrice($group['UnitPrice']) : '--' ?>
                                     </div>
-                                </form>
+                                </div>
+                                <?php if ($hasStock): ?>
+                                    <form method="POST" class="mt-2 add-item-form">
+                                        <input type="hidden" name="action" value="add_multiple">
+                                        <input type="hidden" name="release_id" value="<?= $group['ReleaseID'] ?>">
+                                        <input type="hidden" name="condition" value="<?= h($group['ConditionGrade']) ?>">
+                                        <input type="hidden" name="unit_price" value="<?= $group['UnitPrice'] ?>">
+                                        <div class="input-group input-group-sm" style="max-width: 200px; margin-left: auto;">
+                                            <span class="input-group-text bg-secondary text-white border-secondary">Qty</span>
+                                            <select name="quantity" class="form-select bg-dark text-white border-secondary">
+                                                <?php for ($i = 1; $i <= $group['RemainingQuantity']; $i++): ?>
+                                                    <option value="<?= $i ?>"><?= $i ?></option>
+                                                <?php endfor; ?>
+                                            </select>
+                                            <button type="submit" class="btn btn-success">
+                                                <i class="fa-solid fa-plus me-1"></i>Add
+                                            </button>
+                                        </div>
+                                    </form>
+                                <?php endif; ?>
                             </div>
-                            <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
 
@@ -324,7 +362,11 @@ require_once __DIR__ . '/../../includes/header.php';
                             }).then(response => {
                                 // 刷新页面但保留搜索词
                                 const currentSearch = '<?= h($search) ?>';
-                                window.location.href = 'pos.php?q=' + encodeURIComponent(currentSearch);
+                                if (currentSearch) {
+                                    window.location.href = 'pos.php?q=' + encodeURIComponent(currentSearch);
+                                } else {
+                                    window.location.href = 'pos.php';
+                                }
                             }).catch(error => {
                                 console.error('Error:', error);
                                 window.location.reload();
@@ -332,8 +374,11 @@ require_once __DIR__ . '/../../includes/header.php';
                         });
                     });
                     </script>
-                <?php elseif ($search): ?>
-                    <p class="text-muted text-center">No items found matching "<?= h($search) ?>"</p>
+                <?php else: ?>
+                    <p class="text-muted text-center py-4">
+                        <i class="fa-solid fa-compact-disc fa-3x mb-3 d-block opacity-50"></i>
+                        No albums in the system yet.
+                    </p>
                 <?php endif; ?>
             </div>
         </div>

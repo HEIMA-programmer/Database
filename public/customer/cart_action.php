@@ -31,11 +31,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $releaseId = $_POST['release_id'] ?? null;
             $condition = $_POST['condition'] ?? null;
             $quantity = $_POST['quantity'] ?? 1;
+            $shopId = $_POST['shop_id'] ?? null;
 
             if ($releaseId && $condition) {
+                // 【修复】设置或验证店铺ID
+                if ($shopId) {
+                    if (!isset($_SESSION['selected_shop_id'])) {
+                        $_SESSION['selected_shop_id'] = (int)$shopId;
+                    } elseif ($_SESSION['selected_shop_id'] != (int)$shopId) {
+                        flash('Cannot add items from different stores. Please complete or clear your current cart first.', 'danger');
+                        break;
+                    }
+                }
+
                 $result = addMultipleToCart($pdo, $releaseId, $condition, $quantity);
                 flash($result['message'], $result['success'] ? 'success' : 'warning');
-                error_log("Cart action 'add_multiple': Release #$releaseId, Condition: $condition, Qty: $quantity, Success: " . ($result['success'] ? 'Yes' : 'No'));
+                error_log("Cart action 'add_multiple': Release #$releaseId, Condition: $condition, Qty: $quantity, Shop: $shopId, Success: " . ($result['success'] ? 'Yes' : 'No'));
             }
             break;
 

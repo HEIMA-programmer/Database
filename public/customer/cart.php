@@ -72,7 +72,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash('Item removed from cart.', 'info');
             }
             break;
-            
+
+        // 【新增】批量删除同组商品
+        case 'remove_group':
+            $stockItemIds = $_POST['stock_item_ids'] ?? '';
+            if ($stockItemIds) {
+                $idsToRemove = array_map('intval', explode(',', $stockItemIds));
+                $removedCount = 0;
+                foreach ($idsToRemove as $id) {
+                    $key = array_search($id, $_SESSION['cart']);
+                    if ($key !== false) {
+                        unset($_SESSION['cart'][$key]);
+                        $removedCount++;
+                    }
+                }
+                $_SESSION['cart'] = array_values($_SESSION['cart']); // 重新索引
+                flash("$removedCount item(s) removed from cart.", 'info');
+            }
+            break;
+
         case 'clear':
             $_SESSION['cart'] = [];
             flash('Cart cleared.', 'info');
@@ -85,6 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ========== 获取购物车数据 ==========
 $cartItems = [];
+$cartItemsGrouped = []; // 【新增】分组后的购物车数据
 $total = 0;
 $shopInfo = null;
 
@@ -95,13 +114,12 @@ if (!empty($_SESSION['cart'])) {
             r.Title, r.ArtistName, s.Name as ShopName, s.Type as ShopType
         FROM StockItem si
         JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-        -- 删除 JOIN Artist 行
         JOIN Shop s ON si.ShopID = s.ShopID
         WHERE si.StockItemID IN ($placeholders) AND si.Status = 'Available'
     ");
     $stmt->execute($_SESSION['cart']);
     $cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     // 验证所有商品属于同一店铺
     $shopIds = array_unique(array_column($cartItems, 'ShopID'));
     if (count($shopIds) > 1) {
@@ -114,7 +132,7 @@ if (!empty($_SESSION['cart'])) {
         foreach ($cartItems as $item) {
             $total += $item['UnitPrice'];
         }
-        
+
         // 获取店铺信息
         if (!empty($cartItems)) {
             $shopInfo = [
@@ -123,8 +141,29 @@ if (!empty($_SESSION['cart'])) {
                 'Type' => $cartItems[0]['ShopType']
             ];
         }
+
+        // 【新增】按Release+Condition+Price分组
+        foreach ($cartItems as $item) {
+            $key = $item['ReleaseID'] . '_' . $item['ConditionGrade'] . '_' . $item['UnitPrice'];
+            if (!isset($cartItemsGrouped[$key])) {
+                $cartItemsGrouped[$key] = [
+                    'ReleaseID' => $item['ReleaseID'],
+                    'Title' => $item['Title'],
+                    'ArtistName' => $item['ArtistName'],
+                    'ConditionGrade' => $item['ConditionGrade'],
+                    'UnitPrice' => $item['UnitPrice'],
+                    'Quantity' => 1,
+                    'Subtotal' => $item['UnitPrice'],
+                    'StockItemIds' => [$item['StockItemID']]
+                ];
+            } else {
+                $cartItemsGrouped[$key]['Quantity']++;
+                $cartItemsGrouped[$key]['Subtotal'] += $item['UnitPrice'];
+                $cartItemsGrouped[$key]['StockItemIds'][] = $item['StockItemID'];
+            }
+        }
     }
-    
+
     // 移除不可用的商品
     $availableIds = array_column($cartItems, 'StockItemID');
     $removedCount = count($_SESSION['cart']) - count($availableIds);
@@ -178,41 +217,69 @@ require_once __DIR__ . '/../../includes/header.php';
                     <h5 class="mb-0 text-warning">Cart Items</h5>
                 </div>
                 <div class="card-body p-0">
+                    <!-- 【重构】使用分组后的数据显示，合并同release同condition的商品 -->
                     <table class="table table-dark mb-0">
                         <thead>
                             <tr>
                                 <th>Item</th>
                                 <th>Condition</th>
-                                <th class="text-end">Price</th>
+                                <th class="text-center">Qty</th>
+                                <th class="text-end">Unit Price</th>
+                                <th class="text-end">Subtotal</th>
                                 <th class="text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($cartItems as $item): ?>
+                            <?php foreach ($cartItemsGrouped as $group): ?>
                             <tr>
                                 <td>
-                                    <strong class="text-white"><?= h($item['Title']) ?></strong><br>
-                                    <small class="text-warning"><?= h($item['ArtistName']) ?></small>
+                                    <strong class="text-white"><?= h($group['Title']) ?></strong><br>
+                                    <small class="text-warning"><?= h($group['ArtistName']) ?></small>
                                 </td>
                                 <td>
                                     <?php
-                                    $condClass = match($item['ConditionGrade']) {
+                                    $condClass = match($group['ConditionGrade']) {
                                         'New', 'Mint' => 'bg-success',
                                         'NM', 'VG+'   => 'bg-info text-dark',
                                         default       => 'bg-secondary'
                                     };
                                     ?>
-                                    <span class="badge <?= $condClass ?>"><?= h($item['ConditionGrade']) ?></span>
+                                    <span class="badge <?= $condClass ?>"><?= h($group['ConditionGrade']) ?></span>
                                 </td>
-                                <td class="text-end text-white fw-bold"><?= formatPrice($item['UnitPrice']) ?></td>
                                 <td class="text-center">
-                                    <form method="POST" class="d-inline">
-                                        <input type="hidden" name="action" value="remove">
-                                        <input type="hidden" name="stock_item_id" value="<?= $item['StockItemID'] ?>">
-                                        <button type="submit" class="btn btn-outline-danger btn-sm">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </form>
+                                    <span class="badge bg-warning text-dark"><?= $group['Quantity'] ?></span>
+                                </td>
+                                <td class="text-end text-muted"><?= formatPrice($group['UnitPrice']) ?></td>
+                                <td class="text-end text-white fw-bold"><?= formatPrice($group['Subtotal']) ?></td>
+                                <td class="text-center">
+                                    <?php if ($group['Quantity'] == 1): ?>
+                                        <!-- 单个商品直接删除 -->
+                                        <form method="POST" class="d-inline">
+                                            <input type="hidden" name="action" value="remove">
+                                            <input type="hidden" name="stock_item_id" value="<?= $group['StockItemIds'][0] ?>">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <!-- 多个商品提供删除一个或全部的选项 -->
+                                        <div class="btn-group btn-group-sm">
+                                            <form method="POST" class="d-inline">
+                                                <input type="hidden" name="action" value="remove">
+                                                <input type="hidden" name="stock_item_id" value="<?= $group['StockItemIds'][0] ?>">
+                                                <button type="submit" class="btn btn-outline-warning btn-sm" title="Remove one">
+                                                    <i class="fa-solid fa-minus"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" class="d-inline" onsubmit="return confirm('Remove all <?= $group['Quantity'] ?> items?')">
+                                                <input type="hidden" name="action" value="remove_group">
+                                                <input type="hidden" name="stock_item_ids" value="<?= implode(',', $group['StockItemIds']) ?>">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove all">
+                                                    <i class="fa-solid fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <?php endforeach; ?>

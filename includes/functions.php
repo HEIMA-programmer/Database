@@ -673,26 +673,68 @@ function prepareDashboardData($pdo, $shopId = null) {
         $walkInStmt->execute([$shopId]);
         $walkInRevenue = $walkInStmt->fetch(PDO::FETCH_ASSOC);
 
-        // 【新增】获取采购成本 - 从供应商订单中获取本店铺的采购成本
+        // 【重构】计算当前店铺所有available库存的实时成本
+        // 成本 = 当前店内所有专辑的采购成本之和（实时，考虑调货等变动）
+        // 这确保了调货时成本会自动更新（调出则减少，调入则增加）
+        $inventoryCostStmt = $pdo->prepare("
+            SELECT
+                COALESCE(SUM(
+                    CASE
+                        WHEN si.SourceType = 'Supplier' THEN
+                            COALESCE(
+                                (SELECT sol.UnitCost
+                                 FROM SupplierOrderLine sol
+                                 WHERE sol.SupplierOrderID = si.SourceOrderID
+                                 AND sol.ReleaseID = si.ReleaseID
+                                 AND sol.ConditionGrade = si.ConditionGrade
+                                 LIMIT 1),
+                                0
+                            )
+                        WHEN si.SourceType = 'Buyback' THEN
+                            COALESCE(
+                                (SELECT bol.UnitPrice
+                                 FROM BuybackOrderLine bol
+                                 WHERE bol.BuybackOrderID = si.SourceOrderID
+                                 AND bol.ReleaseID = si.ReleaseID
+                                 AND bol.ConditionGrade = si.ConditionGrade
+                                 LIMIT 1),
+                                0
+                            )
+                        ELSE 0
+                    END
+                ), 0) as TotalInventoryCost,
+                COUNT(*) as InventoryCount
+            FROM StockItem si
+            WHERE si.ShopID = ? AND si.Status = 'Available'
+        ");
+        $inventoryCostStmt->execute([$shopId]);
+        $inventoryCost = $inventoryCostStmt->fetch(PDO::FETCH_ASSOC);
+
+        // 【保留】历史采购统计（用于显示采购订单数量）
         $procurementStmt = $pdo->prepare("
-            SELECT COALESCE(SUM(so.TotalCost), 0) as ProcurementCost, COUNT(so.SupplierOrderID) as ProcurementCount
+            SELECT COUNT(so.SupplierOrderID) as ProcurementCount
             FROM SupplierOrder so
             WHERE so.DestinationShopID = ? AND so.Status = 'Received'
         ");
         $procurementStmt->execute([$shopId]);
-        $procurementExpense = $procurementStmt->fetch(PDO::FETCH_ASSOC);
+        $procurementStats = $procurementStmt->fetch(PDO::FETCH_ASSOC);
 
-        // 计算总支出 = Buyback支出 + 采购成本
-        $totalExpense = ($expense['TotalExpense'] ?? 0) + ($procurementExpense['ProcurementCost'] ?? 0);
+        // 【重构】Total Expense = 当前库存的实时成本
+        // 这包括了从供应商采购的成本和回购的成本，且会随着调货自动更新
+        $totalInventoryCost = $inventoryCost['TotalInventoryCost'] ?? 0;
+
+        // 【保留】历史Buyback支出（用于统计显示）
+        $buybackExpense = $expense['TotalExpense'] ?? 0;
 
         return [
             'total_sales'      => $kpi['TotalSales'] ?? 0,
             'active_orders'    => $kpi['ActiveOrders'] ?? 0,
-            'total_expense'    => $totalExpense,
-            'buyback_expense'  => $expense['TotalExpense'] ?? 0,
+            'total_expense'    => $totalInventoryCost, // 【重构】使用实时库存成本
+            'buyback_expense'  => $buybackExpense,
             'buyback_count'    => $expense['BuybackCount'] ?? 0,
-            'procurement_cost' => $procurementExpense['ProcurementCost'] ?? 0,
-            'procurement_count'=> $procurementExpense['ProcurementCount'] ?? 0,
+            'procurement_cost' => $totalInventoryCost, // 【重构】显示当前库存成本
+            'procurement_count'=> $procurementStats['ProcurementCount'] ?? 0,
+            'inventory_count'  => $inventoryCost['InventoryCount'] ?? 0, // 【新增】当前库存数量
             'popular_item'     => !empty($popularItems) ? $popularItems[0] : null,
             'top_spender_name' => !empty($topCustomers) ? $topCustomers[0]['CustomerName'] : 'No Data',
             'top_customers'    => $topCustomers,
@@ -1008,6 +1050,7 @@ function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
 /**
  * 【修复】添加多个库存到购物车
  * 现在会根据用户选择的店铺来获取库存
+ * 【重构】移除10张限制，只受available数量限制
  */
 function addMultipleToCart($pdo, $releaseId, $conditionGrade, $quantity) {
     require_once __DIR__ . '/db_procedures.php';
@@ -1016,31 +1059,46 @@ function addMultipleToCart($pdo, $releaseId, $conditionGrade, $quantity) {
         $_SESSION['cart'] = [];
     }
 
-    $quantity = max(1, min(10, (int)$quantity)); // 限制1-10
+    // 【修复】移除10张限制，只需确保数量为正整数
+    $quantity = max(1, (int)$quantity);
 
     // 【修复】获取用户当前选择的店铺ID
     $shopId = $_SESSION['selected_shop_id'] ?? null;
 
-    // 获取可用库存ID（传递店铺ID参数）
-    $stockIds = DBProcedures::getAvailableStockIds($pdo, $releaseId, $conditionGrade, $quantity, $shopId);
+    // 【修复】获取该condition的可用数量，排除已在购物车中的
+    $stmt = $pdo->prepare("
+        SELECT StockItemID
+        FROM StockItem
+        WHERE ReleaseID = ? AND ConditionGrade = ? AND Status = 'Available'
+        " . ($shopId ? "AND ShopID = ?" : "") . "
+        ORDER BY StockItemID
+    ");
 
-    if (empty($stockIds)) {
-        return ['success' => false, 'message' => 'No available stock for this item.'];
-    }
-
-    $addedCount = 0;
-    foreach ($stockIds as $stockId) {
-        if (!in_array($stockId, $_SESSION['cart'])) {
-            $_SESSION['cart'][] = $stockId;
-            $addedCount++;
-        }
-    }
-
-    if ($addedCount > 0) {
-        return ['success' => true, 'message' => "$addedCount item(s) added to cart."];
+    if ($shopId) {
+        $stmt->execute([$releaseId, $conditionGrade, $shopId]);
     } else {
-        return ['success' => false, 'message' => 'Items already in cart.'];
+        $stmt->execute([$releaseId, $conditionGrade]);
     }
+    $allStockIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    // 排除已在购物车中的
+    $availableIds = array_diff($allStockIds, $_SESSION['cart']);
+
+    // 限制为可用数量
+    $quantity = min($quantity, count($availableIds));
+
+    if ($quantity <= 0) {
+        return ['success' => false, 'message' => 'No available stock for this item or all already in cart.'];
+    }
+
+    // 取需要的数量
+    $toAdd = array_slice($availableIds, 0, $quantity);
+
+    // 添加到购物车
+    $_SESSION['cart'] = array_merge($_SESSION['cart'], $toAdd);
+    $addedCount = count($toAdd);
+
+    return ['success' => true, 'message' => "$addedCount item(s) added to cart."];
 }
 
 /**

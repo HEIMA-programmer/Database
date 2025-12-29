@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ");
                 $stmt->execute([$stockItemId, $shopId]);
                 $item = $stmt->fetch(PDO::FETCH_ASSOC);
-                
+
                 if ($item && !in_array($stockItemId, $_SESSION['pos_cart'])) {
                     $_SESSION['pos_cart'][] = $stockItemId;
                     flash('Item added to sale.', 'success');
@@ -61,6 +61,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     flash('Item already in cart.', 'warning');
                 } else {
                     flash('Item not available.', 'danger');
+                }
+            }
+            break;
+
+        // 【新增】批量添加 - 按Release和Condition添加多个
+        case 'add_multiple':
+            $releaseId = (int)($_POST['release_id'] ?? 0);
+            $condition = $_POST['condition'] ?? '';
+            $unitPrice = (float)($_POST['unit_price'] ?? 0);
+            $quantity = (int)($_POST['quantity'] ?? 1);
+
+            if ($releaseId > 0 && $condition && $quantity > 0) {
+                // 获取可用的库存ID（排除已在购物车中的）
+                $stmt = $pdo->prepare("
+                    SELECT StockItemID
+                    FROM StockItem
+                    WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ? AND UnitPrice = ? AND Status = 'Available'
+                    ORDER BY StockItemID
+                ");
+                $stmt->execute([$shopId, $releaseId, $condition, $unitPrice]);
+                $allIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+                // 排除已在购物车中的
+                $availableIds = array_diff($allIds, $_SESSION['pos_cart']);
+                $toAdd = array_slice($availableIds, 0, $quantity);
+
+                if (count($toAdd) > 0) {
+                    $_SESSION['pos_cart'] = array_merge($_SESSION['pos_cart'], $toAdd);
+                    $addedCount = count($toAdd);
+                    flash("$addedCount item(s) added to sale.", 'success');
+                } else {
+                    flash('No available items to add.', 'warning');
                 }
             }
             break;
@@ -153,21 +185,49 @@ if (!empty($_SESSION['pos_cart'])) {
 }
 
 // 获取可用库存（用于搜索添加）
+// 【重构】按专辑和成色分组，显示数量
 $search = $_GET['q'] ?? '';
 $availableStock = [];
+$availableStockGrouped = [];
 if ($search) {
+    // 获取分组后的库存（排除已在购物车中的）
     $stmt = $pdo->prepare("
-        SELECT si.*, r.Title, r.ArtistName
+        SELECT
+            r.ReleaseID,
+            r.Title,
+            r.ArtistName,
+            si.ConditionGrade,
+            si.UnitPrice,
+            COUNT(*) as AvailableQuantity
         FROM StockItem si
         JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
         WHERE si.ShopID = ? AND si.Status = 'Available'
-        AND (r.Title LIKE ? OR r.ArtistName LIKE ?) -- 使用 r.ArtistName 搜索
-        ORDER BY r.Title
-        LIMIT 20
+        AND (r.Title LIKE ? OR r.ArtistName LIKE ?)
+        GROUP BY r.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade, si.UnitPrice
+        ORDER BY r.Title, FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG')
+        LIMIT 50
     ");
     $searchParam = "%$search%";
     $stmt->execute([$shopId, $searchParam, $searchParam]);
-    $availableStock = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $availableStockGrouped = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // 计算每组中已在购物车的数量
+    foreach ($availableStockGrouped as &$group) {
+        // 获取该组的所有库存ID
+        $idsStmt = $pdo->prepare("
+            SELECT StockItemID FROM StockItem
+            WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ? AND UnitPrice = ? AND Status = 'Available'
+        ");
+        $idsStmt->execute([$shopId, $group['ReleaseID'], $group['ConditionGrade'], $group['UnitPrice']]);
+        $allIds = $idsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        // 计算已在购物车中的数量
+        $inCartCount = count(array_intersect($allIds, $_SESSION['pos_cart']));
+        $group['InCartCount'] = $inCartCount;
+        $group['RemainingQuantity'] = $group['AvailableQuantity'] - $inCartCount;
+        $group['AllStockIds'] = $allIds;
+    }
+    unset($group);
 }
 
 // 【修复】获取客户列表（移除不存在的Phone字段）
@@ -211,30 +271,67 @@ require_once __DIR__ . '/../../includes/header.php';
                     </div>
                 </form>
                 
-                <?php if ($search && !empty($availableStock)): ?>
-                    <div class="list-group">
-                        <?php foreach ($availableStock as $item): ?>
-                            <?php if (!in_array($item['StockItemID'], $_SESSION['pos_cart'])): ?>
-                            <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong class="text-white"><?= h($item['Title']) ?></strong>
-                                    <span class="text-warning">- <?= h($item['ArtistName']) ?></span>
-                                    <span class="badge bg-secondary ms-2"><?= h($item['ConditionGrade']) ?></span>
+                <?php if ($search && !empty($availableStockGrouped)): ?>
+                    <!-- 【重构】分组显示，支持数量选择 -->
+                    <div class="list-group" id="searchResults">
+                        <?php foreach ($availableStockGrouped as $group): ?>
+                            <?php if ($group['RemainingQuantity'] > 0): ?>
+                            <div class="list-group-item bg-dark border-secondary">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong class="text-white"><?= h($group['Title']) ?></strong>
+                                        <span class="text-warning">- <?= h($group['ArtistName']) ?></span>
+                                        <span class="badge bg-secondary ms-2"><?= h($group['ConditionGrade']) ?></span>
+                                        <span class="badge bg-info ms-1"><?= $group['RemainingQuantity'] ?> available</span>
+                                        <?php if ($group['InCartCount'] > 0): ?>
+                                            <span class="badge bg-success ms-1"><?= $group['InCartCount'] ?> in cart</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="text-warning fw-bold"><?= formatPrice($group['UnitPrice']) ?></div>
                                 </div>
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="text-warning fw-bold"><?= formatPrice($item['UnitPrice']) ?></span>
-                                    <form method="POST" class="d-inline">
-                                        <input type="hidden" name="action" value="add_item">
-                                        <input type="hidden" name="stock_item_id" value="<?= $item['StockItemID'] ?>">
-                                        <button type="submit" class="btn btn-success btn-sm">
-                                            <i class="fa-solid fa-plus"></i>
+                                <form method="POST" class="mt-2 add-item-form">
+                                    <input type="hidden" name="action" value="add_multiple">
+                                    <input type="hidden" name="release_id" value="<?= $group['ReleaseID'] ?>">
+                                    <input type="hidden" name="condition" value="<?= h($group['ConditionGrade']) ?>">
+                                    <input type="hidden" name="unit_price" value="<?= $group['UnitPrice'] ?>">
+                                    <div class="input-group input-group-sm" style="max-width: 200px; margin-left: auto;">
+                                        <span class="input-group-text bg-secondary text-white border-secondary">Qty</span>
+                                        <select name="quantity" class="form-select bg-dark text-white border-secondary">
+                                            <?php for ($i = 1; $i <= $group['RemainingQuantity']; $i++): ?>
+                                                <option value="<?= $i ?>"><?= $i ?></option>
+                                            <?php endfor; ?>
+                                        </select>
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="fa-solid fa-plus me-1"></i>Add
                                         </button>
-                                    </form>
-                                </div>
+                                    </div>
+                                </form>
                             </div>
                             <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
+
+                    <!-- 【新增】保留搜索词，使用AJAX避免页面刷新 -->
+                    <script>
+                    document.querySelectorAll('.add-item-form').forEach(function(form) {
+                        form.addEventListener('submit', function(e) {
+                            e.preventDefault();
+                            const formData = new FormData(this);
+
+                            fetch('pos.php', {
+                                method: 'POST',
+                                body: formData
+                            }).then(response => {
+                                // 刷新页面但保留搜索词
+                                const currentSearch = '<?= h($search) ?>';
+                                window.location.href = 'pos.php?q=' + encodeURIComponent(currentSearch);
+                            }).catch(error => {
+                                console.error('Error:', error);
+                                window.location.reload();
+                            });
+                        });
+                    });
+                    </script>
                 <?php elseif ($search): ?>
                     <p class="text-muted text-center">No items found matching "<?= h($search) ?>"</p>
                 <?php endif; ?>

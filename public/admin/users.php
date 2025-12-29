@@ -103,10 +103,10 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <i class="fa-solid fa-pen-to-square"></i>
                                 </button>
 
-                                <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure?');">
+                                <form method="POST" class="d-inline confirm-form" data-confirm-message="Are you sure you want to delete this employee?">
                                     <input type="hidden" name="delete_employee" value="1">
                                     <input type="hidden" name="employee_id" value="<?= $e['EmployeeID'] ?>">
-                                    <button class="btn btn-sm btn-outline-danger" <?= $e['EmployeeID'] == $_SESSION['user_id'] ? 'disabled' : '' ?>>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" <?= $e['EmployeeID'] == $_SESSION['user_id'] ? 'disabled' : '' ?>>
                                         <i class="fa-solid fa-trash"></i>
                                     </button>
                                 </form>
@@ -263,6 +263,24 @@ require_once __DIR__ . '/../../includes/header.php';
             document.getElementById('edit_name').value = this.dataset.name;
             document.getElementById('edit_role').value = this.dataset.role;
             document.getElementById('edit_shop').value = this.dataset.shop;
+        });
+    });
+
+    // 处理需要确认的表单
+    document.querySelectorAll('.confirm-form').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const message = this.dataset.confirmMessage || 'Are you sure?';
+            const confirmed = await RetroEcho.showConfirm(message, {
+                title: 'Confirm Delete',
+                confirmText: 'Delete',
+                cancelText: 'Cancel',
+                confirmClass: 'btn-danger',
+                icon: 'fa-trash'
+            });
+            if (confirmed) {
+                this.submit();
+            }
         });
     });
 </script>

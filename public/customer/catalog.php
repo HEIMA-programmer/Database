@@ -144,17 +144,20 @@ require_once __DIR__ . '/../../includes/header.php';
     <?php if (empty($items)): ?>
         <div class="col-12 text-center py-5">
             <div class="display-1 text-secondary mb-3"><i class="fa-solid fa-compact-disc"></i></div>
-            <h3 class="text-white">No records found at this location.</h3>
-            <p class="text-muted">Try a different store or adjust your search filters.</p>
+            <h3 class="text-white">No records found.</h3>
+            <p class="text-muted">Try adjusting your search filters.</p>
             <a href="catalog.php?shop_id=<?= $selectedShopId ?>" class="btn btn-warning mt-3">Clear Filters</a>
         </div>
     <?php else: ?>
-        <?php foreach ($items as $item): ?>
+        <?php foreach ($items as $item):
+            $hasStock = $item['TotalAvailable'] > 0;
+            $cardClass = $hasStock ? 'catalog-card' : 'catalog-card out-of-stock';
+        ?>
             <div class="col">
                 <a href="release.php?id=<?= $item['ReleaseID'] ?>&shop_id=<?= $selectedShopId ?>" class="text-decoration-none">
-                    <div class="card h-100 border-0 catalog-card">
+                    <div class="card h-100 border-0 <?= $cardClass ?>">
                         <div class="position-relative pt-3">
-                            <div class="vinyl-placeholder">
+                            <div class="vinyl-placeholder <?= $hasStock ? '' : 'opacity-50' ?>">
                                 <div class="vinyl-center">
                                     <div>Retro<br>Echo</div>
                                 </div>
@@ -162,6 +165,11 @@ require_once __DIR__ . '/../../includes/header.php';
                             <span class="position-absolute top-0 end-0 m-2 badge bg-dark border border-secondary text-warning">
                                 <?= h($item['Genre']) ?>
                             </span>
+                            <?php if (!$hasStock): ?>
+                                <span class="position-absolute top-0 start-0 m-2 badge bg-danger">
+                                    Out of Stock
+                                </span>
+                            <?php endif; ?>
                         </div>
 
                         <div class="card-body text-center">
@@ -170,37 +178,49 @@ require_once __DIR__ . '/../../includes/header.php';
                             </h5>
                             <p class="card-text text-warning small mb-3"><?= h($item['ArtistName']) ?></p>
 
-                            <div class="d-flex justify-content-center gap-1 mb-3 flex-wrap">
-                                <?php
-                                    $conditions = explode(', ', $item['AvailableConditions']);
-                                    foreach ($conditions as $cond):
-                                        $condClass = match($cond) {
-                                            'New', 'Mint' => 'bg-success text-white',
-                                            'NM', 'VG+'   => 'bg-info text-dark',
-                                            default       => 'bg-secondary text-light'
-                                        };
-                                ?>
-                                    <span class="badge <?= $condClass ?> border border-dark rounded-pill" style="font-size: 0.65rem;">
-                                        <?= h($cond) ?>
+                            <?php if ($hasStock): ?>
+                                <div class="d-flex justify-content-center gap-1 mb-3 flex-wrap">
+                                    <?php
+                                        $conditions = explode(', ', $item['AvailableConditions']);
+                                        foreach ($conditions as $cond):
+                                            if (empty($cond)) continue;
+                                            $condClass = match($cond) {
+                                                'New', 'Mint' => 'bg-success text-white',
+                                                'NM', 'VG+'   => 'bg-info text-dark',
+                                                default       => 'bg-secondary text-light'
+                                            };
+                                    ?>
+                                        <span class="badge <?= $condClass ?> border border-dark rounded-pill" style="font-size: 0.65rem;">
+                                            <?= h($cond) ?>
+                                        </span>
+                                    <?php endforeach; ?>
+                                </div>
+
+                                <?php if ($item['MinPrice'] == $item['MaxPrice']): ?>
+                                    <h4 class="fw-bold mb-2"><?= formatPrice($item['MinPrice']) ?></h4>
+                                <?php else: ?>
+                                    <h4 class="fw-bold mb-2"><?= formatPrice($item['MinPrice']) ?> - <?= formatPrice($item['MaxPrice']) ?></h4>
+                                <?php endif; ?>
+
+                                <div class="text-muted small mb-2">
+                                    <i class="fa-solid fa-box me-1"></i><?= $item['TotalAvailable'] ?> in stock
+                                </div>
+
+                                <div class="d-grid">
+                                    <span class="btn btn-outline-warning btn-sm">
+                                        <i class="fa-solid fa-eye me-1"></i> View Details
                                     </span>
-                                <?php endforeach; ?>
-                            </div>
-
-                            <?php if ($item['MinPrice'] == $item['MaxPrice']): ?>
-                                <h4 class="fw-bold mb-2"><?= formatPrice($item['MinPrice']) ?></h4>
+                                </div>
                             <?php else: ?>
-                                <h4 class="fw-bold mb-2"><?= formatPrice($item['MinPrice']) ?> - <?= formatPrice($item['MaxPrice']) ?></h4>
+                                <div class="text-muted small mb-3">
+                                    <i class="fa-solid fa-box-open me-1"></i>0 in stock at this location
+                                </div>
+                                <div class="d-grid">
+                                    <span class="btn btn-outline-secondary btn-sm">
+                                        <i class="fa-solid fa-eye me-1"></i> View Details
+                                    </span>
+                                </div>
                             <?php endif; ?>
-
-                            <div class="text-muted small mb-2">
-                                <i class="fa-solid fa-box me-1"></i><?= $item['TotalAvailable'] ?> in stock
-                            </div>
-
-                            <div class="d-grid">
-                                <span class="btn btn-outline-warning btn-sm">
-                                    <i class="fa-solid fa-eye me-1"></i> View Details
-                                </span>
-                            </div>
                         </div>
                     </div>
                 </a>
@@ -216,6 +236,12 @@ require_once __DIR__ . '/../../includes/header.php';
 .catalog-card:hover {
     transform: translateY(-5px);
     box-shadow: 0 8px 25px rgba(255, 193, 7, 0.15);
+}
+.catalog-card.out-of-stock {
+    opacity: 0.7;
+}
+.catalog-card.out-of-stock:hover {
+    box-shadow: 0 8px 25px rgba(128, 128, 128, 0.1);
 }
 </style>
 

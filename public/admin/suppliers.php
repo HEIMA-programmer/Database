@@ -69,7 +69,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             <i class="fa-solid fa-pen-to-square"></i> Edit
                         </button>
 
-                        <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure? This action cannot be undone.');">
+                        <form method="POST" class="d-inline confirm-form" data-confirm-message="Are you sure? This action cannot be undone.">
                             <input type="hidden" name="delete_supplier" value="1">
                             <input type="hidden" name="supplier_id" value="<?= $s['SupplierID'] ?>">
                             <button type="submit" class="btn btn-sm btn-outline-danger">
@@ -148,6 +148,24 @@ require_once __DIR__ . '/../../includes/header.php';
             document.getElementById('edit_id').value = this.dataset.id;
             document.getElementById('edit_name').value = this.dataset.name;
             document.getElementById('edit_email').value = this.dataset.email;
+        });
+    });
+
+    // 处理需要确认的表单
+    document.querySelectorAll('.confirm-form').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const message = this.dataset.confirmMessage || 'Are you sure?';
+            const confirmed = await RetroEcho.showConfirm(message, {
+                title: 'Confirm Delete',
+                confirmText: 'Delete',
+                cancelText: 'Cancel',
+                confirmClass: 'btn-danger',
+                icon: 'fa-trash'
+            });
+            if (confirmed) {
+                this.submit();
+            }
         });
     });
 </script>

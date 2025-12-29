@@ -218,12 +218,15 @@ INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, Co
 (11, 3, 'Supplier', 4, 'B20251218-WH', 'Mint', 'Available', 27.00, DATE_SUB(NOW(), INTERVAL 9 DAY));
 
 -- 回购二手唱片 - ID 56-60
+-- 【修复】同一Release+同一Condition的价格必须一致
+-- VG+: 22.00 (无其他来源)
+-- VG: 28.00 (与供应商采购价格统一)
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
 (9, 3, 'Buyback', 1, 'BUY-20251211', 'VG+', 'Available', 22.00, DATE_SUB(NOW(), INTERVAL 15 DAY)),
 (9, 3, 'Buyback', 1, 'BUY-20251211', 'VG+', 'Available', 22.00, DATE_SUB(NOW(), INTERVAL 15 DAY)),
 (9, 3, 'Buyback', 1, 'BUY-20251211', 'VG+', 'Available', 22.00, DATE_SUB(NOW(), INTERVAL 15 DAY)),
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG', 'Available', 18.00, DATE_SUB(NOW(), INTERVAL 15 DAY)),
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG', 'Available', 18.00, DATE_SUB(NOW(), INTERVAL 15 DAY));
+(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 15 DAY)),
+(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG', 'Available', 28.00, DATE_SUB(NOW(), INTERVAL 15 DAY));
 
 -- ==========================================
 -- 9. 销售订单 - 【修复】确保状态和数据一致
@@ -301,3 +304,34 @@ SELECT 'CUSTOMERS: alice@test.com, bob@test.com, charlie@test.com, diana@test.co
 -- 3. 客户积分与订单历史相关（注：现有积分包含历史消费积累）
 -- 4. 没有未关联的Pending/Paid/Shipped订单
 -- 5. 库存调拨记录与库存位置一致
+-- 6. 【价格一致性】同一Release+同一Condition的StockItem.UnitPrice必须一致
+
+-- ==========================================
+-- Price 和 Cost 属性说明
+-- ==========================================
+-- 【成本类 Cost】
+-- ReleaseAlbum.BaseUnitCost    = 基础采购成本（每张专辑的基准成本）
+-- SupplierOrderLine.UnitCost   = 实际采购单价（= BaseUnitCost × Condition系数）
+-- SupplierOrder.TotalCost      = 采购订单总成本（SUM(Quantity × UnitCost)）
+-- CustomerOrder.ShippingCost   = 运费（线上送货¥15，自提免费）
+--
+-- 【价格类 Price】
+-- SupplierOrderLine.SalePrice  = 预设售价（采购时可选设定的销售价）
+-- BuybackOrderLine.UnitPrice   = 回购支付单价（支付给客户的金额）
+-- StockItem.UnitPrice          = 【核心】库存销售价（客户购买时的实际价格）
+-- OrderLine.PriceAtSale        = 成交价快照（订单创建时的价格副本，不受后续调价影响）
+-- ManagerRequest.CurrentPrice  = 调价申请当前价格
+-- ManagerRequest.RequestedPrice= 调价申请目标价格
+--
+-- 【汇总金额】
+-- BuybackOrder.TotalPayment    = 回购总支付（SUM(Quantity × BuybackOrderLine.UnitPrice)）
+-- CustomerOrder.TotalAmount    = 订单总金额（SUM(PriceAtSale) + ShippingCost）
+--
+-- 【Condition系数（用于计算采购成本）】
+-- New=1.00, Mint=0.95, NM=0.85, VG+=0.70, VG=0.55
+--
+-- 【定价流程】
+-- 1. 采购入库：UnitCost → 根据利润率计算 → StockItem.UnitPrice
+-- 2. 回购入库：检查是否有同Release+Condition现有价格，有则使用现有价格
+-- 3. 销售时：StockItem.UnitPrice → 记录到 OrderLine.PriceAtSale
+-- 4. 调价：Manager申请 → Admin批准 → 更新StockItem.UnitPrice

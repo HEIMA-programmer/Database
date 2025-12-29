@@ -2,53 +2,17 @@
 /**
  * 【架构重构】订单详情页面
  * 表现层 - 仅负责数据展示和用户交互
- *
- * 【新增】未支付订单倒计时功能：
- * - 订单创建后15分钟内需要支付
- * - 超时自动取消并恢复库存
- * - 支持手动取消未支付订单
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
-require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Customer');
-
-// 订单支付超时时间（秒）
-define('ORDER_PAYMENT_TIMEOUT', 15 * 60); // 15分钟
 
 $customerId = $_SESSION['user_id'];
 $orderId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if (!$orderId) {
     flash("Invalid order ID.", 'danger');
-    header("Location: orders.php");
-    exit();
-}
-
-// 处理取消订单请求
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'cancel_order') {
-    $cancelOrderId = (int)($_POST['order_id'] ?? 0);
-    if ($cancelOrderId === $orderId) {
-        // 验证订单属于当前客户且状态为Pending
-        $stmt = $pdo->prepare("SELECT OrderStatus FROM CustomerOrder WHERE OrderID = ? AND CustomerID = ?");
-        $stmt->execute([$cancelOrderId, $customerId]);
-        $orderCheck = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($orderCheck && $orderCheck['OrderStatus'] === 'Pending') {
-            try {
-                $pdo->beginTransaction();
-                DBProcedures::cancelOrder($pdo, $cancelOrderId);
-                $pdo->commit();
-                flash("Order #$cancelOrderId has been cancelled. Inventory has been restored.", 'info');
-            } catch (Exception $e) {
-                if ($pdo->inTransaction()) $pdo->rollBack();
-                flash("Failed to cancel order: " . $e->getMessage(), 'danger');
-            }
-        } else {
-            flash("Cannot cancel this order.", 'danger');
-        }
-    }
     header("Location: orders.php");
     exit();
 }
@@ -65,31 +29,6 @@ if (!$pageData['found']) {
 $order = $pageData['order'];
 $items = $pageData['items'];
 $statusClass = $pageData['status_class'];
-
-// 计算未支付订单的剩余支付时间
-$remainingSeconds = 0;
-$isExpired = false;
-if ($order['OrderStatus'] === 'Pending') {
-    $orderTime = strtotime($order['OrderDate']);
-    $expiryTime = $orderTime + ORDER_PAYMENT_TIMEOUT;
-    $remainingSeconds = $expiryTime - time();
-
-    // 如果已过期，自动取消订单
-    if ($remainingSeconds <= 0) {
-        $isExpired = true;
-        try {
-            $pdo->beginTransaction();
-            DBProcedures::cancelOrder($pdo, $orderId);
-            $pdo->commit();
-            flash("Order #$orderId has been automatically cancelled due to payment timeout. Inventory has been restored.", 'warning');
-            header("Location: orders.php");
-            exit();
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            // 静默失败，让页面继续加载
-        }
-    }
-}
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
@@ -181,110 +120,17 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
 
         <?php if ($order['OrderStatus'] === 'Pending'): ?>
-        <div class="card bg-warning text-dark border-0 mb-3">
+        <div class="card bg-warning text-dark border-0">
             <div class="card-body">
                 <h6 class="mb-2"><i class="fa-solid fa-clock me-2"></i>Payment Required</h6>
-
-                <!-- 倒计时显示 -->
-                <div class="countdown-container mb-3" id="countdownContainer" data-remaining="<?= $remainingSeconds ?>">
-                    <div class="d-flex align-items-center">
-                        <i class="fa-solid fa-hourglass-half me-2"></i>
-                        <span class="small">Time remaining: </span>
-                        <span id="countdown" class="ms-1 fw-bold"></span>
-                    </div>
-                    <div class="progress mt-2" style="height: 6px;">
-                        <div class="progress-bar bg-dark" id="countdownProgress" role="progressbar" style="width: 100%"></div>
-                    </div>
-                </div>
-
-                <p class="small mb-3">Please complete your payment before time runs out. The order will be automatically cancelled if not paid in time.</p>
-
-                <div class="d-flex gap-2">
-                    <a href="pay.php?order_id=<?= $order['OrderID'] ?>" class="btn btn-dark btn-sm">
-                        <i class="fa-solid fa-credit-card me-1"></i>Pay Now
-                    </a>
-                    <form method="POST" class="d-inline confirm-form" data-confirm-message="Are you sure you want to cancel this order?">
-                        <input type="hidden" name="action" value="cancel_order">
-                        <input type="hidden" name="order_id" value="<?= $order['OrderID'] ?>">
-                        <button type="submit" class="btn btn-outline-dark btn-sm">
-                            <i class="fa-solid fa-ban me-1"></i>Cancel Order
-                        </button>
-                    </form>
-                </div>
+                <p class="small mb-3">Please complete your payment to process this order.</p>
+                <a href="pay.php?order_id=<?= $order['OrderID'] ?>" class="btn btn-dark btn-sm">
+                    <i class="fa-solid fa-credit-card me-1"></i>Pay Now
+                </a>
             </div>
         </div>
         <?php endif; ?>
     </div>
 </div>
-
-<?php if ($order['OrderStatus'] === 'Pending'): ?>
-<script>
-// 订单支付倒计时
-(function() {
-    const container = document.getElementById('countdownContainer');
-    const countdownEl = document.getElementById('countdown');
-    const progressEl = document.getElementById('countdownProgress');
-    let remaining = parseInt(container.dataset.remaining);
-    const total = <?= ORDER_PAYMENT_TIMEOUT ?>;
-
-    function formatTime(seconds) {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    function updateCountdown() {
-        if (remaining <= 0) {
-            countdownEl.textContent = 'Expired';
-            progressEl.style.width = '0%';
-            // 自动刷新页面触发后端取消
-            RetroEcho.showAlert('Your order has expired and will be cancelled.', {
-                title: 'Order Expired',
-                type: 'warning'
-            }).then(() => {
-                window.location.reload();
-            });
-            return;
-        }
-
-        countdownEl.textContent = formatTime(remaining);
-        const progressPct = (remaining / total) * 100;
-        progressEl.style.width = progressPct + '%';
-
-        // 时间紧迫时改变颜色
-        if (remaining <= 60) {
-            countdownEl.classList.add('text-danger');
-            progressEl.classList.remove('bg-dark');
-            progressEl.classList.add('bg-danger');
-        } else if (remaining <= 180) {
-            countdownEl.classList.add('text-warning');
-        }
-
-        remaining--;
-        setTimeout(updateCountdown, 1000);
-    }
-
-    updateCountdown();
-})();
-
-// 处理需要确认的表单
-document.querySelectorAll('.confirm-form').forEach(form => {
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const message = this.dataset.confirmMessage || 'Are you sure?';
-        const confirmed = await RetroEcho.showConfirm(message, {
-            title: 'Cancel Order',
-            confirmText: 'Yes, Cancel',
-            cancelText: 'No, Keep Order',
-            confirmClass: 'btn-danger',
-            icon: 'fa-ban'
-        });
-        if (confirmed) {
-            this.submit();
-        }
-    });
-});
-</script>
-<?php endif; ?>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

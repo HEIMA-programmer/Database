@@ -219,69 +219,72 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <?php if ($order['OrderStatus'] === 'Pending'): ?>
 <script>
-// 订单支付倒计时
-(function() {
-    const container = document.getElementById('countdownContainer');
-    const countdownEl = document.getElementById('countdown');
-    const progressEl = document.getElementById('countdownProgress');
-    let remaining = parseInt(container.dataset.remaining);
-    const total = <?= ORDER_PAYMENT_TIMEOUT ?>;
+// 等待 DOM 完全加载（包括外部脚本如 enhancements.js）
+document.addEventListener('DOMContentLoaded', function() {
+    // 订单支付倒计时
+    (function() {
+        const container = document.getElementById('countdownContainer');
+        const countdownEl = document.getElementById('countdown');
+        const progressEl = document.getElementById('countdownProgress');
+        let remaining = parseInt(container.dataset.remaining);
+        const total = <?= ORDER_PAYMENT_TIMEOUT ?>;
 
-    function formatTime(seconds) {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
 
-    function updateCountdown() {
-        if (remaining <= 0) {
-            countdownEl.textContent = 'Expired';
-            progressEl.style.width = '0%';
-            // 自动刷新页面触发后端取消
-            RetroEcho.showAlert('Your order has expired and will be cancelled.', {
-                title: 'Order Expired',
-                type: 'warning'
-            }).then(() => {
-                window.location.reload();
+        function updateCountdown() {
+            if (remaining <= 0) {
+                countdownEl.textContent = 'Expired';
+                progressEl.style.width = '0%';
+                // 自动刷新页面触发后端取消
+                RetroEcho.showAlert('Your order has expired and will be cancelled.', {
+                    title: 'Order Expired',
+                    type: 'warning'
+                }).then(() => {
+                    window.location.reload();
+                });
+                return;
+            }
+
+            countdownEl.textContent = formatTime(remaining);
+            const progressPct = (remaining / total) * 100;
+            progressEl.style.width = progressPct + '%';
+
+            // 时间紧迫时改变颜色
+            if (remaining <= 60) {
+                countdownEl.classList.add('text-danger');
+                progressEl.classList.remove('bg-dark');
+                progressEl.classList.add('bg-danger');
+            } else if (remaining <= 180) {
+                countdownEl.classList.add('text-warning');
+            }
+
+            remaining--;
+            setTimeout(updateCountdown, 1000);
+        }
+
+        updateCountdown();
+    })();
+
+    // 处理需要确认的表单
+    document.querySelectorAll('.confirm-form').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const message = this.dataset.confirmMessage || 'Are you sure?';
+            const confirmed = await RetroEcho.showConfirm(message, {
+                title: 'Cancel Order',
+                confirmText: 'Yes, Cancel',
+                cancelText: 'No, Keep Order',
+                confirmClass: 'btn-danger',
+                icon: 'fa-ban'
             });
-            return;
-        }
-
-        countdownEl.textContent = formatTime(remaining);
-        const progressPct = (remaining / total) * 100;
-        progressEl.style.width = progressPct + '%';
-
-        // 时间紧迫时改变颜色
-        if (remaining <= 60) {
-            countdownEl.classList.add('text-danger');
-            progressEl.classList.remove('bg-dark');
-            progressEl.classList.add('bg-danger');
-        } else if (remaining <= 180) {
-            countdownEl.classList.add('text-warning');
-        }
-
-        remaining--;
-        setTimeout(updateCountdown, 1000);
-    }
-
-    updateCountdown();
-})();
-
-// 处理需要确认的表单
-document.querySelectorAll('.confirm-form').forEach(form => {
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const message = this.dataset.confirmMessage || 'Are you sure?';
-        const confirmed = await RetroEcho.showConfirm(message, {
-            title: 'Cancel Order',
-            confirmText: 'Yes, Cancel',
-            cancelText: 'No, Keep Order',
-            confirmClass: 'btn-danger',
-            icon: 'fa-ban'
+            if (confirmed) {
+                this.submit();
+            }
         });
-        if (confirmed) {
-            this.submit();
-        }
     });
 });
 </script>

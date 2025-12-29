@@ -198,23 +198,21 @@ document.querySelectorAll('.countdown-timer').forEach(timer => {
     update();
 });
 
-// 处理需要确认的表单 - 等待 DOM 完全加载（包括外部脚本）
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.confirm-form').forEach(form => {
-        form.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const message = this.dataset.confirmMessage || 'Are you sure?';
-            const confirmed = await RetroEcho.showConfirm(message, {
-                title: 'Cancel Order',
-                confirmText: 'Yes, Cancel',
-                cancelText: 'No, Keep Order',
-                confirmClass: 'btn-danger',
-                icon: 'fa-ban'
-            });
-            if (confirmed) {
-                this.submit();
-            }
+// 处理需要确认的表单
+document.querySelectorAll('.confirm-form').forEach(form => {
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const message = this.dataset.confirmMessage || 'Are you sure?';
+        const confirmed = await RetroEcho.showConfirm(message, {
+            title: 'Cancel Order',
+            confirmText: 'Yes, Cancel',
+            cancelText: 'No, Keep Order',
+            confirmClass: 'btn-danger',
+            icon: 'fa-ban'
         });
+        if (confirmed) {
+            this.submit();
+        }
     });
 });
 </script>

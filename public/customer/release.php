@@ -87,6 +87,8 @@ require_once __DIR__ . '/../../includes/header.php';
                             <input type="hidden" name="action" value="add_multiple">
                             <input type="hidden" name="release_id" value="<?= $release['ReleaseID'] ?>">
                             <input type="hidden" name="condition" value="<?= h($stock['ConditionGrade']) ?>">
+                            <!-- 【修复】添加shop_id确保正确的店铺限制 -->
+                            <input type="hidden" name="shop_id" value="<?= $shopId ?>">
 
                             <div class="col-md-3">
                                 <span class="badge <?= $condClass ?> fs-6 px-3 py-2">
@@ -111,8 +113,9 @@ require_once __DIR__ . '/../../includes/header.php';
                             <div class="col-md-3">
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text bg-secondary border-secondary text-light">Qty</span>
+                                    <!-- 【修复】移除10张限制，只受available数量限制 -->
                                     <select name="quantity" class="form-select form-select-sm bg-dark text-light border-secondary">
-                                        <?php for ($i = 1; $i <= min($stock['AvailableQuantity'], 10); $i++): ?>
+                                        <?php for ($i = 1; $i <= $stock['AvailableQuantity']; $i++): ?>
                                             <option value="<?= $i ?>"><?= $i ?></option>
                                         <?php endfor; ?>
                                     </select>

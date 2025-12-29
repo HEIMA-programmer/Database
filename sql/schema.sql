@@ -52,7 +52,8 @@ CREATE TABLE ReleaseAlbum (
     ReleaseYear VARCHAR(4),
     Genre VARCHAR(50),
     Format VARCHAR(50) DEFAULT 'Vinyl',
-    Description TEXT
+    Description TEXT,
+    BaseUnitCost DECIMAL(10,2) DEFAULT 25.00 -- 基础采购成本，不同condition会按比例调整
 );
 
 CREATE TABLE Track (

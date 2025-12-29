@@ -295,44 +295,25 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <h6 class="text-warning">Take Action</h6>
 
                                     <?php
-                                    // 【新增】对于调货申请，显示其他店铺的库存情况
+                                    // 【重构】对于调货申请，显示库存容器（实时AJAX加载）
                                     if (!$isPrice):
-                                        $otherShopsInventory = getOtherShopsInventory($pdo, $req['ReleaseID'], $req['ConditionGrade'], $req['FromShopID']);
                                     ?>
                                     <div class="mb-3">
-                                        <label class="form-label text-info"><i class="fa-solid fa-warehouse me-1"></i>Available Stock in Other Shops</label>
-                                        <?php if (empty($otherShopsInventory)): ?>
-                                            <div class="alert alert-warning py-2">
-                                                <i class="fa-solid fa-exclamation-triangle me-1"></i>
-                                                No matching stock found in other shops for this album/condition.
+                                        <label class="form-label text-info">
+                                            <i class="fa-solid fa-warehouse me-1"></i>Available Stock in Other Shops
+                                            <small class="text-muted ms-2">(Real-time)</small>
+                                        </label>
+                                        <!-- 【重构】使用data属性存储参数，AJAX动态加载库存 -->
+                                        <div class="stock-inventory-container"
+                                             data-release-id="<?= $req['ReleaseID'] ?>"
+                                             data-condition="<?= h($req['ConditionGrade']) ?>"
+                                             data-from-shop-id="<?= $req['FromShopID'] ?>"
+                                             data-quantity="<?= $req['Quantity'] ?>">
+                                            <div class="text-center py-3 text-muted">
+                                                <i class="fa-solid fa-mouse-pointer me-1"></i>
+                                                Click to expand and load real-time inventory data
                                             </div>
-                                        <?php else: ?>
-                                            <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
-                                                <table class="table table-sm table-dark mb-0">
-                                                    <thead class="sticky-top bg-dark">
-                                                        <tr>
-                                                            <th>Shop</th>
-                                                            <th class="text-center">Qty</th>
-                                                            <th class="text-end">Price</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <?php foreach ($otherShopsInventory as $inv): ?>
-                                                        <tr>
-                                                            <td>
-                                                                <?= h($inv['ShopName']) ?>
-                                                                <?php if ($inv['ShopType'] === 'Warehouse'): ?>
-                                                                    <span class="badge bg-secondary ms-1">WH</span>
-                                                                <?php endif; ?>
-                                                            </td>
-                                                            <td class="text-center"><span class="badge bg-success"><?= $inv['AvailableQuantity'] ?></span></td>
-                                                            <td class="text-end text-warning"><?= formatPrice($inv['UnitPrice']) ?></td>
-                                                        </tr>
-                                                        <?php endforeach; ?>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        <?php endif; ?>
+                                        </div>
                                     </div>
                                     <?php endif; ?>
 
@@ -340,21 +321,15 @@ require_once __DIR__ . '/../../includes/header.php';
                                         <input type="hidden" name="request_id" value="<?= $req['RequestID'] ?>">
 
                                         <?php
-                                        // 【新增】调货申请需要选择源店铺
-                                        if (!$isPrice && !empty($otherShopsInventory)):
+                                        // 【重构】调货申请需要选择源店铺（AJAX动态加载）
+                                        if (!$isPrice):
                                         ?>
-                                        <div class="mb-3">
-                                            <label class="form-label">Select Source Shop <span class="text-danger">*</span></label>
-                                            <select name="source_shop_id" class="form-select bg-dark text-white border-secondary" required>
-                                                <option value="">-- Choose source shop --</option>
-                                                <?php foreach ($otherShopsInventory as $inv): ?>
-                                                <option value="<?= $inv['ShopID'] ?>">
-                                                    <?= h($inv['ShopName']) ?>
-                                                    (<?= $inv['AvailableQuantity'] ?> available @ <?= formatPrice($inv['UnitPrice']) ?>)
-                                                </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                            <small class="text-muted">Stock will be transferred from the selected shop</small>
+                                        <div class="mb-3 source-shop-select-container">
+                                            <!-- 源店铺选择将通过AJAX动态加载 -->
+                                            <div class="text-muted small">
+                                                <i class="fa-solid fa-info-circle me-1"></i>
+                                                Source shop selection will appear after inventory loads
+                                            </div>
                                         </div>
                                         <?php endif; ?>
 
@@ -365,9 +340,10 @@ require_once __DIR__ . '/../../includes/header.php';
                                         </div>
 
                                         <div class="d-grid gap-2">
-                                            <?php if (!$isPrice && empty($otherShopsInventory)): ?>
-                                                <button type="button" class="btn btn-secondary" disabled>
-                                                    <i class="fa-solid fa-ban me-1"></i>Cannot Approve (No Stock Available)
+                                            <?php if (!$isPrice): ?>
+                                                <!-- 【重构】调货申请：初始禁用，等待AJAX加载后启用 -->
+                                                <button type="submit" name="action" value="approve" class="btn btn-secondary" disabled>
+                                                    <i class="fa-solid fa-spinner fa-spin me-1"></i>Loading inventory...
                                                 </button>
                                             <?php else: ?>
                                                 <button type="submit" name="action" value="approve" class="btn btn-success">
@@ -410,5 +386,117 @@ require_once __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
     </div>
 </div>
+
+<!-- 【新增】AJAX实时获取库存信息的脚本 -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 监听accordion展开事件
+    document.querySelectorAll('.accordion-collapse').forEach(function(collapse) {
+        collapse.addEventListener('show.bs.collapse', function() {
+            const requestId = this.id.replace('req', '');
+            const stockContainer = this.querySelector('.stock-inventory-container');
+
+            if (stockContainer) {
+                // 获取申请参数
+                const releaseId = stockContainer.dataset.releaseId;
+                const condition = stockContainer.dataset.condition;
+                const fromShopId = stockContainer.dataset.fromShopId;
+                const quantity = stockContainer.dataset.quantity;
+
+                // 显示加载状态
+                stockContainer.innerHTML = '<div class="text-center py-3"><i class="fa-solid fa-spinner fa-spin me-2"></i>Loading real-time inventory...</div>';
+
+                // 发送AJAX请求获取最新库存
+                fetch('requests_api.php?action=get_inventory&release_id=' + releaseId + '&condition=' + encodeURIComponent(condition) + '&exclude_shop=' + fromShopId)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            updateInventoryDisplay(stockContainer, data.inventory, quantity, requestId);
+                        } else {
+                            stockContainer.innerHTML = '<div class="alert alert-danger py-2"><i class="fa-solid fa-exclamation-circle me-1"></i>' + (data.message || 'Failed to load inventory') + '</div>';
+                        }
+                    })
+                    .catch(error => {
+                        stockContainer.innerHTML = '<div class="alert alert-warning py-2"><i class="fa-solid fa-exclamation-triangle me-1"></i>Error loading inventory. <a href="requests.php" class="alert-link">Refresh page</a></div>';
+                    });
+            }
+        });
+    });
+
+    // 更新库存显示
+    function updateInventoryDisplay(container, inventory, requiredQty, requestId) {
+        if (!inventory || inventory.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-warning py-2">
+                    <i class="fa-solid fa-exclamation-triangle me-1"></i>
+                    No matching stock found in other shops for this album/condition.
+                </div>
+                <div class="mt-2">
+                    <button type="submit" name="action" value="approve" class="btn btn-secondary w-100" disabled>
+                        <i class="fa-solid fa-ban me-1"></i>Cannot Approve (No Stock Available)
+                    </button>
+                </div>`;
+            // 禁用approve按钮
+            const form = container.closest('form');
+            if (form) {
+                const approveBtn = form.querySelector('button[value="approve"]');
+                if (approveBtn) {
+                    approveBtn.disabled = true;
+                    approveBtn.className = 'btn btn-secondary';
+                    approveBtn.innerHTML = '<i class="fa-solid fa-ban me-1"></i>Cannot Approve (No Stock Available)';
+                }
+            }
+        } else {
+            let tableHtml = `
+                <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
+                    <table class="table table-sm table-dark mb-0">
+                        <thead class="sticky-top bg-dark">
+                            <tr><th>Shop</th><th class="text-center">Qty</th><th class="text-end">Price</th></tr>
+                        </thead>
+                        <tbody>`;
+
+            inventory.forEach(inv => {
+                const whBadge = inv.ShopType === 'Warehouse' ? '<span class="badge bg-secondary ms-1">WH</span>' : '';
+                const qtyClass = inv.AvailableQuantity >= requiredQty ? 'bg-success' : 'bg-warning text-dark';
+                tableHtml += `<tr>
+                    <td>${inv.ShopName}${whBadge}</td>
+                    <td class="text-center"><span class="badge ${qtyClass}">${inv.AvailableQuantity}</span></td>
+                    <td class="text-end text-warning">¥${parseFloat(inv.UnitPrice).toFixed(2)}</td>
+                </tr>`;
+            });
+
+            tableHtml += '</tbody></table></div>';
+            container.innerHTML = tableHtml;
+
+            // 更新源店铺选择下拉框
+            const form = container.closest('form');
+            if (form) {
+                const selectContainer = form.querySelector('.source-shop-select-container');
+                if (selectContainer) {
+                    let selectHtml = `
+                        <label class="form-label">Select Source Shop <span class="text-danger">*</span></label>
+                        <select name="source_shop_id" class="form-select bg-dark text-white border-secondary" required>
+                            <option value="">-- Choose source shop --</option>`;
+
+                    inventory.forEach(inv => {
+                        selectHtml += `<option value="${inv.ShopID}">${inv.ShopName} (${inv.AvailableQuantity} available @ ¥${parseFloat(inv.UnitPrice).toFixed(2)})</option>`;
+                    });
+
+                    selectHtml += '</select><small class="text-muted">Stock will be transferred from the selected shop</small>';
+                    selectContainer.innerHTML = selectHtml;
+                }
+
+                // 启用approve按钮
+                const approveBtn = form.querySelector('button[value="approve"]');
+                if (approveBtn && approveBtn.disabled) {
+                    approveBtn.disabled = false;
+                    approveBtn.className = 'btn btn-success';
+                    approveBtn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Approve Request';
+                }
+            }
+        }
+    }
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

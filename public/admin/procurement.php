@@ -9,21 +9,14 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Admin');
 
-// ========== 【新增】固定Unit Cost配置 ==========
-// 每种专辑的固定采购成本（元）
-// 根据专辑稀有度、热门程度等因素定义
-$UNIT_COST_CONFIG = [
-    // ReleaseID => unit_cost
-    // 默认按专辑类型或者统一设定一个基础成本
-    // 实际项目中可以根据专辑属性动态计算
-];
-
-// 默认Unit Cost（如果专辑没有配置，则使用此默认值）
-$DEFAULT_UNIT_COSTS = [
-    'vinyl_standard' => 25.00,  // 标准黑胶
-    'vinyl_rare'     => 50.00,  // 稀有版本
-    'vinyl_import'   => 80.00,  // 进口版
-    'cd_standard'    => 15.00,  // 标准CD
+// ========== 【重构】从数据库读取Unit Cost ==========
+// 不同condition的成本系数（相对于BaseUnitCost）
+$CONDITION_COST_MULTIPLIERS = [
+    'New'  => 1.00,  // 全新：100%基础成本
+    'Mint' => 0.95,  // 近全新：95%
+    'NM'   => 0.85,  // Near Mint：85%
+    'VG+'  => 0.70,  // Very Good Plus：70%
+    'VG'   => 0.55,  // Very Good：55%
 ];
 
 /**
@@ -47,13 +40,16 @@ function getSuggestedSalePrice($unitCost) {
     }
 }
 
-// 为每个专辑获取unit cost配置（这里使用简单的默认值）
-function getUnitCostForRelease($releaseId, $config) {
-    if (isset($config[$releaseId])) {
-        return $config[$releaseId];
-    }
-    // 默认使用标准黑胶成本
-    return 25.00;
+/**
+ * 【重构】根据condition计算实际采购成本
+ * @param float $baseCost 基础成本
+ * @param string $condition 成色
+ * @return float 实际采购成本
+ */
+function getUnitCostByCondition($baseCost, $condition) {
+    global $CONDITION_COST_MULTIPLIERS;
+    $multiplier = $CONDITION_COST_MULTIPLIERS[$condition] ?? 1.00;
+    return round($baseCost * $multiplier, 2);
 }
 
 // ========== 数据准备 ==========
@@ -63,14 +59,29 @@ $suppliers = $pageData['suppliers'];
 $releases = $pageData['releases'];
 $pendingPOs = $pageData['pending_orders'];
 
-// 为每个专辑添加unit cost和建议售价
+// 【重构】从数据库获取每个专辑的BaseUnitCost
+$releaseBaseUnitCosts = [];
+$stmt = $pdo->query("SELECT ReleaseID, COALESCE(BaseUnitCost, 25.00) as BaseUnitCost FROM ReleaseAlbum");
+while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+    $releaseBaseUnitCosts[$row['ReleaseID']] = (float)$row['BaseUnitCost'];
+}
+
+// 为每个专辑和每种condition构建价格配置
 $releasePriceConfig = [];
 foreach ($releases as $r) {
-    $unitCost = getUnitCostForRelease($r['ReleaseID'], $UNIT_COST_CONFIG);
-    $suggestedPrice = getSuggestedSalePrice($unitCost);
+    $baseCost = $releaseBaseUnitCosts[$r['ReleaseID']] ?? 25.00;
+    $conditionPrices = [];
+    foreach ($CONDITION_COST_MULTIPLIERS as $condition => $multiplier) {
+        $unitCost = round($baseCost * $multiplier, 2);
+        $suggestedPrice = getSuggestedSalePrice($unitCost);
+        $conditionPrices[$condition] = [
+            'unit_cost' => $unitCost,
+            'suggested_price' => round($suggestedPrice, 2)
+        ];
+    }
     $releasePriceConfig[$r['ReleaseID']] = [
-        'unit_cost' => $unitCost,
-        'suggested_price' => $suggestedPrice
+        'base_cost' => $baseCost,
+        'conditions' => $conditionPrices
     ];
 }
 
@@ -82,9 +93,11 @@ $conditionOptions = ['New', 'Mint', 'NM', 'VG+', 'VG'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_po'])) {
     $releaseId = (int)$_POST['release_id'];
     $salePrice = (float)$_POST['sale_price'];
+    $condition = $_POST['condition'] ?? 'New';
 
-    // 【修改】使用固定的unit cost而不是从售价计算
-    $unitCost = getUnitCostForRelease($releaseId, $UNIT_COST_CONFIG);
+    // 【重构】根据专辑的BaseUnitCost和condition计算实际采购成本
+    $baseCost = $releaseBaseUnitCosts[$releaseId] ?? 25.00;
+    $unitCost = getUnitCostByCondition($baseCost, $condition);
 
     $data = [
         'supplier_id'  => (int)$_POST['supplier_id'],
@@ -92,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_po'])) {
         'release_id'   => $releaseId,
         'quantity'     => (int)$_POST['quantity'],
         'unit_cost'    => $unitCost,
-        'condition'    => $_POST['condition'] ?? 'New',
+        'condition'    => $condition,
         'sale_price'   => $salePrice
     ];
 
@@ -347,11 +360,12 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 【修改】专辑价格配置数据
+    // 【重构】专辑价格配置数据（包含每种condition的价格）
     const releasePriceConfig = <?= json_encode($releasePriceConfig) ?>;
 
     // DOM元素
     const releaseSelect = document.querySelector('select[name="release_id"]');
+    const conditionSelect = document.querySelector('select[name="condition"]');
     const salePriceInput = document.getElementById('salePrice');
     const quantityInput = document.getElementById('poQuantity');
     const unitCostDisplay = document.getElementById('unitCostDisplay');
@@ -362,12 +376,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let currentUnitCost = 25.00;
 
-    // 更新专辑选择时的价格信息
-    function updateReleasePrice() {
+    // 【重构】根据专辑和condition更新价格信息
+    function updatePriceByCondition() {
         const releaseId = releaseSelect.value;
-        if (releaseId && releasePriceConfig[releaseId]) {
-            currentUnitCost = releasePriceConfig[releaseId].unit_cost;
-            const suggestedPrice = releasePriceConfig[releaseId].suggested_price;
+        const condition = conditionSelect.value;
+
+        if (releaseId && releasePriceConfig[releaseId] && releasePriceConfig[releaseId].conditions[condition]) {
+            const priceInfo = releasePriceConfig[releaseId].conditions[condition];
+            currentUnitCost = priceInfo.unit_cost;
+            const suggestedPrice = priceInfo.suggested_price;
 
             unitCostDisplay.value = '¥' + currentUnitCost.toFixed(2);
             suggestedPriceDisplay.value = '¥' + suggestedPrice.toFixed(2);
@@ -405,7 +422,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    releaseSelect.addEventListener('change', updateReleasePrice);
+    // 【重构】监听专辑和condition的变化
+    releaseSelect.addEventListener('change', updatePriceByCondition);
+    conditionSelect.addEventListener('change', updatePriceByCondition);
     salePriceInput.addEventListener('input', updateCosts);
     quantityInput.addEventListener('input', updateCosts);
 

@@ -395,6 +395,8 @@ document.addEventListener('DOMContentLoaded', function() {
         collapse.addEventListener('show.bs.collapse', function() {
             const requestId = this.id.replace('req', '');
             const stockContainer = this.querySelector('.stock-inventory-container');
+            // 【修复】从accordion-body查找form，而不是从stockContainer查找
+            const accordionBody = this.querySelector('.accordion-body');
 
             if (stockContainer) {
                 // 获取申请参数
@@ -411,7 +413,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            updateInventoryDisplay(stockContainer, data.inventory, quantity, requestId);
+                            updateInventoryDisplay(stockContainer, accordionBody, data.inventory, quantity, requestId);
                         } else {
                             stockContainer.innerHTML = '<div class="alert alert-danger py-2"><i class="fa-solid fa-exclamation-circle me-1"></i>' + (data.message || 'Failed to load inventory') + '</div>';
                         }
@@ -423,21 +425,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // 更新库存显示
-    function updateInventoryDisplay(container, inventory, requiredQty, requestId) {
+    // 【修复】更新库存显示 - 添加accordionBody参数来正确查找form
+    function updateInventoryDisplay(container, accordionBody, inventory, requiredQty, requestId) {
+        // 【修复】从accordionBody查找form，而不是从container查找（因为container在form外面）
+        const form = accordionBody ? accordionBody.querySelector('form') : null;
+
         if (!inventory || inventory.length === 0) {
             container.innerHTML = `
                 <div class="alert alert-warning py-2">
                     <i class="fa-solid fa-exclamation-triangle me-1"></i>
                     No matching stock found in other shops for this album/condition.
-                </div>
-                <div class="mt-2">
-                    <button type="submit" name="action" value="approve" class="btn btn-secondary w-100" disabled>
-                        <i class="fa-solid fa-ban me-1"></i>Cannot Approve (No Stock Available)
-                    </button>
                 </div>`;
+
             // 禁用approve按钮
-            const form = container.closest('form');
             if (form) {
                 const approveBtn = form.querySelector('button[value="approve"]');
                 if (approveBtn) {
@@ -468,8 +468,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tableHtml += '</tbody></table></div>';
             container.innerHTML = tableHtml;
 
-            // 更新源店铺选择下拉框
-            const form = container.closest('form');
+            // 【修复】更新源店铺选择下拉框和按钮
             if (form) {
                 const selectContainer = form.querySelector('.source-shop-select-container');
                 if (selectContainer) {
@@ -488,7 +487,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // 启用approve按钮
                 const approveBtn = form.querySelector('button[value="approve"]');
-                if (approveBtn && approveBtn.disabled) {
+                if (approveBtn) {
                     approveBtn.disabled = false;
                     approveBtn.className = 'btn btn-success';
                     approveBtn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Approve Request';

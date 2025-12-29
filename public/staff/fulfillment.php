@@ -487,11 +487,10 @@ require_once __DIR__ . '/../../includes/header.php';
                                 </form>
                             <?php endif; ?>
                             
-                            <form method="POST" class="d-inline ms-auto">
+                            <form method="POST" class="d-inline ms-auto confirm-form" data-confirm-message="Cancel this order?">
                                 <input type="hidden" name="order_id" value="<?= $order['OrderID'] ?>">
                                 <input type="hidden" name="action" value="cancel">
-                                <button type="submit" class="btn btn-outline-danger btn-sm" 
-                                        onclick="return confirm('Cancel this order?')">
+                                <button type="submit" class="btn btn-outline-danger btn-sm">
                                     <i class="fa-solid fa-ban me-1"></i>Cancel
                                 </button>
                             </form>
@@ -579,11 +578,10 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <i class="fa-solid fa-truck me-1"></i>确认发货 (<?= $transfer['Quantity'] ?> 张)
                                 </button>
                             </form>
-                            <form method="POST">
+                            <form method="POST" class="confirm-form" data-confirm-message="确定要取消这 <?= $transfer['Quantity'] ?> 张的调货请求吗？">
                                 <input type="hidden" name="transfer_ids" value="<?= h($transfer['TransferIDs']) ?>">
                                 <input type="hidden" name="action" value="cancel_transfer">
-                                <button type="submit" class="btn btn-outline-danger btn-sm"
-                                        onclick="return confirm('确定要取消这 <?= $transfer['Quantity'] ?> 张的调货请求吗？')">
+                                <button type="submit" class="btn btn-outline-danger btn-sm">
                                     <i class="fa-solid fa-ban me-1"></i>取消
                                 </button>
                             </form>
@@ -677,5 +675,24 @@ require_once __DIR__ . '/../../includes/header.php';
 <?php endif; ?>
 
 <?php endif; ?>
+
+<script>
+// 处理需要确认的表单
+document.querySelectorAll('.confirm-form').forEach(form => {
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const message = this.dataset.confirmMessage || 'Are you sure?';
+        const confirmed = await RetroEcho.showConfirm(message, {
+            title: 'Confirm Action',
+            confirmText: 'Yes',
+            cancelText: 'No',
+            icon: 'fa-exclamation-triangle'
+        });
+        if (confirmed) {
+            this.submit();
+        }
+    });
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

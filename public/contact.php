@@ -59,22 +59,12 @@ require_once __DIR__ . '/../includes/header.php';
                         <textarea class="form-control bg-secondary text-white border-0" rows="4"></textarea>
                     </div>
                     <div class="col-12 text-center">
-                        <button type="button" class="btn btn-warning px-5" id="sendMessageBtn">Send Message</button>
+                        <button type="button" class="btn btn-warning px-5" onclick="alert('Thank you for your message! We will get back to you shortly.')">Send Message</button>
                     </div>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
-<script>
-document.getElementById('sendMessageBtn').addEventListener('click', function() {
-    RetroEcho.showAlert('Thank you for your message! We will get back to you shortly.', {
-        title: 'Message Sent',
-        type: 'success',
-        buttonText: 'OK'
-    });
-});
-</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

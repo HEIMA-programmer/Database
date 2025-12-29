@@ -271,7 +271,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                                     <i class="fa-solid fa-minus"></i>
                                                 </button>
                                             </form>
-                                            <form method="POST" class="d-inline confirm-form" data-confirm-message="Remove all <?= $group['Quantity'] ?> items?">
+                                            <form method="POST" class="d-inline" onsubmit="return confirm('Remove all <?= $group['Quantity'] ?> items?')">
                                                 <input type="hidden" name="action" value="remove_group">
                                                 <input type="hidden" name="stock_item_ids" value="<?= implode(',', $group['StockItemIds']) ?>">
                                                 <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove all">
@@ -292,9 +292,9 @@ require_once __DIR__ . '/../../includes/header.php';
                 <a href="catalog.php" class="btn btn-outline-secondary">
                     <i class="fa-solid fa-arrow-left me-1"></i> Continue Shopping
                 </a>
-                <form method="POST" class="d-inline confirm-form" data-confirm-message="Clear all items from cart?">
+                <form method="POST" class="d-inline">
                     <input type="hidden" name="action" value="clear">
-                    <button type="submit" class="btn btn-outline-danger">
+                    <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Clear all items from cart?')">
                         <i class="fa-solid fa-trash me-1"></i> Clear Cart
                     </button>
                 </form>
@@ -351,24 +351,5 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 <?php endif; ?>
-
-<script>
-// 处理需要确认的表单
-document.querySelectorAll('.confirm-form').forEach(form => {
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const message = this.dataset.confirmMessage || 'Are you sure?';
-        const confirmed = await RetroEcho.showConfirm(message, {
-            title: 'Confirm Action',
-            confirmText: 'Yes',
-            cancelText: 'No',
-            icon: 'fa-trash'
-        });
-        if (confirmed) {
-            this.submit();
-        }
-    });
-});
-</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

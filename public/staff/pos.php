@@ -186,44 +186,33 @@ if (!empty($_SESSION['pos_cart'])) {
 
 // 获取可用库存（用于搜索添加）
 // 【重构】按专辑和成色分组，显示数量
-// 【新增】显示所有专辑，包括没有库存的
 $search = $_GET['q'] ?? '';
 $availableStock = [];
 $availableStockGrouped = [];
-
-// 构建搜索条件
-$searchWhere = "";
-$searchParams = [$shopId, $shopId];
 if ($search) {
-    $searchWhere = "AND (r.Title LIKE ? OR r.ArtistName LIKE ?)";
+    // 获取分组后的库存（排除已在购物车中的）
+    $stmt = $pdo->prepare("
+        SELECT
+            r.ReleaseID,
+            r.Title,
+            r.ArtistName,
+            si.ConditionGrade,
+            si.UnitPrice,
+            COUNT(*) as AvailableQuantity
+        FROM StockItem si
+        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+        WHERE si.ShopID = ? AND si.Status = 'Available'
+        AND (r.Title LIKE ? OR r.ArtistName LIKE ?)
+        GROUP BY r.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade, si.UnitPrice
+        ORDER BY r.Title, FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG')
+        LIMIT 50
+    ");
     $searchParam = "%$search%";
-    $searchParams[] = $searchParam;
-    $searchParams[] = $searchParam;
-}
+    $stmt->execute([$shopId, $searchParam, $searchParam]);
+    $availableStockGrouped = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 【修改】使用 LEFT JOIN 获取所有专辑，包括没有库存的
-$stmt = $pdo->prepare("
-    SELECT
-        r.ReleaseID,
-        r.Title,
-        r.ArtistName,
-        r.Genre,
-        COALESCE(si.ConditionGrade, 'N/A') as ConditionGrade,
-        COALESCE(si.UnitPrice, 0) as UnitPrice,
-        COUNT(CASE WHEN si.ShopID = ? AND si.Status = 'Available' THEN si.StockItemID END) as AvailableQuantity
-    FROM ReleaseAlbum r
-    LEFT JOIN StockItem si ON r.ReleaseID = si.ReleaseID AND si.ShopID = ? AND si.Status = 'Available'
-    WHERE 1=1 $searchWhere
-    GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, si.ConditionGrade, si.UnitPrice
-    ORDER BY AvailableQuantity DESC, r.Title, FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'N/A')
-    LIMIT 100
-");
-$stmt->execute($searchParams);
-$availableStockGrouped = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// 计算每组中已在购物车的数量
-foreach ($availableStockGrouped as &$group) {
-    if ($group['AvailableQuantity'] > 0 && $group['ConditionGrade'] !== 'N/A') {
+    // 计算每组中已在购物车的数量
+    foreach ($availableStockGrouped as &$group) {
         // 获取该组的所有库存ID
         $idsStmt = $pdo->prepare("
             SELECT StockItemID FROM StockItem
@@ -237,13 +226,9 @@ foreach ($availableStockGrouped as &$group) {
         $group['InCartCount'] = $inCartCount;
         $group['RemainingQuantity'] = $group['AvailableQuantity'] - $inCartCount;
         $group['AllStockIds'] = $allIds;
-    } else {
-        $group['InCartCount'] = 0;
-        $group['RemainingQuantity'] = 0;
-        $group['AllStockIds'] = [];
     }
+    unset($group);
 }
-unset($group);
 
 // 【修复】获取客户列表（移除不存在的Phone字段）
 $stmt = $pdo->prepare("SELECT CustomerID, Name, Email FROM Customer ORDER BY Name LIMIT 100");
@@ -286,39 +271,24 @@ require_once __DIR__ . '/../../includes/header.php';
                     </div>
                 </form>
                 
-                <?php if (!empty($availableStockGrouped)): ?>
+                <?php if ($search && !empty($availableStockGrouped)): ?>
                     <!-- 【重构】分组显示，支持数量选择 -->
-                    <!-- 【修改】显示所有专辑，包括无库存的 -->
-                    <div class="list-group" id="searchResults" style="max-height: 500px; overflow-y: auto;">
+                    <div class="list-group" id="searchResults">
                         <?php foreach ($availableStockGrouped as $group): ?>
-                            <?php
-                            $hasStock = $group['RemainingQuantity'] > 0;
-                            $itemClass = $hasStock ? '' : 'opacity-50';
-                            ?>
-                            <div class="list-group-item bg-dark border-secondary <?= $itemClass ?>">
+                            <?php if ($group['RemainingQuantity'] > 0): ?>
+                            <div class="list-group-item bg-dark border-secondary">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong class="text-white"><?= h($group['Title']) ?></strong>
                                         <span class="text-warning">- <?= h($group['ArtistName']) ?></span>
-                                        <?php if ($group['ConditionGrade'] !== 'N/A'): ?>
-                                            <span class="badge bg-secondary ms-2"><?= h($group['ConditionGrade']) ?></span>
-                                        <?php endif; ?>
-                                        <?php if ($hasStock): ?>
-                                            <span class="badge bg-info ms-1"><?= $group['RemainingQuantity'] ?> available</span>
-                                            <?php if ($group['InCartCount'] > 0): ?>
-                                                <span class="badge bg-success ms-1"><?= $group['InCartCount'] ?> in cart</span>
-                                            <?php endif; ?>
-                                        <?php else: ?>
-                                            <span class="badge bg-danger ms-1">Out of Stock</span>
+                                        <span class="badge bg-secondary ms-2"><?= h($group['ConditionGrade']) ?></span>
+                                        <span class="badge bg-info ms-1"><?= $group['RemainingQuantity'] ?> available</span>
+                                        <?php if ($group['InCartCount'] > 0): ?>
+                                            <span class="badge bg-success ms-1"><?= $group['InCartCount'] ?> in cart</span>
                                         <?php endif; ?>
                                     </div>
-                                    <?php if ($hasStock): ?>
-                                        <div class="text-warning fw-bold"><?= formatPrice($group['UnitPrice']) ?></div>
-                                    <?php else: ?>
-                                        <div class="text-muted">-</div>
-                                    <?php endif; ?>
+                                    <div class="text-warning fw-bold"><?= formatPrice($group['UnitPrice']) ?></div>
                                 </div>
-                                <?php if ($hasStock): ?>
                                 <form method="POST" class="mt-2 add-item-form">
                                     <input type="hidden" name="action" value="add_multiple">
                                     <input type="hidden" name="release_id" value="<?= $group['ReleaseID'] ?>">
@@ -336,8 +306,8 @@ require_once __DIR__ . '/../../includes/header.php';
                                         </button>
                                     </div>
                                 </form>
-                                <?php endif; ?>
                             </div>
+                            <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
 
@@ -354,11 +324,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             }).then(response => {
                                 // 刷新页面但保留搜索词
                                 const currentSearch = '<?= h($search) ?>';
-                                if (currentSearch) {
-                                    window.location.href = 'pos.php?q=' + encodeURIComponent(currentSearch);
-                                } else {
-                                    window.location.href = 'pos.php';
-                                }
+                                window.location.href = 'pos.php?q=' + encodeURIComponent(currentSearch);
                             }).catch(error => {
                                 console.error('Error:', error);
                                 window.location.reload();
@@ -366,14 +332,8 @@ require_once __DIR__ . '/../../includes/header.php';
                         });
                     });
                     </script>
-                <?php else: ?>
-                    <p class="text-muted text-center">
-                        <?php if ($search): ?>
-                            No items found matching "<?= h($search) ?>"
-                        <?php else: ?>
-                            No releases in the system yet.
-                        <?php endif; ?>
-                    </p>
+                <?php elseif ($search): ?>
+                    <p class="text-muted text-center">No items found matching "<?= h($search) ?>"</p>
                 <?php endif; ?>
             </div>
         </div>
@@ -442,10 +402,11 @@ require_once __DIR__ . '/../../includes/header.php';
                         </div>
                     </form>
                     
-                    <form method="POST" class="mt-2 confirm-form" data-confirm-message="Clear all items from cart?">
+                    <form method="POST" class="mt-2">
                         <input type="hidden" name="action" value="clear_cart">
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-outline-danger">
+                            <button type="submit" class="btn btn-outline-danger" 
+                                    onclick="return confirm('Clear all items?')">
                                 <i class="fa-solid fa-trash me-1"></i> Clear Cart
                             </button>
                         </div>
@@ -609,23 +570,6 @@ function loadOrderDetail(orderId) {
         contentEl.innerHTML = '<div class="text-center py-4 text-danger"><i class="fa-solid fa-exclamation-circle fa-3x mb-3 d-block"></i>Order not found</div>';
     }
 }
-
-// 处理需要确认的表单
-document.querySelectorAll('.confirm-form').forEach(form => {
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const message = this.dataset.confirmMessage || 'Are you sure?';
-        const confirmed = await RetroEcho.showConfirm(message, {
-            title: 'Confirm Action',
-            confirmText: 'Yes',
-            cancelText: 'No',
-            icon: 'fa-trash'
-        });
-        if (confirmed) {
-            this.submit();
-        }
-    });
-});
 </script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

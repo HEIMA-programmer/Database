@@ -64,156 +64,12 @@ function showToast(message, type = 'success') {
 }
 
 /**
- * 自定义确认对话框（替代浏览器原生confirm）
- * @param {string} message - 确认消息
- * @param {Object} options - 配置选项
- * @returns {Promise<boolean>} - 用户选择结果
- */
-function showConfirm(message, options = {}) {
-    return new Promise((resolve) => {
-        const {
-            title = 'Confirm',
-            confirmText = 'Confirm',
-            cancelText = 'Cancel',
-            confirmClass = 'btn-warning',
-            cancelClass = 'btn-outline-secondary',
-            icon = 'fa-question-circle'
-        } = options;
-
-        // 创建模态框HTML
-        const modalId = 'retroConfirmModal';
-
-        // 移除已存在的模态框
-        const existingModal = document.getElementById(modalId);
-        if (existingModal) {
-            existingModal.remove();
-        }
-
-        const modalHTML = `
-            <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content bg-dark border-warning">
-                        <div class="modal-header border-secondary">
-                            <h5 class="modal-title text-warning">
-                                <i class="fas ${icon} me-2"></i>${title}
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p class="text-light mb-0">${message}</p>
-                        </div>
-                        <div class="modal-footer border-secondary">
-                            <button type="button" class="btn ${cancelClass}" data-action="cancel">${cancelText}</button>
-                            <button type="button" class="btn ${confirmClass}" data-action="confirm">${confirmText}</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        const modalElement = document.getElementById(modalId);
-        const modal = new bootstrap.Modal(modalElement);
-
-        // 绑定事件
-        modalElement.querySelector('[data-action="confirm"]').addEventListener('click', () => {
-            modal.hide();
-            resolve(true);
-        });
-
-        modalElement.querySelector('[data-action="cancel"]').addEventListener('click', () => {
-            modal.hide();
-            resolve(false);
-        });
-
-        modalElement.querySelector('.btn-close').addEventListener('click', () => {
-            resolve(false);
-        });
-
-        // 模态框关闭后清理DOM
-        modalElement.addEventListener('hidden.bs.modal', () => {
-            modalElement.remove();
-        });
-
-        modal.show();
-    });
-}
-
-/**
- * 自定义提示对话框（替代浏览器原生alert）
- * @param {string} message - 提示消息
- * @param {Object} options - 配置选项
- * @returns {Promise<void>}
- */
-function showAlert(message, options = {}) {
-    return new Promise((resolve) => {
-        const {
-            title = 'Notice',
-            buttonText = 'OK',
-            buttonClass = 'btn-warning',
-            icon = 'fa-info-circle',
-            type = 'info' // info, success, warning, danger
-        } = options;
-
-        const iconMap = {
-            info: 'fa-info-circle',
-            success: 'fa-check-circle',
-            warning: 'fa-exclamation-triangle',
-            danger: 'fa-exclamation-circle'
-        };
-
-        const actualIcon = icon || iconMap[type] || 'fa-info-circle';
-
-        const modalId = 'retroAlertModal';
-
-        const existingModal = document.getElementById(modalId);
-        if (existingModal) {
-            existingModal.remove();
-        }
-
-        const modalHTML = `
-            <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content bg-dark border-warning">
-                        <div class="modal-header border-secondary">
-                            <h5 class="modal-title text-warning">
-                                <i class="fas ${actualIcon} me-2"></i>${title}
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p class="text-light mb-0">${message}</p>
-                        </div>
-                        <div class="modal-footer border-secondary">
-                            <button type="button" class="btn ${buttonClass}" data-bs-dismiss="modal">${buttonText}</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        const modalElement = document.getElementById(modalId);
-        const modal = new bootstrap.Modal(modalElement);
-
-        modalElement.addEventListener('hidden.bs.modal', () => {
-            modalElement.remove();
-            resolve();
-        });
-
-        modal.show();
-    });
-}
-
-/**
- * 确认对话框（兼容旧版API）
+ * 确认对话框
  */
 function confirmAction(message, callback) {
-    showConfirm(message).then(confirmed => {
-        if (confirmed) {
-            callback();
-        }
-    });
+    if (confirm(message)) {
+        callback();
+    }
 }
 
 /**
@@ -484,8 +340,6 @@ window.RetroEcho = {
     showLoading,
     hideLoading,
     showToast,
-    showConfirm,
-    showAlert,
     confirmAction,
     formatCurrency,
     formatDate,

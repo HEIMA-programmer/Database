@@ -2,6 +2,7 @@
 /**
  * 【架构重构】订单列表页面
  * 表现层 - 仅负责数据展示和用户交互
+ * 【新增】支持15分钟支付倒计时显示
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
@@ -13,6 +14,9 @@ $customerId = $_SESSION['user_id'];
 // ========== 数据准备 ==========
 $pageData = prepareOrdersPageData($pdo, $customerId);
 $orders = $pageData['orders'];
+
+// 支付超时时间（15分钟）
+define('PAYMENT_TIMEOUT_MINUTES', 15);
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
@@ -36,7 +40,18 @@ require_once __DIR__ . '/../../includes/header.php';
                 </thead>
                 <tbody>
                     <?php foreach ($orders as $o): ?>
-                    <tr>
+                    <?php
+                    // 计算剩余支付时间
+                    $remainingSeconds = 0;
+                    $isExpired = false;
+                    if ($o['OrderStatus'] === 'Pending') {
+                        $orderTime = strtotime($o['OrderDate']);
+                        $expiryTime = $orderTime + (PAYMENT_TIMEOUT_MINUTES * 60);
+                        $remainingSeconds = $expiryTime - time();
+                        $isExpired = $remainingSeconds <= 0;
+                    }
+                    ?>
+                    <tr data-order-id="<?= $o['OrderID'] ?>">
                         <td>#<?= $o['OrderID'] ?></td>
                         <td><?= formatDate($o['OrderDate']) ?></td>
                         <td>
@@ -64,6 +79,18 @@ require_once __DIR__ . '/../../includes/header.php';
                             };
                             ?>
                             <span class="<?= $statusClass ?> fw-bold"><?= h($o['OrderStatus']) ?></span>
+                            <?php if ($o['OrderStatus'] === 'Pending' && !$isExpired): ?>
+                                <br>
+                                <small class="countdown-timer text-danger" data-remaining="<?= $remainingSeconds ?>">
+                                    <i class="fa-solid fa-clock me-1"></i>
+                                    <span class="countdown-display"></span>
+                                </small>
+                            <?php elseif ($o['OrderStatus'] === 'Pending' && $isExpired): ?>
+                                <br>
+                                <small class="text-danger">
+                                    <i class="fa-solid fa-exclamation-triangle me-1"></i>已超时
+                                </small>
+                            <?php endif; ?>
                         </td>
                         <td class="text-warning fw-bold"><?= formatPrice($o['TotalAmount']) ?></td>
                         <td>
@@ -81,5 +108,51 @@ require_once __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
     </div>
 </div>
+
+<!-- 倒计时脚本 -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const timers = document.querySelectorAll('.countdown-timer');
+
+    timers.forEach(function(timer) {
+        let remaining = parseInt(timer.dataset.remaining);
+        const display = timer.querySelector('.countdown-display');
+        const orderId = timer.closest('tr').dataset.orderId;
+
+        function updateDisplay() {
+            if (remaining <= 0) {
+                display.textContent = '已超时';
+                // 自动取消订单
+                cancelExpiredOrder(orderId);
+                return;
+            }
+
+            const minutes = Math.floor(remaining / 60);
+            const seconds = remaining % 60;
+            display.textContent = `${minutes}:${seconds.toString().padStart(2, '0')} 剩余`;
+
+            remaining--;
+            setTimeout(updateDisplay, 1000);
+        }
+
+        updateDisplay();
+    });
+
+    function cancelExpiredOrder(orderId) {
+        fetch('cancel_order.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'order_id=' + orderId + '&auto_cancel=1'
+        }).then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            }
+        }).catch(error => console.error('Error:', error));
+    }
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

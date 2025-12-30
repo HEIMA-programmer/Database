@@ -19,14 +19,8 @@ requireRole('Staff');
 // 【修复】使用正确的Session结构
 $employeeId = $_SESSION['user_id'];
 $shopId = $_SESSION['shop_id'];
-$stmt = $pdo->prepare("
-    SELECT e.*, s.Name as ShopName, s.Type as ShopType
-    FROM Employee e
-    JOIN Shop s ON e.ShopID = s.ShopID
-    WHERE e.EmployeeID = ?
-");
-$stmt->execute([$employeeId]);
-$employee = $stmt->fetch(PDO::FETCH_ASSOC);
+// 【架构重构Phase2】使用DBProcedures替换直接SQL
+$employee = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
 $shopType = $employee['ShopType'];
 
 // 处理订单操作
@@ -50,20 +44,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $processedCount = 0;
 
             foreach ($transferIdArray as $transferId) {
-                // 验证调拨记录属于本店铺（作为源店铺）
-                $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND FromShopID = ?");
-                $stmt->execute([$transferId, $shopId]);
-                $transfer = $stmt->fetch(PDO::FETCH_ASSOC);
+                // 【架构重构Phase2】使用DBProcedures替换直接SQL
+                $transfer = DBProcedures::validateTransferFromShop($pdo, $transferId, $shopId);
 
                 if ($transfer && $transfer['Status'] === 'Pending') {
                     if ($action === 'confirm_transfer') {
-                        // 更新调拨状态为InTransit
-                        $stmt = $pdo->prepare("UPDATE InventoryTransfer SET Status = 'InTransit' WHERE TransferID = ?");
-                        $stmt->execute([$transferId]);
-
-                        // 更新库存状态为InTransit
-                        $stmt = $pdo->prepare("UPDATE StockItem SET Status = 'InTransit' WHERE StockItemID = ?");
-                        $stmt->execute([$transfer['StockItemID']]);
+                        // 使用存储过程确认发货
+                        DBProcedures::confirmTransferDispatch($pdo, $transferId, $employeeId);
                         $processedCount++;
                     } elseif ($action === 'cancel_transfer') {
                         // 取消调拨（删除记录）
@@ -106,10 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $processedCount = 0;
 
             foreach ($transferIdArray as $transferId) {
-                // 验证调拨记录属于本店铺（作为目标店铺）
-                $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND ToShopID = ?");
-                $stmt->execute([$transferId, $shopId]);
-                $transfer = $stmt->fetch(PDO::FETCH_ASSOC);
+                // 【架构重构Phase2】使用DBProcedures替换直接SQL
+                $transfer = DBProcedures::validateTransferToShop($pdo, $transferId, $shopId);
 
                 if ($transfer && $transfer['Status'] === 'InTransit') {
                     // 调用存储过程完成调拨（触发器会自动更新库存位置和状态）
@@ -132,18 +117,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 处理顾客订单操作
     $orderId = (int)($_POST['order_id'] ?? 0);
 
-    // 【修复】验证订单属于本店铺 - 使用正确的字段名 FulfilledByShopID
-    $stmt = $pdo->prepare("SELECT FulfilledByShopID, OrderStatus FROM CustomerOrder WHERE OrderID = ?");
-    $stmt->execute([$orderId]);
-    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+    // 【架构重构Phase2】使用DBProcedures替换直接SQL
+    $order = DBProcedures::validateOrderBelongsToShop($pdo, $orderId, $shopId);
 
-    if ($order && $order['FulfilledByShopID'] == $shopId) {
+    if ($order) {
         try {
             switch ($action) {
                 case 'mark_paid':
                     if ($order['OrderStatus'] == 'Pending') {
-                        $stmt = $pdo->prepare("UPDATE CustomerOrder SET OrderStatus = 'Paid' WHERE OrderID = ?");
-                        $stmt->execute([$orderId]);
+                        DBProcedures::updateOrderStatus($pdo, $orderId, 'Paid', $employeeId);
                         flash("Order #$orderId marked as Paid.", 'success');
                     }
                     break;
@@ -151,8 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 case 'ship':
                     // 【修复】只有Paid状态才能发货，Pending状态（未支付）不能发货
                     if ($order['OrderStatus'] == 'Paid') {
-                        $stmt = $pdo->prepare("UPDATE CustomerOrder SET OrderStatus = 'Shipped' WHERE OrderID = ?");
-                        $stmt->execute([$orderId]);
+                        DBProcedures::updateOrderStatus($pdo, $orderId, 'Shipped', $employeeId);
                         flash("Order #$orderId marked as Shipped.", 'success');
                     } else {
                         flash("Order must be paid before shipping.", 'warning');
@@ -161,8 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 case 'ready_pickup':
                     if (in_array($order['OrderStatus'], ['Pending', 'Paid'])) {
-                        $stmt = $pdo->prepare("UPDATE CustomerOrder SET OrderStatus = 'ReadyForPickup' WHERE OrderID = ?");
-                        $stmt->execute([$orderId]);
+                        DBProcedures::updateOrderStatus($pdo, $orderId, 'ReadyForPickup', $employeeId);
                         flash("Order #$orderId is ready for pickup.", 'success');
                     }
                     break;
@@ -174,16 +154,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 case 'cancel':
                     if (!in_array($order['OrderStatus'], ['Completed', 'Cancelled'])) {
-                        // 【修复】使用存储过程取消订单，触发器会自动释放库存
-                        $pdo->beginTransaction();
                         DBProcedures::cancelOrder($pdo, $orderId);
-                        $pdo->commit();
                         flash("Order #$orderId cancelled.", 'info');
                     }
                     break;
             }
         } catch (Exception $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
             flash("Error: " . $e->getMessage(), 'danger');
         }
     } elseif ($orderId > 0) {
@@ -194,113 +170,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-// 获取本店铺待处理订单
+// 【架构重构Phase2】获取本店铺订单列表
 $statusFilter = $_GET['status'] ?? 'pending';
-$statusCondition = match($statusFilter) {
-    'pending' => "AND co.OrderStatus IN ('Pending', 'Paid')",
-    'shipping' => "AND co.OrderStatus = 'Shipped'",
-    'completed' => "AND co.OrderStatus = 'Completed'",
-    'cancelled' => "AND co.OrderStatus = 'Cancelled'",
-    default => ""
-};
+$orders = DBProcedures::getFulfillmentOrders($pdo, $shopId, $statusFilter);
 
-// 【修复】使用正确的字段名：FulfilledByShopID 和 COUNT(ol.StockItemID)
-$stmt = $pdo->prepare("
-    SELECT co.*, c.Name as CustomerName, c.Email as CustomerEmail,
-           COUNT(ol.StockItemID) as ItemCount,
-           (SELECT GROUP_CONCAT(DISTINCT r.Title SEPARATOR ', ')
-            FROM OrderLine ol2
-            JOIN StockItem si ON ol2.StockItemID = si.StockItemID
-            JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-            WHERE ol2.OrderID = co.OrderID
-            LIMIT 3) as ItemTitles
-    FROM CustomerOrder co
-    LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-    LEFT JOIN OrderLine ol ON co.OrderID = ol.OrderID
-    WHERE co.FulfilledByShopID = ? AND co.FulfillmentType = 'Shipping' $statusCondition
-    GROUP BY co.OrderID
-    ORDER BY co.OrderDate DESC
-");
-$stmt->execute([$shopId]);
-$orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// 【架构重构Phase2】获取订单状态统计
+$statusCounts = DBProcedures::getFulfillmentOrderStatusCounts($pdo, $shopId);
 
-// 【修复】统计各状态数量 - 使用正确的字段名
-$stmt = $pdo->prepare("
-    SELECT OrderStatus, COUNT(*) as cnt
-    FROM CustomerOrder
-    WHERE FulfilledByShopID = ? AND FulfillmentType = 'Shipping'
-    GROUP BY OrderStatus
-");
-$stmt->execute([$shopId]);
-$statusCounts = [];
-while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    $statusCounts[$row['OrderStatus']] = $row['cnt'];
-}
-
-// 【新增】获取待发货的店铺间调货记录（本店作为源店铺）
-// 【修复】按专辑+条件+目标店铺合并显示，而不是每个StockItem单独显示
-$pendingTransfers = [];
-$transferStmt = $pdo->prepare("
-    SELECT
-        MIN(it.TransferID) as FirstTransferID,
-        GROUP_CONCAT(it.TransferID) as TransferIDs,
-        it.FromShopID,
-        it.ToShopID,
-        it.Status,
-        MIN(it.TransferDate) as TransferDate,
-        from_shop.Name as FromShopName,
-        to_shop.Name as ToShopName,
-        r.ReleaseID,
-        r.Title as ReleaseTitle,
-        r.ArtistName,
-        si.ConditionGrade,
-        MIN(si.UnitPrice) as UnitPrice,
-        COUNT(*) as Quantity
-    FROM InventoryTransfer it
-    JOIN Shop from_shop ON it.FromShopID = from_shop.ShopID
-    JOIN Shop to_shop ON it.ToShopID = to_shop.ShopID
-    JOIN StockItem si ON it.StockItemID = si.StockItemID
-    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-    WHERE it.FromShopID = ? AND it.Status = 'Pending'
-    GROUP BY it.FromShopID, it.ToShopID, r.ReleaseID, si.ConditionGrade, it.Status,
-             from_shop.Name, to_shop.Name, r.Title, r.ArtistName
-    ORDER BY MIN(it.TransferDate) DESC
-");
-$transferStmt->execute([$shopId]);
-$pendingTransfers = $transferStmt->fetchAll(PDO::FETCH_ASSOC);
+// 【架构重构Phase2】获取待发货的店铺间调货记录（本店作为源店铺）
+$pendingTransfers = DBProcedures::getFulfillmentPendingTransfersGrouped($pdo, $shopId);
 $pendingTransferCount = array_sum(array_column($pendingTransfers, 'Quantity'));
 
-// 【新增】获取待接收的店铺间调货记录（本店作为目标店铺）
-// 【修复】按专辑+条件+来源店铺合并显示
-$incomingTransfers = [];
-$incomingStmt = $pdo->prepare("
-    SELECT
-        MIN(it.TransferID) as FirstTransferID,
-        GROUP_CONCAT(it.TransferID) as TransferIDs,
-        it.FromShopID,
-        it.ToShopID,
-        it.Status,
-        MIN(it.TransferDate) as TransferDate,
-        from_shop.Name as FromShopName,
-        to_shop.Name as ToShopName,
-        r.ReleaseID,
-        r.Title as ReleaseTitle,
-        r.ArtistName,
-        si.ConditionGrade,
-        MIN(si.UnitPrice) as UnitPrice,
-        COUNT(*) as Quantity
-    FROM InventoryTransfer it
-    JOIN Shop from_shop ON it.FromShopID = from_shop.ShopID
-    JOIN Shop to_shop ON it.ToShopID = to_shop.ShopID
-    JOIN StockItem si ON it.StockItemID = si.StockItemID
-    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-    WHERE it.ToShopID = ? AND it.Status = 'InTransit'
-    GROUP BY it.FromShopID, it.ToShopID, r.ReleaseID, si.ConditionGrade, it.Status,
-             from_shop.Name, to_shop.Name, r.Title, r.ArtistName
-    ORDER BY MIN(it.TransferDate) DESC
-");
-$incomingStmt->execute([$shopId]);
-$incomingTransfers = $incomingStmt->fetchAll(PDO::FETCH_ASSOC);
+// 【架构重构Phase2】获取待接收的店铺间调货记录（本店作为目标店铺）
+$incomingTransfers = DBProcedures::getFulfillmentIncomingTransfersGrouped($pdo, $shopId);
 $incomingTransferCount = array_sum(array_column($incomingTransfers, 'Quantity'));
 
 // 当前标签页

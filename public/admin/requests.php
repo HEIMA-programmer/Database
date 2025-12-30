@@ -21,32 +21,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($requestId && in_array($action, ['approve', 'reject'])) {
         $approved = ($action === 'approve');
 
-        // 【新增】对于调货申请的批准，需要先验证并设置源店铺
+        // 【架构重构Phase2】对于调货申请的批准，需要先验证并设置源店铺
         if ($approved && $sourceShopId > 0) {
             // 获取申请的详细信息
-            $reqStmt = $pdo->prepare("SELECT ReleaseID, ConditionGrade, Quantity, RequestType FROM ManagerRequest WHERE RequestID = ?");
-            $reqStmt->execute([$requestId]);
-            $reqInfo = $reqStmt->fetch(PDO::FETCH_ASSOC);
+            $reqInfo = DBProcedures::getTransferRequestInfo($pdo, $requestId);
 
             if ($reqInfo && $reqInfo['RequestType'] === 'TransferRequest') {
                 // 【边界检查】验证源店铺的可用库存数量是否足够
-                $stockStmt = $pdo->prepare("
-                    SELECT COUNT(*) as available
-                    FROM StockItem
-                    WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ? AND Status = 'Available'
-                ");
-                $stockStmt->execute([$sourceShopId, $reqInfo['ReleaseID'], $reqInfo['ConditionGrade']]);
-                $stockCount = $stockStmt->fetch(PDO::FETCH_ASSOC);
+                $stockCount = DBProcedures::getShopStockCount($pdo, $sourceShopId, $reqInfo['ReleaseID'], $reqInfo['ConditionGrade']);
 
-                if (!$stockCount || $stockCount['available'] < $reqInfo['Quantity']) {
-                    flash("Cannot approve: Source shop only has " . ($stockCount['available'] ?? 0) . " available item(s), but " . $reqInfo['Quantity'] . " requested.", 'danger');
+                if ($stockCount < $reqInfo['Quantity']) {
+                    flash("Cannot approve: Source shop only has $stockCount available item(s), but " . $reqInfo['Quantity'] . " requested.", 'danger');
                     header("Location: requests.php");
                     exit();
                 }
             }
 
-            $updateStmt = $pdo->prepare("UPDATE ManagerRequest SET ToShopID = ? WHERE RequestID = ? AND RequestType = 'TransferRequest'");
-            $updateStmt->execute([$sourceShopId, $requestId]);
+            DBProcedures::updateTransferRequestSource($pdo, $requestId, $sourceShopId);
         }
 
         $result = DBProcedures::respondToRequest($pdo, $requestId, $employeeId, $approved, $responseNote);
@@ -76,25 +67,10 @@ if (!in_array($filter, $validFilters)) {
 $pendingRequests = DBProcedures::getAdminPendingRequests($pdo);
 $allRequests = DBProcedures::getAdminAllRequests($pdo);
 
-// 【新增】获取所有店铺信息（用于调货申请的源店铺选择）
+// 【架构重构Phase2】获取所有店铺信息
 $shops = DBProcedures::getShopList($pdo);
 
-// 【新增】为每个调货申请查询其他店铺的库存情况
-function getOtherShopsInventory($pdo, $releaseId, $conditionGrade, $excludeShopId) {
-    $stmt = $pdo->prepare("
-        SELECT si.ShopID, s.Name as ShopName, s.Type as ShopType,
-               COUNT(*) as AvailableQuantity, MIN(si.UnitPrice) as UnitPrice
-        FROM StockItem si
-        JOIN Shop s ON si.ShopID = s.ShopID
-        WHERE si.ReleaseID = ? AND si.ConditionGrade = ? AND si.Status = 'Available'
-        AND si.ShopID != ?
-        GROUP BY si.ShopID, s.Name, s.Type
-        HAVING AvailableQuantity > 0
-        ORDER BY AvailableQuantity DESC
-    ");
-    $stmt->execute([$releaseId, $conditionGrade, $excludeShopId]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
+// 【架构重构Phase2】getOtherShopsInventory函数已移至DBProcedures::getOtherShopsInventory()
 
 // 根据过滤条件筛选
 $displayRequests = [];

@@ -1,11 +1,12 @@
 <?php
 /**
- * 【新增】Admin申请处理API
+ * 【架构重构Phase2】Admin申请处理API
  * 提供实时库存查询等API功能
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Admin');
 
 header('Content-Type: application/json');
@@ -25,19 +26,8 @@ switch ($action) {
         }
 
         try {
-            $stmt = $pdo->prepare("
-                SELECT si.ShopID, s.Name as ShopName, s.Type as ShopType,
-                       COUNT(*) as AvailableQuantity, MIN(si.UnitPrice) as UnitPrice
-                FROM StockItem si
-                JOIN Shop s ON si.ShopID = s.ShopID
-                WHERE si.ReleaseID = ? AND si.ConditionGrade = ? AND si.Status = 'Available'
-                AND si.ShopID != ?
-                GROUP BY si.ShopID, s.Name, s.Type
-                HAVING AvailableQuantity > 0
-                ORDER BY AvailableQuantity DESC
-            ");
-            $stmt->execute([$releaseId, $condition, $excludeShopId]);
-            $inventory = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // 【架构重构Phase2】使用DBProcedures替换直接SQL
+            $inventory = DBProcedures::getOtherShopsInventory($pdo, $releaseId, $condition, $excludeShopId);
 
             echo json_encode(['success' => true, 'inventory' => $inventory]);
         } catch (PDOException $e) {

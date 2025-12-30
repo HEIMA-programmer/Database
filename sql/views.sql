@@ -1044,3 +1044,634 @@ JOIN Shop sh ON s.ShopID = sh.ShopID
 WHERE s.Status = 'Available'
 GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, sh.ShopID, sh.Name, s.ConditionGrade
 ORDER BY r.Title, sh.Name, FIELD(s.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG');
+
+-- ================================================
+-- 【架构重构Phase2】新增视图 - 消除剩余PHP直接表访问
+-- ================================================
+
+-- 52. [架构重构] 供应商列表视图
+-- 替换 db_procedures.php:getSupplierList() 中的直接表访问
+CREATE OR REPLACE VIEW vw_supplier_list AS
+SELECT
+    SupplierID,
+    Name,
+    Email
+FROM Supplier
+ORDER BY Name;
+
+-- 53. [架构重构] 购物车商品验证视图
+-- 替换 cart.php 中的直接表访问（验证商品可用性）
+CREATE OR REPLACE VIEW vw_cart_item_validation AS
+SELECT
+    si.StockItemID,
+    si.ReleaseID,
+    si.UnitPrice,
+    si.ConditionGrade,
+    si.ShopID,
+    si.Status,
+    r.Title,
+    r.ArtistName
+FROM StockItem si
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;
+
+-- 54. [架构重构] 购物车商品详情视图
+-- 替换 cart.php 中的购物车数据获取
+CREATE OR REPLACE VIEW vw_cart_items_detail AS
+SELECT
+    si.StockItemID,
+    si.ReleaseID,
+    si.UnitPrice,
+    si.ConditionGrade,
+    si.ShopID,
+    si.Status,
+    r.Title,
+    r.ArtistName,
+    s.Name AS ShopName,
+    s.Type AS ShopType
+FROM StockItem si
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+JOIN Shop s ON si.ShopID = s.ShopID;
+
+-- 55. [架构重构] 订单取消验证视图
+-- 替换 cancel_order.php 中的直接表访问
+CREATE OR REPLACE VIEW vw_order_cancel_validation AS
+SELECT
+    OrderID,
+    CustomerID,
+    OrderStatus
+FROM CustomerOrder
+WHERE OrderStatus = 'Pending';
+
+-- 56. [架构重构] 员工店铺信息视图（包含shopId）
+-- 替换 pos.php, fulfillment.php, buyback.php 中的员工信息查询
+CREATE OR REPLACE VIEW vw_employee_shop_info AS
+SELECT
+    e.EmployeeID,
+    e.Name AS EmployeeName,
+    e.Role,
+    e.ShopID,
+    COALESCE(s.Name, 'Headquarters') AS ShopName,
+    COALESCE(s.Type, 'Retail') AS ShopType
+FROM Employee e
+LEFT JOIN Shop s ON e.ShopID = s.ShopID;
+
+-- 57. [架构重构] POS库存分组视图
+-- 替换 pos.php 中的库存分组查询
+CREATE OR REPLACE VIEW vw_pos_stock_grouped AS
+SELECT
+    si.ShopID,
+    si.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    si.ConditionGrade,
+    COUNT(*) AS Quantity,
+    MIN(si.UnitPrice) AS UnitPrice,
+    GROUP_CONCAT(si.StockItemID ORDER BY si.StockItemID) AS StockItemIds
+FROM StockItem si
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+WHERE si.Status = 'Available'
+GROUP BY si.ShopID, si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade
+ORDER BY r.Title, FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG');
+
+-- 58. [架构重构] 待处理调拨列表（源店铺视角）
+-- 替换 fulfillment.php 中的待发货调拨查询
+CREATE OR REPLACE VIEW vw_fulfillment_pending_transfers AS
+SELECT
+    t.TransferID,
+    t.StockItemID,
+    t.FromShopID,
+    t.ToShopID,
+    t.Status,
+    t.TransferDate,
+    s1.Name AS FromShopName,
+    s2.Name AS ToShopName,
+    r.Title,
+    r.ArtistName,
+    si.ConditionGrade,
+    si.UnitPrice,
+    e.Name AS AuthorizedByName
+FROM InventoryTransfer t
+JOIN StockItem si ON t.StockItemID = si.StockItemID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+JOIN Shop s1 ON t.FromShopID = s1.ShopID
+JOIN Shop s2 ON t.ToShopID = s2.ShopID
+LEFT JOIN Employee e ON t.AuthorizedByEmployeeID = e.EmployeeID
+WHERE t.Status = 'Pending'
+ORDER BY t.TransferDate DESC;
+
+-- 59. [架构重构] 进货中调拨列表（目标店铺视角）
+-- 替换 fulfillment.php 中的待收货调拨查询
+CREATE OR REPLACE VIEW vw_fulfillment_incoming_transfers AS
+SELECT
+    t.TransferID,
+    t.StockItemID,
+    t.FromShopID,
+    t.ToShopID,
+    t.Status,
+    t.TransferDate,
+    s1.Name AS FromShopName,
+    s2.Name AS ToShopName,
+    r.Title,
+    r.ArtistName,
+    si.ConditionGrade,
+    si.UnitPrice,
+    e.Name AS AuthorizedByName
+FROM InventoryTransfer t
+JOIN StockItem si ON t.StockItemID = si.StockItemID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+JOIN Shop s1 ON t.FromShopID = s1.ShopID
+JOIN Shop s2 ON t.ToShopID = s2.ShopID
+LEFT JOIN Employee e ON t.AuthorizedByEmployeeID = e.EmployeeID
+WHERE t.Status = 'InTransit'
+ORDER BY t.TransferDate DESC;
+
+-- 60. [架构重构] Fulfillment待发货订单视图
+-- 替换 fulfillment.php 中的待发货订单查询
+CREATE OR REPLACE VIEW vw_fulfillment_shipping_orders AS
+SELECT
+    co.OrderID,
+    co.CustomerID,
+    co.OrderDate,
+    co.OrderStatus,
+    co.TotalAmount,
+    co.FulfilledByShopID AS ShopID,
+    co.FulfillmentType,
+    co.ShippingAddress,
+    c.Name AS CustomerName,
+    c.Email AS CustomerEmail,
+    (SELECT COUNT(*) FROM OrderLine WHERE OrderID = co.OrderID) AS ItemCount
+FROM CustomerOrder co
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+WHERE co.OrderType = 'Online'
+  AND co.OrderStatus = 'Paid'
+  AND co.FulfillmentType = 'Shipping'
+ORDER BY co.OrderDate ASC;
+
+-- 61. [架构重构] 已发货待确认订单视图
+-- 替换 fulfillment.php 中的已发货订单查询
+CREATE OR REPLACE VIEW vw_fulfillment_shipped_orders AS
+SELECT
+    co.OrderID,
+    co.CustomerID,
+    co.OrderDate,
+    co.OrderStatus,
+    co.TotalAmount,
+    co.FulfilledByShopID AS ShopID,
+    co.FulfillmentType,
+    c.Name AS CustomerName,
+    c.Email AS CustomerEmail,
+    (SELECT COUNT(*) FROM OrderLine WHERE OrderID = co.OrderID) AS ItemCount
+FROM CustomerOrder co
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+WHERE co.OrderType = 'Online'
+  AND co.OrderStatus = 'Shipped'
+ORDER BY co.OrderDate ASC;
+
+-- 62. [架构重构] Warehouse库存视图
+-- 替换 warehouse_dispatch.php 中的仓库库存查询
+CREATE OR REPLACE VIEW vw_warehouse_stock AS
+SELECT
+    si.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    si.ConditionGrade,
+    COUNT(*) AS Quantity,
+    MIN(si.UnitPrice) AS UnitPrice,
+    si.ShopID,
+    s.Name AS ShopName
+FROM StockItem si
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+JOIN Shop s ON si.ShopID = s.ShopID
+WHERE si.Status = 'Available' AND s.Type = 'Warehouse'
+GROUP BY si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade, si.ShopID, s.Name
+ORDER BY r.Title, FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG');
+
+-- 63. [架构重构] 零售店铺列表视图
+-- 替换 warehouse_dispatch.php 中的零售店铺查询
+CREATE OR REPLACE VIEW vw_retail_shops AS
+SELECT
+    ShopID,
+    Name,
+    Address
+FROM Shop
+WHERE Type = 'Retail'
+ORDER BY Name;
+
+-- 64. [架构重构] Buyback专辑价格参考视图
+-- 替换 buyback.php 中的现有库存价格查询
+CREATE OR REPLACE VIEW vw_buyback_price_reference AS
+SELECT
+    ReleaseID,
+    ConditionGrade,
+    MIN(UnitPrice) AS MinPrice,
+    MAX(UnitPrice) AS MaxPrice,
+    AVG(UnitPrice) AS AvgPrice,
+    COUNT(*) AS StockCount
+FROM StockItem
+WHERE Status = 'Available'
+GROUP BY ReleaseID, ConditionGrade;
+
+-- 65. [架构重构] 最近回购订单视图
+-- 替换 buyback.php 中的最近回购查询
+CREATE OR REPLACE VIEW vw_recent_buyback_orders AS
+SELECT
+    bo.BuybackOrderID,
+    bo.CustomerID,
+    COALESCE(c.Name, 'Walk-in') AS CustomerName,
+    bo.ShopID,
+    bo.BuybackDate,
+    bo.TotalPayment,
+    bo.Status,
+    r.Title,
+    r.ArtistName,
+    bol.Quantity,
+    bol.UnitPrice AS BuybackPrice,
+    bol.ConditionGrade,
+    e.Name AS ProcessedByName
+FROM BuybackOrder bo
+LEFT JOIN Customer c ON bo.CustomerID = c.CustomerID
+JOIN BuybackOrderLine bol ON bo.BuybackOrderID = bol.BuybackOrderID
+JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
+JOIN Employee e ON bo.ProcessedByEmployeeID = e.EmployeeID
+ORDER BY bo.BuybackDate DESC;
+
+-- 66. [架构重构] Manager申请详情视图（用于库存验证）
+-- 替换 admin/requests.php 中的库存验证查询
+CREATE OR REPLACE VIEW vw_request_stock_verification AS
+SELECT
+    mr.RequestID,
+    mr.FromShopID,
+    mr.ToShopID,
+    mr.ReleaseID,
+    mr.ConditionGrade,
+    mr.Quantity AS RequestedQuantity,
+    (
+        SELECT COUNT(*)
+        FROM StockItem si
+        WHERE si.ShopID = mr.ToShopID
+          AND si.ReleaseID = mr.ReleaseID
+          AND si.ConditionGrade = mr.ConditionGrade
+          AND si.Status = 'Available'
+    ) AS AvailableQuantity
+FROM ManagerRequest mr
+WHERE mr.RequestType = 'TransferRequest' AND mr.Status = 'Pending';
+
+-- 67. [架构重构] 其他店铺同款库存视图
+-- 替换 admin/requests.php 中的跨店库存查询
+CREATE OR REPLACE VIEW vw_other_shops_inventory AS
+SELECT
+    si.ShopID,
+    s.Name AS ShopName,
+    si.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    si.ConditionGrade,
+    COUNT(*) AS AvailableQuantity,
+    MIN(si.UnitPrice) AS UnitPrice
+FROM StockItem si
+JOIN Shop s ON si.ShopID = s.ShopID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+WHERE si.Status = 'Available'
+GROUP BY si.ShopID, s.Name, si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade;
+
+-- 68. [架构重构] 订单详情视图（包含商品信息）
+-- 替换 pos.php 中的订单明细查询
+CREATE OR REPLACE VIEW vw_order_line_detail AS
+SELECT
+    ol.OrderID,
+    ol.StockItemID,
+    ol.PriceAtSale,
+    si.ReleaseID,
+    si.ConditionGrade,
+    r.Title,
+    r.ArtistName
+FROM OrderLine ol
+JOIN StockItem si ON ol.StockItemID = si.StockItemID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;
+
+-- 69. [架构重构] Checkout库存验证视图
+-- 替换 checkout.php 中的库存验证查询
+CREATE OR REPLACE VIEW vw_checkout_stock_validation AS
+SELECT
+    si.StockItemID,
+    si.ReleaseID,
+    si.ShopID,
+    si.Status,
+    si.UnitPrice,
+    si.ConditionGrade,
+    r.Title,
+    r.ArtistName,
+    s.Name AS ShopName,
+    s.Type AS ShopType
+FROM StockItem si
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+JOIN Shop s ON si.ShopID = s.ShopID
+WHERE si.Status = 'Available';
+
+-- 70. [架构重构] 店铺Walk-in顾客收入视图
+-- 替换 functions.php:prepareDashboardData 中的walk-in收入查询
+CREATE OR REPLACE VIEW vw_shop_walk_in_revenue AS
+SELECT
+    FulfilledByShopID AS ShopID,
+    COUNT(DISTINCT OrderID) AS OrderCount,
+    COALESCE(SUM(TotalAmount), 0) AS TotalSpent
+FROM CustomerOrder
+WHERE CustomerID IS NULL AND OrderStatus IN ('Paid', 'Completed')
+GROUP BY FulfilledByShopID;
+
+-- 71. [架构重构] 店铺库存成本视图
+-- 替换 functions.php:prepareDashboardData 中的库存成本计算
+CREATE OR REPLACE VIEW vw_shop_inventory_cost AS
+SELECT
+    si.ShopID,
+    COALESCE(SUM(
+        CASE
+            WHEN si.SourceType = 'Supplier' THEN
+                COALESCE(
+                    (SELECT sol.UnitCost
+                     FROM SupplierOrderLine sol
+                     WHERE sol.SupplierOrderID = si.SourceOrderID
+                     AND sol.ReleaseID = si.ReleaseID
+                     AND sol.ConditionGrade = si.ConditionGrade
+                     LIMIT 1),
+                    0
+                )
+            WHEN si.SourceType = 'Buyback' THEN
+                COALESCE(
+                    (SELECT bol.UnitPrice
+                     FROM BuybackOrderLine bol
+                     WHERE bol.BuybackOrderID = si.SourceOrderID
+                     AND bol.ReleaseID = si.ReleaseID
+                     AND bol.ConditionGrade = si.ConditionGrade
+                     LIMIT 1),
+                    0
+                )
+            ELSE 0
+        END
+    ), 0) AS TotalInventoryCost,
+    COUNT(*) AS InventoryCount
+FROM StockItem si
+WHERE si.Status IN ('Available', 'Sold')
+GROUP BY si.ShopID;
+
+-- 72. [架构重构] 店铺采购统计视图
+-- 替换 functions.php:prepareDashboardData 中的采购统计查询
+CREATE OR REPLACE VIEW vw_shop_procurement_stats AS
+SELECT
+    DestinationShopID AS ShopID,
+    COUNT(SupplierOrderID) AS ProcurementCount
+FROM SupplierOrder
+WHERE Status = 'Received'
+GROUP BY DestinationShopID;
+
+-- 73. [架构重构] 专辑店铺库存分组视图
+-- 替换 functions.php:prepareReleaseDetailData 中的库存分组查询
+CREATE OR REPLACE VIEW vw_release_shop_stock_grouped AS
+SELECT
+    si.ReleaseID,
+    si.ShopID,
+    si.ConditionGrade,
+    si.UnitPrice,
+    COUNT(*) AS AvailableQuantity
+FROM StockItem si
+WHERE si.Status = 'Available'
+GROUP BY si.ReleaseID, si.ShopID, si.ConditionGrade, si.UnitPrice;
+
+-- 74. [架构重构] 可用库存ID列表视图
+-- 替换 functions.php:addMultipleToCart 中的库存ID查询
+CREATE OR REPLACE VIEW vw_available_stock_ids AS
+SELECT
+    StockItemID,
+    ReleaseID,
+    ShopID,
+    ConditionGrade
+FROM StockItem
+WHERE Status = 'Available'
+ORDER BY StockItemID;
+
+-- 75. [架构重构Phase2] POS可用库存ID视图（含价格）
+-- 替换 pos.php 中的 add_multiple 库存ID查询
+CREATE OR REPLACE VIEW vw_pos_available_stock_ids AS
+SELECT
+    StockItemID,
+    ShopID,
+    ReleaseID,
+    ConditionGrade,
+    UnitPrice
+FROM StockItem
+WHERE Status = 'Available'
+ORDER BY StockItemID;
+
+-- 76. [架构重构Phase2] 简单客户列表视图
+-- 替换 pos.php 中的客户下拉框查询
+CREATE OR REPLACE VIEW vw_customer_list_simple AS
+SELECT
+    CustomerID,
+    Name,
+    Email
+FROM Customer
+ORDER BY Name;
+
+-- 77. [架构重构Phase2] POS购物车商品验证视图
+-- 替换 pos.php 中的添加商品验证查询
+CREATE OR REPLACE VIEW vw_pos_cart_item_validation AS
+SELECT
+    si.StockItemID,
+    si.ShopID,
+    si.ReleaseID,
+    si.ConditionGrade,
+    si.UnitPrice,
+    si.Status,
+    r.Title,
+    r.ArtistName
+FROM StockItem si
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+WHERE si.Status = 'Available';
+
+-- 78. [架构重构Phase2] 待发货调拨分组视图（源店铺视角）
+-- 替换 fulfillment.php 中的待发货调拨分组查询
+CREATE OR REPLACE VIEW vw_fulfillment_pending_transfers_grouped AS
+SELECT
+    MIN(it.TransferID) as FirstTransferID,
+    GROUP_CONCAT(it.TransferID ORDER BY it.TransferID) as TransferIDs,
+    it.FromShopID,
+    it.ToShopID,
+    it.Status,
+    MIN(it.TransferDate) as TransferDate,
+    from_shop.Name as FromShopName,
+    to_shop.Name as ToShopName,
+    r.ReleaseID,
+    r.Title as ReleaseTitle,
+    r.ArtistName,
+    si.ConditionGrade,
+    MIN(si.UnitPrice) as UnitPrice,
+    COUNT(*) as Quantity
+FROM InventoryTransfer it
+JOIN Shop from_shop ON it.FromShopID = from_shop.ShopID
+JOIN Shop to_shop ON it.ToShopID = to_shop.ShopID
+JOIN StockItem si ON it.StockItemID = si.StockItemID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+WHERE it.Status = 'Pending'
+GROUP BY it.FromShopID, it.ToShopID, r.ReleaseID, si.ConditionGrade, it.Status,
+         from_shop.Name, to_shop.Name, r.Title, r.ArtistName
+ORDER BY MIN(it.TransferDate) DESC;
+
+-- 79. [架构重构Phase2] 待接收调拨分组视图（目标店铺视角）
+-- 替换 fulfillment.php 中的待接收调拨分组查询
+CREATE OR REPLACE VIEW vw_fulfillment_incoming_transfers_grouped AS
+SELECT
+    MIN(it.TransferID) as FirstTransferID,
+    GROUP_CONCAT(it.TransferID ORDER BY it.TransferID) as TransferIDs,
+    it.FromShopID,
+    it.ToShopID,
+    it.Status,
+    MIN(it.TransferDate) as TransferDate,
+    from_shop.Name as FromShopName,
+    to_shop.Name as ToShopName,
+    r.ReleaseID,
+    r.Title as ReleaseTitle,
+    r.ArtistName,
+    si.ConditionGrade,
+    MIN(si.UnitPrice) as UnitPrice,
+    COUNT(*) as Quantity
+FROM InventoryTransfer it
+JOIN Shop from_shop ON it.FromShopID = from_shop.ShopID
+JOIN Shop to_shop ON it.ToShopID = to_shop.ShopID
+JOIN StockItem si ON it.StockItemID = si.StockItemID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+WHERE it.Status = 'InTransit'
+GROUP BY it.FromShopID, it.ToShopID, r.ReleaseID, si.ConditionGrade, it.Status,
+         from_shop.Name, to_shop.Name, r.Title, r.ArtistName
+ORDER BY MIN(it.TransferDate) DESC;
+
+-- 80. [架构重构Phase2] 订单履行列表视图
+-- 替换 fulfillment.php 中的订单列表查询
+CREATE OR REPLACE VIEW vw_fulfillment_orders AS
+SELECT
+    co.OrderID,
+    co.CustomerID,
+    co.FulfilledByShopID,
+    co.OrderDate,
+    co.OrderStatus,
+    co.FulfillmentType,
+    co.ShippingAddress,
+    co.ShippingCost,
+    co.TotalAmount,
+    co.OrderType,
+    c.Name as CustomerName,
+    c.Email as CustomerEmail,
+    COUNT(ol.StockItemID) as ItemCount,
+    (SELECT GROUP_CONCAT(DISTINCT r.Title SEPARATOR ', ')
+     FROM OrderLine ol2
+     JOIN StockItem si ON ol2.StockItemID = si.StockItemID
+     JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+     WHERE ol2.OrderID = co.OrderID
+     LIMIT 3) as ItemTitles
+FROM CustomerOrder co
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+LEFT JOIN OrderLine ol ON co.OrderID = ol.OrderID
+WHERE co.FulfillmentType = 'Shipping'
+GROUP BY co.OrderID
+ORDER BY co.OrderDate DESC;
+
+-- 81. [架构重构Phase2] 订单状态统计视图
+-- 替换 fulfillment.php 中的状态统计查询
+CREATE OR REPLACE VIEW vw_fulfillment_order_status_counts AS
+SELECT
+    FulfilledByShopID,
+    OrderStatus,
+    COUNT(*) as cnt
+FROM CustomerOrder
+WHERE FulfillmentType = 'Shipping'
+GROUP BY FulfilledByShopID, OrderStatus;
+
+-- 82. [架构重构Phase2] 专辑列表视图（含基础成本）
+-- 替换 buyback.php 中的专辑列表查询
+CREATE OR REPLACE VIEW vw_release_list_with_cost AS
+SELECT
+    ReleaseID,
+    Title,
+    ArtistName,
+    Genre,
+    BaseUnitCost
+FROM ReleaseAlbum
+ORDER BY Title;
+
+-- 83. [架构重构Phase2] 客户列表视图（含积分）
+-- 替换 buyback.php 中的客户下拉框查询
+CREATE OR REPLACE VIEW vw_customer_list_with_points AS
+SELECT
+    CustomerID,
+    Name,
+    Email,
+    Points
+FROM Customer
+ORDER BY Name;
+
+-- 84. [架构重构Phase2] 库存价格映射视图
+-- 替换 buyback.php 中的价格映射查询
+CREATE OR REPLACE VIEW vw_stock_price_map AS
+SELECT
+    ReleaseID,
+    ConditionGrade,
+    MAX(UnitPrice) as CurrentPrice
+FROM StockItem
+WHERE Status = 'Available'
+GROUP BY ReleaseID, ConditionGrade;
+
+-- 85. [架构重构Phase2] 最近回购记录详情视图
+-- 替换 buyback.php 中的最近回购查询
+CREATE OR REPLACE VIEW vw_recent_buybacks_detail AS
+SELECT
+    bo.BuybackOrderID,
+    bo.ShopID,
+    bo.BuybackDate,
+    bo.TotalPayment,
+    bo.Status,
+    c.Name as CustomerName,
+    c.Email as CustomerEmail,
+    r.Title,
+    r.ArtistName,
+    bol.Quantity,
+    bol.UnitPrice,
+    bol.ConditionGrade,
+    (bol.Quantity * bol.UnitPrice) as LineTotal,
+    e.Name as ProcessedByName
+FROM BuybackOrder bo
+LEFT JOIN Customer c ON bo.CustomerID = c.CustomerID
+JOIN BuybackOrderLine bol ON bo.BuybackOrderID = bol.BuybackOrderID
+JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
+JOIN Employee e ON bo.ProcessedByEmployeeID = e.EmployeeID
+ORDER BY bo.BuybackDate DESC;
+
+-- 86. [架构重构Phase2] 调货申请详情视图
+-- 替换 requests.php 中的申请信息查询
+CREATE OR REPLACE VIEW vw_transfer_request_info AS
+SELECT
+    RequestID,
+    ReleaseID,
+    ConditionGrade,
+    Quantity,
+    RequestType,
+    FromShopID,
+    ToShopID,
+    Status
+FROM ManagerRequest
+WHERE RequestType = 'TransferRequest';
+
+-- 87. [架构重构Phase2] 店铺库存查询视图（按专辑和成色分组）
+-- 替换 requests.php 中的getOtherShopsInventory函数
+CREATE OR REPLACE VIEW vw_shop_inventory_by_release AS
+SELECT
+    si.ShopID,
+    s.Name as ShopName,
+    s.Type as ShopType,
+    si.ReleaseID,
+    si.ConditionGrade,
+    COUNT(*) as AvailableQuantity,
+    MIN(si.UnitPrice) as UnitPrice
+FROM StockItem si
+JOIN Shop s ON si.ShopID = s.ShopID
+WHERE si.Status = 'Available'
+GROUP BY si.ShopID, s.Name, s.Type, si.ReleaseID, si.ConditionGrade
+HAVING AvailableQuantity > 0;

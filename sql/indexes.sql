@@ -219,3 +219,68 @@ CREATE INDEX idx_buyback_line_release ON BuybackOrderLine(ReleaseID);
 - 定期分析表统计信息：ANALYZE TABLE
 - 监控慢查询日志
 */
+
+-- ================================================
+-- 【架构重构Phase2】覆盖索引优化
+-- Covering Indexes for Critical Query Patterns
+-- ================================================
+
+-- 1. StockItem 库存查询覆盖索引
+-- 用于 vw_inventory_summary, vw_pos_stock_grouped, vw_customer_catalog 等高频视图
+-- 覆盖 WHERE Status='Available' 的分组查询，避免回表读取 ConditionGrade 和 UnitPrice
+CREATE INDEX idx_stock_covering_available
+    ON StockItem(ShopID, ReleaseID, Status, ConditionGrade, UnitPrice);
+
+-- 2. StockItem 按专辑+状态覆盖索引
+-- 用于 vw_release_stock_by_condition, vw_product_alternatives 等按专辑查询的视图
+CREATE INDEX idx_stock_release_status_covering
+    ON StockItem(ReleaseID, Status, ShopID, ConditionGrade, UnitPrice);
+
+-- 3. CustomerOrder 履行类型覆盖索引
+-- 用于 vw_fulfillment_orders, vw_fulfillment_order_status_counts 等履行相关视图
+CREATE INDEX idx_order_fulfillment_covering
+    ON CustomerOrder(FulfilledByShopID, FulfillmentType, OrderStatus, OrderDate, TotalAmount);
+
+-- 4. CustomerOrder 在线订单覆盖索引
+-- 用于 vw_staff_online_orders_pending, vw_fulfillment_shipping_orders 等在线订单视图
+CREATE INDEX idx_order_online_covering
+    ON CustomerOrder(OrderType, OrderStatus, FulfilledByShopID, FulfillmentType, OrderDate);
+
+-- 5. InventoryTransfer 状态覆盖索引
+-- 用于 vw_fulfillment_pending_transfers, vw_fulfillment_incoming_transfers 等调拨视图
+CREATE INDEX idx_transfer_status_covering
+    ON InventoryTransfer(Status, FromShopID, ToShopID, StockItemID, TransferDate);
+
+-- 6. ManagerRequest 待处理申请覆盖索引
+-- 用于 vw_admin_pending_requests, vw_manager_requests_sent 等申请管理视图
+CREATE INDEX idx_request_pending_covering
+    ON ManagerRequest(Status, RequestType, FromShopID, ReleaseID, ConditionGrade, CreatedAt);
+
+-- 7. BuybackOrder 店铺回购覆盖索引
+-- 用于 vw_recent_buybacks_detail, vw_buyback_orders 等回购相关视图
+CREATE INDEX idx_buyback_shop_covering
+    ON BuybackOrder(ShopID, Status, BuybackDate DESC, CustomerID, TotalPayment);
+
+-- 8. OrderLine 订单明细覆盖索引
+-- 用于 vw_order_line_detail, vw_report_sales_by_genre 等订单明细视图
+CREATE INDEX idx_orderline_order_covering
+    ON OrderLine(OrderID, StockItemID, PriceAtSale);
+
+-- ================================================
+-- 覆盖索引使用说明
+-- ================================================
+/*
+覆盖索引（Covering Index）设计原则：
+1. 将 WHERE/JOIN 条件列放在索引前面
+2. 将 SELECT 需要的列附加在后面
+3. 可以完全从索引返回数据，避免回表（减少 I/O）
+
+验证方法：
+- EXPLAIN SELECT ...
+- 查看 Extra 列是否显示 "Using index" 表示使用了覆盖索引
+
+注意事项：
+- 覆盖索引会增加写操作的开销（INSERT/UPDATE/DELETE）
+- 仅对高频读取且列数有限的查询使用
+- 定期使用 ANALYZE TABLE 更新索引统计信息
+*/

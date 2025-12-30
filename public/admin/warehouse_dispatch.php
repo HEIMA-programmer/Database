@@ -12,10 +12,8 @@ requireRole('Admin');
 // 获取Warehouse ID
 $warehouseId = getShopIdByType($pdo, 'Warehouse');
 
-// 获取所有零售店铺（排除Warehouse）
-$retailShops = [];
-$shopsStmt = $pdo->query("SELECT ShopID, Name FROM Shop WHERE Type = 'Retail' ORDER BY Name");
-$retailShops = $shopsStmt->fetchAll(PDO::FETCH_ASSOC);
+// 【架构重构Phase2】使用DBProcedures替换直接SQL
+$retailShops = DBProcedures::getRetailShops($pdo);
 
 // ========== POST 请求处理 ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dispatch_stock'])) {
@@ -39,54 +37,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dispatch_stock'])) {
     } elseif ($quantity < 1) {
         flash("Quantity must be at least 1.", 'danger');
     } else {
-        try {
-            $pdo->beginTransaction();
+        // 【架构重构Phase2】使用DBProcedures替换直接SQL
+        $dispatchedCount = DBProcedures::dispatchWarehouseStock(
+            $pdo,
+            $warehouseId,
+            $targetShopId,
+            $releaseId,
+            $conditionGrade,
+            $quantity
+        );
 
-            // 获取warehouse中符合条件的可用库存
-            $stockStmt = $pdo->prepare("
-                SELECT StockItemID, UnitPrice
-                FROM StockItem
-                WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ? AND Status = 'Available'
-                ORDER BY StockItemID
-                LIMIT ?
-            ");
-            $stockStmt->execute([$warehouseId, $releaseId, $conditionGrade, $quantity]);
-            $stockItems = $stockStmt->fetchAll(PDO::FETCH_ASSOC);
-
-            if (count($stockItems) < $quantity) {
-                throw new Exception("Not enough stock available. Only " . count($stockItems) . " item(s) found.");
-            }
-
-            // 计算调配成本（用于dashboard统计）
-            $totalCost = 0;
-
-            // 逐个调拨库存
-            $dispatchedCount = 0;
-            foreach ($stockItems as $item) {
-                // 直接更新库存位置（不创建调拨记录，因为这是admin统一调配）
-                $updateStmt = $pdo->prepare("
-                    UPDATE StockItem SET ShopID = ? WHERE StockItemID = ?
-                ");
-                $updateStmt->execute([$targetShopId, $item['StockItemID']]);
-
-                // 获取原始采购成本
-                $costStmt = $pdo->prepare("
-                    SELECT sol.UnitCost
-                    FROM StockItem si
-                    JOIN SupplierOrderLine sol ON si.SourceOrderID = sol.SupplierOrderID AND si.ReleaseID = sol.ReleaseID
-                    WHERE si.StockItemID = ? AND si.SourceType = 'Supplier'
-                ");
-                $costStmt->execute([$item['StockItemID']]);
-                $costRow = $costStmt->fetch(PDO::FETCH_ASSOC);
-                if ($costRow) {
-                    $totalCost += $costRow['UnitCost'];
-                }
-
-                $dispatchedCount++;
-            }
-
-            $pdo->commit();
-
+        if ($dispatchedCount > 0) {
             // 获取目标店铺名称
             $targetShopName = '';
             foreach ($retailShops as $shop) {
@@ -97,11 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dispatch_stock'])) {
             }
 
             flash("Successfully dispatched $dispatchedCount item(s) to $targetShopName.", 'success');
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            flash("Dispatch failed: " . $e->getMessage(), 'danger');
+        } else {
+            flash("Dispatch failed: Not enough stock available or an error occurred.", 'danger');
         }
     }
 
@@ -110,27 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dispatch_stock'])) {
 }
 
 // ========== 获取Warehouse库存数据 ==========
-$warehouseStock = [];
-if ($warehouseId) {
-    $stockStmt = $pdo->prepare("
-        SELECT
-            si.ReleaseID,
-            r.Title,
-            r.ArtistName,
-            si.ConditionGrade,
-            COUNT(*) as Quantity,
-            MIN(si.UnitPrice) as UnitPrice,
-            SUM(COALESCE(sol.UnitCost, 0)) as TotalCost
-        FROM StockItem si
-        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-        LEFT JOIN SupplierOrderLine sol ON si.SourceOrderID = sol.SupplierOrderID AND si.ReleaseID = sol.ReleaseID
-        WHERE si.ShopID = ? AND si.Status = 'Available'
-        GROUP BY si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade
-        ORDER BY r.Title, FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG')
-    ");
-    $stockStmt->execute([$warehouseId]);
-    $warehouseStock = $stockStmt->fetchAll(PDO::FETCH_ASSOC);
-}
+// 【架构重构Phase2】使用DBProcedures替换直接SQL
+$warehouseStock = $warehouseId ? DBProcedures::getWarehouseStock($pdo, $warehouseId) : [];
 
 // 获取专辑列表用于下拉菜单
 $releaseList = DBProcedures::getReleaseList($pdo);

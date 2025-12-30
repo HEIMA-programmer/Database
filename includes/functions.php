@@ -676,6 +676,7 @@ function prepareDashboardData($pdo, $shopId = null) {
         // 【重构】计算当前店铺所有available库存的实时成本
         // 成本 = 当前店内所有专辑的采购成本之和（实时，考虑调货等变动）
         // 这确保了调货时成本会自动更新（调出则减少，调入则增加）
+        // 【修复】直接使用SupplierOrderLine.UnitCost（seeds数据已修正，每个订单只有一个Condition）
         $inventoryCostStmt = $pdo->prepare("
             SELECT
                 COALESCE(SUM(

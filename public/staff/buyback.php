@@ -92,13 +92,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// 获取Release列表
+// 获取Release列表（包含BaseUnitCost用于计算建议价格）
 $stmt = $pdo->query("
-    SELECT r.ReleaseID, r.Title, r.ArtistName, r.Genre
+    SELECT r.ReleaseID, r.Title, r.ArtistName, r.Genre, r.BaseUnitCost
     FROM ReleaseAlbum r
     ORDER BY r.Title
 ");
 $releases = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// 【新增】构建专辑基础成本映射表（用于JavaScript计算建议价格）
+$baseCostMap = [];
+foreach ($releases as $r) {
+    $baseCostMap[$r['ReleaseID']] = (float)$r['BaseUnitCost'];
+}
 
 // 【修复】获取客户列表（移除不存在的Phone字段）
 $stmt = $pdo->query("SELECT CustomerID, Name, Email, Points FROM Customer ORDER BY Name");
@@ -319,6 +325,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // 【新增】当前库存价格映射（从PHP传入）
     const priceMap = <?= json_encode($priceMap) ?>;
 
+    // 【新增】专辑基础成本映射（用于计算建议价格）
+    const baseCostMap = <?= json_encode($baseCostMap) ?>;
+
+    // 【新增】Condition系数和利润率计算
+    const conditionFactors = {
+        'New': 1.00,
+        'Mint': 0.95,
+        'NM': 0.85,
+        'VG+': 0.70,
+        'VG': 0.55
+    };
+
+    // 【新增】根据成本计算利润率
+    function getProfitMargin(cost) {
+        if (cost <= 20) return 1.50;
+        if (cost <= 50) return 1.60;
+        if (cost <= 100) return 1.70;
+        return 1.80;
+    }
+
+    // 【新增】计算建议售价
+    function calculateSuggestedPrice(releaseId, condition) {
+        const baseCost = baseCostMap[releaseId];
+        if (!baseCost) return null;
+
+        const conditionFactor = conditionFactors[condition] || 0.55;
+        const adjustedCost = baseCost * conditionFactor;
+        const margin = getProfitMargin(adjustedCost);
+        return (adjustedCost * margin).toFixed(2);
+    }
+
     function updateTotal() {
         const quantity = parseInt(quantityInput.value) || 0;
         const price = parseFloat(priceInput.value) || 0;
@@ -336,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【新增】自动填充resale价格
+    // 【修复】自动填充resale价格 - 优先使用现有库存价格，否则计算建议价格
     function updateResalePrice() {
         const releaseId = releaseSelect.value;
         const condition = conditionSelect.value;
@@ -344,14 +381,31 @@ document.addEventListener('DOMContentLoaded', function() {
         if (releaseId && condition) {
             const key = releaseId + '_' + condition;
             if (priceMap[key]) {
+                // 有现有库存价格，使用现有价格
                 resalePriceInput.value = parseFloat(priceMap[key]).toFixed(2);
                 resalePriceInput.classList.add('border-success');
+                resalePriceInput.classList.remove('border-warning');
                 resalePriceInput.title = '已自动填充当前库存售价';
             } else {
-                // 没有现有价格时，清空并允许手动输入
-                resalePriceInput.classList.remove('border-success');
-                resalePriceInput.title = '请设置转售价格';
+                // 【修复】没有现有价格时，根据公式计算建议价格
+                const suggestedPrice = calculateSuggestedPrice(releaseId, condition);
+                if (suggestedPrice) {
+                    resalePriceInput.value = suggestedPrice;
+                    resalePriceInput.classList.add('border-warning');
+                    resalePriceInput.classList.remove('border-success');
+                    resalePriceInput.title = '建议售价（根据公式计算）';
+                } else {
+                    // 无法计算时清空
+                    resalePriceInput.value = '';
+                    resalePriceInput.classList.remove('border-success', 'border-warning');
+                    resalePriceInput.title = '请设置转售价格';
+                }
             }
+        } else {
+            // 未选择专辑或条件时清空
+            resalePriceInput.value = '';
+            resalePriceInput.classList.remove('border-success', 'border-warning');
+            resalePriceInput.title = '';
         }
     }
 

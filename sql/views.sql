@@ -483,6 +483,7 @@ JOIN StockItem s ON ol.StockItemID = s.StockItemID;
 -- 26. [架构重构] 员工认证视图
 -- 替换 login.php 中的直接 Employee + Shop 查询
 -- 【修复】添加 ShopType 字段，用于区分仓库和门店员工的菜单显示
+-- 【修复】使用 LEFT JOIN 支持 ShopID 为 NULL 的全局管理员（如 Admin）
 CREATE OR REPLACE VIEW vw_auth_employee AS
 SELECT
     e.EmployeeID,
@@ -491,10 +492,10 @@ SELECT
     e.PasswordHash,
     e.Role,
     e.ShopID,
-    s.Name AS ShopName,
-    s.Type AS ShopType
+    COALESCE(s.Name, 'Headquarters') AS ShopName,
+    COALESCE(s.Type, 'Retail') AS ShopType
 FROM Employee e
-JOIN Shop s ON e.ShopID = s.ShopID;
+LEFT JOIN Shop s ON e.ShopID = s.ShopID;
 
 -- 27. [架构重构] 客户认证视图
 -- 替换 login.php 中的直接 Customer 查询

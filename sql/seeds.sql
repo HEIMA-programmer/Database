@@ -53,8 +53,9 @@ INSERT INTO MembershipTier (TierName, MinPoints, DiscountRate) VALUES
 -- ==========================================
 -- 2. 员工账号 (密码: password123)
 -- ==========================================
+-- 【修复】Admin作为全局管理员，ShopID应为NULL，不属于任何特定店铺
 INSERT INTO Employee (ShopID, Role, Name, Username, PasswordHash, HireDate) VALUES
-(1, 'Admin', 'Super Admin', 'admin', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-01-01'),
+(NULL, 'Admin', 'Super Admin', 'admin', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-01-01'),
 (1, 'Manager', 'Changsha Manager', 'manager_cs', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-03-15'),
 (1, 'Staff', 'Changsha Staff', 'staff_cs', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-06-01'),
 (2, 'Manager', 'Shanghai Manager', 'manager_sh', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-04-01'),
@@ -128,24 +129,117 @@ INSERT INTO Track (ReleaseID, Title, TrackNumber, Duration) VALUES
 -- ==========================================
 -- 6. 供应商订单
 -- ==========================================
-INSERT INTO SupplierOrder (SupplierID, CreatedByEmployeeID, DestinationShopID, OrderDate, Status, ReceivedDate) VALUES
-(1, 1, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 69 DAY)),
-(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY));
+-- 【重构】每个不同Condition必须是独立的采购订单（符合UI业务逻辑）
+-- 采购成本 = BaseUnitCost × Condition系数
+-- Condition系数：New=1.00, Mint=0.95, NM=0.85, VG+=0.70, VG=0.55
 
-INSERT INTO SupplierOrderLine (SupplierOrderID, ReleaseID, Quantity, UnitCost) VALUES
-(1, 1, 5, 20.00), (1, 2, 5, 25.00),
-(2, 3, 5, 15.00), (2, 4, 5, 18.00), (2, 5, 5, 22.00),
-(3, 6, 5, 20.00), (3, 7, 5, 24.00), (3, 8, 5, 28.00),
-(4, 9, 5, 22.00), (4, 10, 5, 20.00), (4, 11, 5, 18.00);
+-- 长沙店采购订单 (DestinationShopID=1)
+INSERT INTO SupplierOrder (SupplierID, CreatedByEmployeeID, DestinationShopID, OrderDate, Status, ReceivedDate) VALUES
+(1, 1, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 69 DAY)),  -- ID 1: Abbey Road New
+(1, 1, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 69 DAY)),  -- ID 2: Abbey Road Mint
+(1, 1, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 69 DAY)),  -- ID 3: Abbey Road VG+
+(1, 1, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 69 DAY)),  -- ID 4: Dark Side New
+(1, 1, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 69 DAY)),  -- ID 5: Dark Side Mint
+(1, 1, 1, DATE_SUB(NOW(), INTERVAL 70 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 69 DAY)),  -- ID 6: Dark Side VG+
+-- 上海店采购订单 (DestinationShopID=2)
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 7: Thriller New
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 8: Thriller Mint
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 9: Thriller VG
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 10: Kind of Blue New
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 11: Kind of Blue Mint
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 12: Kind of Blue NM
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 13: Kind of Blue VG
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 14: Back in Black New
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 15: Back in Black Mint
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 16: Back in Black NM
+(2, 1, 2, DATE_SUB(NOW(), INTERVAL 50 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- ID 17: Back in Black VG+
+-- 仓库采购订单 (DestinationShopID=3)
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 18: Rumours New
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 19: Rumours Mint
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 20: Rumours VG
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 21: Led Zeppelin IV New
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 22: Led Zeppelin IV Mint
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 23: Led Zeppelin IV NM
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 24: Led Zeppelin IV VG
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 25: The Wall New
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 26: The Wall Mint
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 27: The Wall NM
+(3, 1, 3, DATE_SUB(NOW(), INTERVAL 30 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- ID 28: The Wall VG+
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 29: Opera New
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 30: Opera Mint
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 31: Opera NM
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 32: Opera VG
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 33: Hotel California New
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 34: Hotel California Mint
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 35: Hotel California NM
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 36: Hotel California VG+
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 37: Born to Run New
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 38: Born to Run Mint
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- ID 39: Born to Run NM
+(4, 2, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 'Received', DATE_SUB(NOW(), INTERVAL 9 DAY));   -- ID 40: Born to Run VG+
+
+-- 采购订单明细（每条记录对应一个专辑+一个Condition）
+-- UnitCost = BaseUnitCost × Condition系数
+INSERT INTO SupplierOrderLine (SupplierOrderID, ReleaseID, Quantity, UnitCost, ConditionGrade) VALUES
+-- 长沙店: Abbey Road (Base=35)
+(1, 1, 3, 35.00, 'New'),    -- 35×1.00=35, 数量3(2张Available+1张Sold)
+(2, 1, 1, 33.25, 'Mint'),   -- 35×0.95=33.25
+(3, 1, 1, 24.50, 'VG+'),    -- 35×0.70=24.50
+-- 长沙店: Dark Side (Base=40)
+(4, 2, 2, 40.00, 'New'),    -- 40×1.00=40
+(5, 2, 2, 38.00, 'Mint'),   -- 40×0.95=38, 数量2(1张Available+1张Sold)
+(6, 2, 1, 28.00, 'VG+'),    -- 40×0.70=28
+-- 上海店: Thriller (Base=25)
+(7, 3, 3, 25.00, 'New'),    -- 25×1.00=25, 数量3(2张Available+1张Sold)
+(8, 3, 1, 23.75, 'Mint'),   -- 25×0.95=23.75
+(9, 3, 1, 13.75, 'VG'),     -- 25×0.55=13.75
+-- 上海店: Kind of Blue (Base=45)
+(10, 4, 2, 45.00, 'New'),   -- 45×1.00=45, 数量2(1张Available+1张Sold)
+(11, 4, 1, 42.75, 'Mint'),  -- 45×0.95=42.75
+(12, 4, 1, 38.25, 'NM'),    -- 45×0.85=38.25
+(13, 4, 1, 24.75, 'VG'),    -- 45×0.55=24.75
+-- 上海店: Back in Black (Base=30)
+(14, 5, 1, 30.00, 'New'),   -- 30×1.00=30
+(15, 5, 2, 28.50, 'Mint'),  -- 30×0.95=28.5, 数量2(1张Available+1张Sold)
+(16, 5, 1, 25.50, 'NM'),    -- 30×0.85=25.5
+(17, 5, 1, 21.00, 'VG+'),   -- 30×0.70=21
+-- 仓库: Rumours (Base=32)
+(18, 6, 3, 32.00, 'New'),   -- 32×1.00=32, 数量3(2张Available+1张Sold)
+(19, 6, 1, 30.40, 'Mint'),  -- 32×0.95=30.4
+(20, 6, 1, 17.60, 'VG'),    -- 32×0.55=17.6
+-- 仓库: Led Zeppelin IV (Base=38)
+(21, 7, 2, 38.00, 'New'),   -- 38×1.00=38, 数量2(1张Available+1张Sold)
+(22, 7, 1, 36.10, 'Mint'),  -- 38×0.95=36.1
+(23, 7, 1, 32.30, 'NM'),    -- 38×0.85=32.3
+(24, 7, 1, 20.90, 'VG'),    -- 38×0.55=20.9
+-- 仓库: The Wall (Base=42)
+(25, 8, 2, 42.00, 'New'),   -- 42×1.00=42, 数量2(1张Available+1张Sold)
+(26, 8, 1, 39.90, 'Mint'),  -- 42×0.95=39.9
+(27, 8, 1, 35.70, 'NM'),    -- 42×0.85=35.7
+(28, 8, 1, 29.40, 'VG+'),   -- 42×0.70=29.4
+-- 仓库: Opera (Base=36)
+(29, 9, 2, 36.00, 'New'),   -- 36×1.00=36
+(30, 9, 1, 34.20, 'Mint'),  -- 36×0.95=34.2
+(31, 9, 1, 30.60, 'NM'),    -- 36×0.85=30.6
+(32, 9, 1, 19.80, 'VG'),    -- 36×0.55=19.8
+-- 仓库: Hotel California (Base=28)
+(33, 10, 2, 28.00, 'New'),  -- 28×1.00=28
+(34, 10, 1, 26.60, 'Mint'), -- 28×0.95=26.6
+(35, 10, 1, 23.80, 'NM'),   -- 28×0.85=23.8
+(36, 10, 1, 19.60, 'VG+'),  -- 28×0.70=19.6
+-- 仓库: Born to Run (Base=26)
+(37, 11, 2, 26.00, 'New'),  -- 26×1.00=26
+(38, 11, 1, 24.70, 'Mint'), -- 26×0.95=24.7
+(39, 11, 1, 22.10, 'NM'),   -- 26×0.85=22.1
+(40, 11, 1, 18.20, 'VG+');  -- 26×0.70=18.2
 
 -- ==========================================
 -- 7. 回购订单
 -- ==========================================
--- 改为（员工6属于仓库ShopID=3）：
+-- 【修复】只有门店可以进行回购，仓库不能回购
+-- 长沙店(ShopID=1)员工staff_cs(EmployeeID=3)处理回购
 INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, BuybackDate, Status, TotalPayment) VALUES
-(2, 6, 3, DATE_SUB(NOW(), INTERVAL 15 DAY), 'Completed', 66.00);
+(2, 3, 1, DATE_SUB(NOW(), INTERVAL 15 DAY), 'Completed', 36.00);
 
 -- 【修复】BuybackOrderID 都改为 1，因为只有一个回购订单
 INSERT INTO BuybackOrderLine (BuybackOrderID, ReleaseID, Quantity, UnitPrice, ConditionGrade) VALUES
@@ -172,79 +266,80 @@ INSERT INTO BuybackOrderLine (BuybackOrderID, ReleaseID, Quantity, UnitPrice, Co
 -- Album 11 (Born to Run, Base=26): New=41.60, Mint=39.52, NM=35.36, VG+=27.30, VG=21.45
 
 -- 长沙店库存 (ShopID=1) - ID 1-10
+-- 【重构】SourceOrderID必须指向包含对应ConditionGrade的采购订单
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
-(1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Available', 56.00, DATE_SUB(NOW(), INTERVAL 69 DAY)),
-(1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Available', 56.00, DATE_SUB(NOW(), INTERVAL 69 DAY)),
-(1, 1, 'Supplier', 1, 'B20251001-CS', 'Mint', 'Available', 53.20, DATE_SUB(NOW(), INTERVAL 69 DAY)),
-(2, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Available', 64.00, DATE_SUB(NOW(), INTERVAL 69 DAY)),
-(2, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Available', 64.00, DATE_SUB(NOW(), INTERVAL 69 DAY)),
-(2, 1, 'Supplier', 1, 'B20251001-CS', 'Mint', 'Available', 60.80, DATE_SUB(NOW(), INTERVAL 69 DAY)),
-(2, 1, 'Supplier', 1, 'B20251001-CS', 'VG+', 'Available', 44.80, DATE_SUB(NOW(), INTERVAL 69 DAY)),
-(1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Sold', 56.00, DATE_SUB(NOW(), INTERVAL 69 DAY)),
-(2, 1, 'Supplier', 1, 'B20251001-CS', 'Mint', 'Sold', 60.80, DATE_SUB(NOW(), INTERVAL 69 DAY)),
-(1, 1, 'Supplier', 1, 'B20251001-CS', 'VG+', 'Available', 39.20, DATE_SUB(NOW(), INTERVAL 69 DAY));
+(1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Available', 56.00, DATE_SUB(NOW(), INTERVAL 69 DAY)),   -- Order 1: Abbey Road New
+(1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Available', 56.00, DATE_SUB(NOW(), INTERVAL 69 DAY)),   -- Order 1: Abbey Road New
+(1, 1, 'Supplier', 2, 'B20251001-CS', 'Mint', 'Available', 53.20, DATE_SUB(NOW(), INTERVAL 69 DAY)),  -- Order 2: Abbey Road Mint
+(2, 1, 'Supplier', 4, 'B20251001-CS', 'New', 'Available', 64.00, DATE_SUB(NOW(), INTERVAL 69 DAY)),   -- Order 4: Dark Side New
+(2, 1, 'Supplier', 4, 'B20251001-CS', 'New', 'Available', 64.00, DATE_SUB(NOW(), INTERVAL 69 DAY)),   -- Order 4: Dark Side New
+(2, 1, 'Supplier', 5, 'B20251001-CS', 'Mint', 'Available', 60.80, DATE_SUB(NOW(), INTERVAL 69 DAY)),  -- Order 5: Dark Side Mint
+(2, 1, 'Supplier', 6, 'B20251001-CS', 'VG+', 'Available', 44.80, DATE_SUB(NOW(), INTERVAL 69 DAY)),   -- Order 6: Dark Side VG+
+(1, 1, 'Supplier', 1, 'B20251001-CS', 'New', 'Sold', 56.00, DATE_SUB(NOW(), INTERVAL 69 DAY)),        -- Order 1: Abbey Road New (Sold)
+(2, 1, 'Supplier', 5, 'B20251001-CS', 'Mint', 'Sold', 60.80, DATE_SUB(NOW(), INTERVAL 69 DAY)),       -- Order 5: Dark Side Mint (Sold)
+(1, 1, 'Supplier', 3, 'B20251001-CS', 'VG+', 'Available', 39.20, DATE_SUB(NOW(), INTERVAL 69 DAY));   -- Order 3: Abbey Road VG+
 
 -- 上海店库存 (ShopID=2) - ID 11-25
+-- 【重构】SourceOrderID必须指向包含对应ConditionGrade的采购订单
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
-(3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 40.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 40.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(3, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Sold', 40.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(4, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 72.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(4, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Sold', 72.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(4, 2, 'Supplier', 2, 'B20251115-SH', 'NM', 'Available', 61.20, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 45.60, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(5, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Sold', 45.60, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(5, 2, 'Supplier', 2, 'B20251115-SH', 'VG+', 'Available', 33.60, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(3, 2, 'Supplier', 2, 'B20251115-SH', 'VG', 'Available', 20.63, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(4, 2, 'Supplier', 2, 'B20251115-SH', 'VG', 'Available', 39.60, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(5, 2, 'Supplier', 2, 'B20251115-SH', 'New', 'Available', 48.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(3, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 38.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(4, 2, 'Supplier', 2, 'B20251115-SH', 'Mint', 'Available', 68.40, DATE_SUB(NOW(), INTERVAL 49 DAY)),
-(5, 2, 'Supplier', 2, 'B20251115-SH', 'NM', 'Available', 40.80, DATE_SUB(NOW(), INTERVAL 49 DAY));
+(3, 2, 'Supplier', 7, 'B20251115-SH', 'New', 'Available', 40.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),   -- Order 7: Thriller New
+(3, 2, 'Supplier', 7, 'B20251115-SH', 'New', 'Available', 40.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),   -- Order 7: Thriller New
+(3, 2, 'Supplier', 7, 'B20251115-SH', 'New', 'Sold', 40.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),        -- Order 7: Thriller New (Sold)
+(4, 2, 'Supplier', 10, 'B20251115-SH', 'New', 'Available', 72.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- Order 10: Kind of Blue New
+(4, 2, 'Supplier', 10, 'B20251115-SH', 'New', 'Sold', 72.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),       -- Order 10: Kind of Blue New (Sold)
+(4, 2, 'Supplier', 12, 'B20251115-SH', 'NM', 'Available', 61.20, DATE_SUB(NOW(), INTERVAL 49 DAY)),   -- Order 12: Kind of Blue NM
+(5, 2, 'Supplier', 15, 'B20251115-SH', 'Mint', 'Available', 45.60, DATE_SUB(NOW(), INTERVAL 49 DAY)), -- Order 15: Back in Black Mint
+(5, 2, 'Supplier', 15, 'B20251115-SH', 'Mint', 'Sold', 45.60, DATE_SUB(NOW(), INTERVAL 49 DAY)),      -- Order 15: Back in Black Mint (Sold)
+(5, 2, 'Supplier', 17, 'B20251115-SH', 'VG+', 'Available', 33.60, DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- Order 17: Back in Black VG+
+(3, 2, 'Supplier', 9, 'B20251115-SH', 'VG', 'Available', 20.63, DATE_SUB(NOW(), INTERVAL 49 DAY)),    -- Order 9: Thriller VG
+(4, 2, 'Supplier', 13, 'B20251115-SH', 'VG', 'Available', 39.60, DATE_SUB(NOW(), INTERVAL 49 DAY)),   -- Order 13: Kind of Blue VG
+(5, 2, 'Supplier', 14, 'B20251115-SH', 'New', 'Available', 48.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- Order 14: Back in Black New
+(3, 2, 'Supplier', 8, 'B20251115-SH', 'Mint', 'Available', 38.00, DATE_SUB(NOW(), INTERVAL 49 DAY)),  -- Order 8: Thriller Mint
+(4, 2, 'Supplier', 11, 'B20251115-SH', 'Mint', 'Available', 68.40, DATE_SUB(NOW(), INTERVAL 49 DAY)), -- Order 11: Kind of Blue Mint
+(5, 2, 'Supplier', 16, 'B20251115-SH', 'NM', 'Available', 40.80, DATE_SUB(NOW(), INTERVAL 49 DAY));   -- Order 16: Back in Black NM
 
 -- 仓库库存 (ShopID=3) - ID 26-55
+-- 【重构】SourceOrderID必须指向包含对应ConditionGrade的采购订单
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
-(6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 51.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 51.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(6, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Sold', 51.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 60.80, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(7, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Sold', 60.80, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(7, 3, 'Supplier', 3, 'B20251210-WH', 'Mint', 'Available', 57.76, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(8, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Available', 67.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(8, 3, 'Supplier', 3, 'B20251210-WH', 'New', 'Sold', 67.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(8, 3, 'Supplier', 3, 'B20251210-WH', 'VG+', 'Available', 47.04, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(6, 3, 'Supplier', 3, 'B20251210-WH', 'VG', 'Available', 26.40, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(7, 3, 'Supplier', 3, 'B20251210-WH', 'VG', 'Available', 33.44, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(8, 3, 'Supplier', 3, 'B20251210-WH', 'NM', 'Available', 57.12, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(6, 3, 'Supplier', 3, 'B20251210-WH', 'Mint', 'Available', 48.64, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(7, 3, 'Supplier', 3, 'B20251210-WH', 'NM', 'Available', 51.68, DATE_SUB(NOW(), INTERVAL 29 DAY)),
-(8, 3, 'Supplier', 3, 'B20251210-WH', 'Mint', 'Available', 63.84, DATE_SUB(NOW(), INTERVAL 29 DAY)),
--- 最新批次
-(9, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 57.60, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(9, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 57.60, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(9, 3, 'Supplier', 4, 'B20251218-WH', 'Mint', 'Available', 54.72, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(10, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 44.80, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(10, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 44.80, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(10, 3, 'Supplier', 4, 'B20251218-WH', 'VG+', 'Available', 29.40, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(11, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 41.60, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(11, 3, 'Supplier', 4, 'B20251218-WH', 'New', 'Available', 41.60, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(11, 3, 'Supplier', 4, 'B20251218-WH', 'NM', 'Available', 35.36, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(9, 3, 'Supplier', 4, 'B20251218-WH', 'VG', 'Available', 29.70, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(10, 3, 'Supplier', 4, 'B20251218-WH', 'Mint', 'Available', 42.56, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(11, 3, 'Supplier', 4, 'B20251218-WH', 'VG+', 'Available', 27.30, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(9, 3, 'Supplier', 4, 'B20251218-WH', 'NM', 'Available', 48.96, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(10, 3, 'Supplier', 4, 'B20251218-WH', 'NM', 'Available', 38.08, DATE_SUB(NOW(), INTERVAL 9 DAY)),
-(11, 3, 'Supplier', 4, 'B20251218-WH', 'Mint', 'Available', 39.52, DATE_SUB(NOW(), INTERVAL 9 DAY));
+(6, 3, 'Supplier', 18, 'B20251210-WH', 'New', 'Available', 51.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 18: Rumours New
+(6, 3, 'Supplier', 18, 'B20251210-WH', 'New', 'Available', 51.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 18: Rumours New
+(6, 3, 'Supplier', 18, 'B20251210-WH', 'New', 'Sold', 51.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),       -- Order 18: Rumours New (Sold)
+(7, 3, 'Supplier', 21, 'B20251210-WH', 'New', 'Available', 60.80, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 21: Led Zeppelin IV New
+(7, 3, 'Supplier', 21, 'B20251210-WH', 'New', 'Sold', 60.80, DATE_SUB(NOW(), INTERVAL 29 DAY)),       -- Order 21: Led Zeppelin IV New (Sold)
+(7, 3, 'Supplier', 22, 'B20251210-WH', 'Mint', 'Available', 57.76, DATE_SUB(NOW(), INTERVAL 29 DAY)), -- Order 22: Led Zeppelin IV Mint
+(8, 3, 'Supplier', 25, 'B20251210-WH', 'New', 'Available', 67.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 25: The Wall New
+(8, 3, 'Supplier', 25, 'B20251210-WH', 'New', 'Sold', 67.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),       -- Order 25: The Wall New (Sold)
+(8, 3, 'Supplier', 28, 'B20251210-WH', 'VG+', 'Available', 47.04, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 28: The Wall VG+
+(6, 3, 'Supplier', 20, 'B20251210-WH', 'VG', 'Available', 26.40, DATE_SUB(NOW(), INTERVAL 29 DAY)),   -- Order 20: Rumours VG
+(7, 3, 'Supplier', 24, 'B20251210-WH', 'VG', 'Available', 33.44, DATE_SUB(NOW(), INTERVAL 29 DAY)),   -- Order 24: Led Zeppelin IV VG
+(8, 3, 'Supplier', 27, 'B20251210-WH', 'NM', 'Available', 57.12, DATE_SUB(NOW(), INTERVAL 29 DAY)),   -- Order 27: The Wall NM
+(6, 3, 'Supplier', 19, 'B20251210-WH', 'Mint', 'Available', 48.64, DATE_SUB(NOW(), INTERVAL 29 DAY)), -- Order 19: Rumours Mint
+(7, 3, 'Supplier', 23, 'B20251210-WH', 'NM', 'Available', 51.68, DATE_SUB(NOW(), INTERVAL 29 DAY)),   -- Order 23: Led Zeppelin IV NM
+(8, 3, 'Supplier', 26, 'B20251210-WH', 'Mint', 'Available', 63.84, DATE_SUB(NOW(), INTERVAL 29 DAY)), -- Order 26: The Wall Mint
+-- 最新批次 (Orders 29-40)
+(9, 3, 'Supplier', 29, 'B20251218-WH', 'New', 'Available', 57.60, DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- Order 29: Opera New
+(9, 3, 'Supplier', 29, 'B20251218-WH', 'New', 'Available', 57.60, DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- Order 29: Opera New
+(9, 3, 'Supplier', 30, 'B20251218-WH', 'Mint', 'Available', 54.72, DATE_SUB(NOW(), INTERVAL 9 DAY)),  -- Order 30: Opera Mint
+(10, 3, 'Supplier', 33, 'B20251218-WH', 'New', 'Available', 44.80, DATE_SUB(NOW(), INTERVAL 9 DAY)),  -- Order 33: Hotel California New
+(10, 3, 'Supplier', 33, 'B20251218-WH', 'New', 'Available', 44.80, DATE_SUB(NOW(), INTERVAL 9 DAY)),  -- Order 33: Hotel California New
+(10, 3, 'Supplier', 36, 'B20251218-WH', 'VG+', 'Available', 29.40, DATE_SUB(NOW(), INTERVAL 9 DAY)),  -- Order 36: Hotel California VG+
+(11, 3, 'Supplier', 37, 'B20251218-WH', 'New', 'Available', 41.60, DATE_SUB(NOW(), INTERVAL 9 DAY)),  -- Order 37: Born to Run New
+(11, 3, 'Supplier', 37, 'B20251218-WH', 'New', 'Available', 41.60, DATE_SUB(NOW(), INTERVAL 9 DAY)),  -- Order 37: Born to Run New
+(11, 3, 'Supplier', 39, 'B20251218-WH', 'NM', 'Available', 35.36, DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- Order 39: Born to Run NM
+(9, 3, 'Supplier', 32, 'B20251218-WH', 'VG', 'Available', 29.70, DATE_SUB(NOW(), INTERVAL 9 DAY)),    -- Order 32: Opera VG
+(10, 3, 'Supplier', 34, 'B20251218-WH', 'Mint', 'Available', 42.56, DATE_SUB(NOW(), INTERVAL 9 DAY)), -- Order 34: Hotel California Mint
+(11, 3, 'Supplier', 40, 'B20251218-WH', 'VG+', 'Available', 27.30, DATE_SUB(NOW(), INTERVAL 9 DAY)),  -- Order 40: Born to Run VG+
+(9, 3, 'Supplier', 31, 'B20251218-WH', 'NM', 'Available', 48.96, DATE_SUB(NOW(), INTERVAL 9 DAY)),    -- Order 31: Opera NM
+(10, 3, 'Supplier', 35, 'B20251218-WH', 'NM', 'Available', 38.08, DATE_SUB(NOW(), INTERVAL 9 DAY)),   -- Order 35: Hotel California NM
+(11, 3, 'Supplier', 38, 'B20251218-WH', 'Mint', 'Available', 39.52, DATE_SUB(NOW(), INTERVAL 9 DAY)); -- Order 38: Born to Run Mint
 
--- 回购二手唱片 - ID 56-60
--- 回购时采用现有售价（如无现有库存则按算法计算）
--- Album 9 VG+ = 40.32, VG = 29.70
+-- 回购二手唱片 - ID 56-58
+-- 【修复】回购入库到长沙店(ShopID=1)而不是仓库
+-- Album 9 VG+ = 40.32 (回购数量3张)
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY)),
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY)),
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY)),
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG', 'Available', 29.70, DATE_SUB(NOW(), INTERVAL 15 DAY)),
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG', 'Available', 29.70, DATE_SUB(NOW(), INTERVAL 15 DAY));
+(9, 1, 'Buyback', 1, 'BUY-20251215', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY)),
+(9, 1, 'Buyback', 1, 'BUY-20251215', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY)),
+(9, 1, 'Buyback', 1, 'BUY-20251215', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY));
 
 -- ==========================================
 -- 9. 销售订单 - 【修复】使用正确的算法价格

@@ -43,11 +43,9 @@ require_once __DIR__ . '/../../includes/header.php';
 ?>
 
 <!-- ========== 表现层 ========== -->
+<!-- 【修复】移除顶部按钮，New Employee按钮移至员工tab内部 -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="text-warning"><i class="fa-solid fa-users-gear me-2"></i>User Management</h2>
-    <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addEmpModal">
-        <i class="fa-solid fa-user-plus me-2"></i>New Employee
-    </button>
 </div>
 
 <ul class="nav nav-tabs border-secondary mb-4" id="userTabs" role="tablist">
@@ -61,6 +59,12 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <div class="tab-content">
     <div class="tab-pane fade show active" id="employees">
+        <!-- 【修复】New Employee按钮移至员工tab内部 -->
+        <div class="d-flex justify-content-end mb-3">
+            <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addEmpModal">
+                <i class="fa-solid fa-user-plus me-2"></i>New Employee
+            </button>
+        </div>
         <div class="card bg-dark border-secondary">
             <div class="table-responsive">
                 <table class="table table-dark table-hover mb-0 align-middle">
@@ -129,7 +133,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             <th>Name / Email</th>
                             <th>Membership</th>
                             <th>Points</th>
-                            <th>Joined</th>
+                            <th>DOB</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -146,7 +150,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                 </span>
                             </td>
                             <td class="text-info fw-bold"><?= $c['Points'] ?> pts</td>
-                            <td><?= $c['Birthday'] ? 'DOB: '.h($c['Birthday']) : 'N/A' ?></td>
+                            <td><?= $c['Birthday'] ? h($c['Birthday']) : 'N/A' ?></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>

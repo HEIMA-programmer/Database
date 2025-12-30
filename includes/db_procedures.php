@@ -1185,6 +1185,7 @@ class DBProcedures {
 
     /**
      * 获取店铺的KPI统计（限定店铺）
+     * 营业额只统计已确认收入（Paid/Completed状态的订单）
      */
     public static function getShopKpiStats($pdo, $shopId) {
         try {
@@ -1193,7 +1194,7 @@ class DBProcedures {
                     COALESCE(SUM(co.TotalAmount), 0) AS TotalSales,
                     (SELECT COUNT(*) FROM CustomerOrder WHERE FulfilledByShopID = ? AND OrderStatus IN ('Pending', 'Paid', 'Shipped')) AS ActiveOrders
                 FROM CustomerOrder co
-                WHERE co.FulfilledByShopID = ? AND co.OrderStatus != 'Cancelled'
+                WHERE co.FulfilledByShopID = ? AND co.OrderStatus IN ('Paid', 'Completed')
             ");
             $stmt->execute([$shopId, $shopId]);
             return $stmt->fetch();

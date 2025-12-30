@@ -86,18 +86,18 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
         </div>
     </div>
-    <!-- 4. 【重构】Current Inventory Cost - 实时库存成本 -->
+    <!-- 4. 【重构】Total Inventory Cost - 历史库存总成本（含已售出） -->
     <div class="col-md-6 col-lg-3">
         <div class="card bg-dark border-danger h-100">
             <div class="card-body">
                 <h6 class="text-danger text-uppercase mb-2">
-                    <i class="fa-solid fa-boxes-stacked me-1"></i>Inventory Cost
+                    <i class="fa-solid fa-boxes-stacked me-1"></i>Total Cost
                 </h6>
                 <h3 class="text-white fw-bold"><?= formatPrice($totalExpense) ?></h3>
                 <small class="text-muted d-block">
-                    <i class="fa-solid fa-cube me-1"></i><?= $dashboardData['inventory_count'] ?? 0 ?> items in stock
+                    <i class="fa-solid fa-cube me-1"></i><?= $dashboardData['inventory_count'] ?? 0 ?> items (incl. sold)
                 </small>
-                <small class="text-info">(Real-time cost)</small>
+                <small class="text-info">(Historical cost)</small>
             </div>
         </div>
     </div>
@@ -326,18 +326,18 @@ require_once __DIR__ . '/../../includes/header.php';
                         </tr>
                         <?php endif; ?>
 
-                        <!-- 【重构】Current Inventory Cost - 实时库存成本 -->
+                        <!-- 【重构】Total Inventory Cost - 历史库存总成本（含已售出） -->
                         <tr class="table-warning bg-opacity-25">
                             <td>
                                 <i class="fa-solid fa-boxes-stacked me-2 text-warning"></i>
-                                <strong>Current Inventory Cost</strong>
+                                <strong>Total Inventory Cost</strong>
                             </td>
                             <td class="text-center">
                                 <span class="badge bg-warning text-dark"><?= $dashboardData['inventory_count'] ?? 0 ?> items</span>
                             </td>
                             <td class="text-end text-warning fw-bold"><?= formatPrice($procurementCost) ?></td>
                             <td class="text-center">
-                                <span class="badge bg-info">Real-time</span>
+                                <span class="badge bg-info">Historical</span>
                             </td>
                         </tr>
                     </tbody>

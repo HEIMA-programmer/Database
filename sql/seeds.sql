@@ -305,11 +305,11 @@ INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, Co
 (6, 3, 'Supplier', 18, 'B20251210-WH', 'New', 'Available', 51.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 18: Rumours New
 (6, 3, 'Supplier', 18, 'B20251210-WH', 'New', 'Sold', 51.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),       -- Order 18: Rumours New (Sold)
 (7, 3, 'Supplier', 21, 'B20251210-WH', 'New', 'Available', 60.80, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 21: Led Zeppelin IV New
-(7, 3, 'Supplier', 21, 'B20251210-WH', 'New', 'Sold', 60.80, DATE_SUB(NOW(), INTERVAL 29 DAY)),       -- Order 21: Led Zeppelin IV New (Sold)
-(7, 3, 'Supplier', 22, 'B20251210-WH', 'Mint', 'Available', 57.76, DATE_SUB(NOW(), INTERVAL 29 DAY)), -- Order 22: Led Zeppelin IV Mint
+(7, 3, 'Supplier', 21, 'B20251210-WH', 'New', 'Available', 60.80, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 21: Led Zeppelin IV New
+(7, 3, 'Supplier', 22, 'B20251210-WH', 'Mint', 'Sold', 57.76, DATE_SUB(NOW(), INTERVAL 29 DAY)),      -- Order 22: Led Zeppelin IV Mint (Sold)
 (8, 3, 'Supplier', 25, 'B20251210-WH', 'New', 'Available', 67.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 25: The Wall New
-(8, 3, 'Supplier', 25, 'B20251210-WH', 'New', 'Sold', 67.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),       -- Order 25: The Wall New (Sold)
-(8, 3, 'Supplier', 28, 'B20251210-WH', 'VG+', 'Available', 47.04, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 28: The Wall VG+
+(8, 3, 'Supplier', 25, 'B20251210-WH', 'New', 'Available', 67.20, DATE_SUB(NOW(), INTERVAL 29 DAY)),  -- Order 25: The Wall New
+(8, 3, 'Supplier', 28, 'B20251210-WH', 'VG+', 'Sold', 47.04, DATE_SUB(NOW(), INTERVAL 29 DAY)),       -- Order 28: The Wall VG+ (Sold)
 (6, 3, 'Supplier', 20, 'B20251210-WH', 'VG', 'Available', 26.40, DATE_SUB(NOW(), INTERVAL 29 DAY)),   -- Order 20: Rumours VG
 (7, 3, 'Supplier', 24, 'B20251210-WH', 'VG', 'Available', 33.44, DATE_SUB(NOW(), INTERVAL 29 DAY)),   -- Order 24: Led Zeppelin IV VG
 (8, 3, 'Supplier', 27, 'B20251210-WH', 'NM', 'Available', 57.12, DATE_SUB(NOW(), INTERVAL 29 DAY)),   -- Order 27: The Wall NM

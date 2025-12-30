@@ -102,16 +102,18 @@
 ## 2. 调货成本变化追踪测试
 
 > 这是测试Dashboard实时更新能力的关键场景
+>
+> **重要更新：** 成本计算现在使用"Total Cost"（历史总成本），统计所有库存（包含已售出）的采购成本。调货时成本从源店转移到目标店。
 
 ### 2.1 初始状态记录
 
-**各店Inventory Cost基准值：**
+**各店Total Cost基准值（包含已售库存）：**
 
-| 店铺 | 初始成本(约) | 可用库存件数 |
-|------|-------------|-------------|
-| 长沙店 | ¥200 | 9件 |
-| 上海店 | ¥250 | 12件 |
-| 仓库 | ¥800 | 30件 |
+| 店铺 | 初始成本(约) | 库存件数（含已售） |
+|------|-------------|-------------------|
+| 长沙店 | ¥415 | 13件（11件可用+2件已售） |
+| 上海店 | ¥615 | 16件（13件可用+3件已售） |
+| 仓库 | ¥900 | 28件（25件可用+3件已售） |
 
 ### 2.2 调货成本追踪测试
 
@@ -122,10 +124,10 @@
 | 操作 | 验证 |
 |------|------|
 | manager_cs登录 | 进入长沙店Dashboard |
-| 记录Inventory Cost小框 | 值A (如¥200) |
-| 记录Revenue Breakdown的Current Inventory Cost | 值A' |
+| 记录Total Cost小框 | 值A (如¥415) |
+| 记录Revenue Breakdown的Total Cost | 值A' (应与A相同) |
 | manager_wh登录 | 进入仓库Dashboard |
-| 记录Inventory Cost小框 | 值B (如¥800) |
+| 记录Total Cost小框 | 值B (如¥900) |
 
 **步骤2: 执行调货**
 
@@ -140,46 +142,49 @@
 
 | 验证项 | 操作 | 预期结果 |
 |--------|------|---------|
-| 长沙店Dashboard刷新 | manager_cs | Inventory Cost = A + 2×22 = A + 44 |
-| 仓库Dashboard刷新 | manager_wh | Inventory Cost = B - 2×22 = B - 44 |
-| Revenue Breakdown更新 | 两边查看 | Current Inventory Cost行同步更新 |
+| 长沙店Dashboard刷新 | manager_cs | Total Cost = A + 2×36 = A + 72 |
+| 仓库Dashboard刷新 | manager_wh | Total Cost = B - 2×36 = B - 72 |
+| Revenue Breakdown更新 | 两边查看 | Total Cost行同步更新 |
 
 ### 2.3 成本计算规则验证
 
 **调货商品成本来源：**
 
-| SourceType | 成本来源 |
-|------------|---------|
-| Supplier | SupplierOrderLine.UnitCost |
-| Buyback | BuybackOrderLine.UnitPrice |
+| SourceType | 成本来源字段 |
+|------------|-------------|
+| Supplier（供应商采购） | SupplierOrderLine.UnitCost |
+| Buyback（回购入库） | BuybackOrderLine.UnitPrice |
 
 **测试用例 2.3.1: Supplier来源成本验证**
 
 | 步骤 | 操作 | 预期 |
 |------|------|------|
 | 1 | 查看仓库Opera New的SourceType | Supplier |
-| 2 | 查看SupplierOrderLine.UnitCost | ¥22 |
+| 2 | 查看SupplierOrderLine.UnitCost | ¥36 (BaseUnitCost×1.0) |
 | 3 | 调货1件到长沙店 | 调货完成 |
-| 4 | 验证长沙店成本增加 | +¥22 |
+| 4 | 验证长沙店Total Cost增加 | +¥36 |
 
 **测试用例 2.3.2: Buyback来源成本验证**
 
 | 步骤 | 操作 | 预期 |
 |------|------|------|
-| 1 | 查看仓库Opera VG+的SourceType | Buyback |
+| 1 | 查看长沙店Opera VG+的SourceType | Buyback（Bob回购） |
 | 2 | 查看BuybackOrderLine.UnitPrice | ¥12 |
-| 3 | 调货1件到长沙店 | 调货完成 |
-| 4 | 验证长沙店成本增加 | +¥12 |
+| 3 | 如需调货该库存到上海店 | 调货完成 |
+| 4 | 验证上海店Total Cost增加 | +¥12 |
 
-### 2.4 销售后成本减少验证
+### 2.4 销售后成本变化验证
 
-**测试用例 2.4.1: 销售减少库存成本**
+> **重要更新：** 销售完成后Total Cost**不会减少**，因为已售库存的历史成本仍计入统计。
+
+**测试用例 2.4.1: 销售不改变Total Cost**
 
 | 步骤 | 操作 | 预期 |
 |------|------|------|
-| 1 | 记录长沙店Inventory Cost | 值X |
+| 1 | 记录长沙店Total Cost | 值X |
 | 2 | POS销售1件Abbey Road New | 销售完成 |
-| 3 | 刷新Dashboard | Inventory Cost = X - ¥20 |
+| 3 | 刷新Dashboard | Total Cost = X（**保持不变**） |
+| 4 | 验证库存件数显示 | 件数不变（items incl. sold） |
 
 ---
 
@@ -402,11 +407,11 @@
 
 ### B. 成本追踪检查
 
-- [ ] 调货后源店成本减少
-- [ ] 调货后目标店成本增加
-- [ ] 销售后库存成本减少
-- [ ] Dashboard实时更新正确
-- [ ] Revenue Breakdown成本行正确
+- [ ] 调货后源店Total Cost减少
+- [ ] 调货后目标店Total Cost增加
+- [ ] 销售后Total Cost**保持不变**（已售库存成本仍计入）
+- [ ] Dashboard Total Cost实时更新正确（调货转移）
+- [ ] Revenue Breakdown Total Cost行显示正确
 
 ### C. 数据一致性检查
 

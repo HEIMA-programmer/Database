@@ -67,6 +67,35 @@ Condition系数：
 - 成本 > ¥100: ×1.80 (80%利润)
 ```
 
+### 1.5 成本与营业额计算机制
+
+> **重要更新：** 以下计算规则已在最近版本中更新，请注意区分。
+
+#### 店铺总成本（Total Cost）计算
+
+Dashboard显示的店铺成本为**历史成本总和**，包含：
+- ✅ 当前可用库存（Available）的采购成本
+- ✅ 已售出库存（Sold）的历史采购成本
+- ✅ 调货后成本跟随库存转移到目标店铺
+
+**成本来源：**
+| SourceType | 成本取值字段 |
+|------------|-------------|
+| Supplier（供应商采购） | SupplierOrderLine.UnitCost |
+| Buyback（回购入库） | BuybackOrderLine.UnitPrice |
+
+**显示标签：**
+- 小框标题：`Total Cost`（非Inventory Cost）
+- 描述文字：`Historical cost`（非Real-time cost）
+- 数量显示：`items (incl. sold)`（包含已售库存）
+
+#### 营业额（Revenue）计算
+
+只统计**已确认收入**的订单：
+- ✅ OrderStatus = `Paid`
+- ✅ OrderStatus = `Completed`
+- ❌ 排除 `Pending`、`Shipped`、`Cancelled` 等未确认订单
+
 ---
 
 ## 2. 初始测试数据说明
@@ -137,7 +166,7 @@ Condition系数：
 
 ### 2.6 库存初始分布
 
-#### 长沙店库存（ShopID=1）- 共10件，2件已售
+#### 长沙店库存（ShopID=1）- 共13件（8件供应商+1件调拨+3件回购），2件已售
 
 | StockItemID | 专辑 | 成色 | 售价 | 状态 | 备注 |
 |-------------|------|------|------|------|------|
@@ -152,13 +181,17 @@ Condition系数：
 | 9 | The Dark Side of the Moon | Mint | ¥60.80 | **Sold** | Bob订单2 |
 | 10 | Abbey Road | VG+ | ¥39.20 | Available | |
 | 26 | Rumours | New | ¥51.20 | Available | 从仓库调拨 |
+| 56 | A Night at the Opera | VG+ | ¥40.32 | Available | Bob回购 |
+| 57 | A Night at the Opera | VG+ | ¥40.32 | Available | Bob回购 |
+| 58 | A Night at the Opera | VG+ | ¥40.32 | Available | Bob回购 |
 
 **可用库存统计：**
 - Abbey Road: 3件 (2×New, 1×Mint, 1×VG+)
 - Dark Side: 4件 (2×New, 1×Mint, 1×VG+)
 - Rumours: 1件 (1×New，从仓库调拨)
+- A Night at the Opera: 3件 (3×VG+，Bob回购)
 
-#### 上海店库存（ShopID=2）- 共15件，3件已售
+#### 上海店库存（ShopID=2）- 共16件（15件供应商+1件调拨），3件已售
 
 | StockItemID | 专辑 | 成色 | 售价 | 状态 | 备注 |
 |-------------|------|------|------|------|------|
@@ -177,53 +210,48 @@ Condition系数：
 | 23 | Thriller | Mint | ¥38.00 | Available | |
 | 24 | Kind of Blue | Mint | ¥68.40 | Available | |
 | 25 | Back in Black | NM | ¥40.80 | Available | |
-| 29 | Led Zeppelin IV | NM | ¥51.68 | Available | 从仓库调拨 |
+| 29 | Led Zeppelin IV | New | ¥60.80 | Available | 从仓库调拨 |
 
-#### 仓库库存（ShopID=3）- 共35件，3件已售，2件已调拨
+#### 仓库库存（ShopID=3）- 共30件，3件已售，2件已调拨
 
-**B20251210-WH批次：**
+**B20251210-WH批次（实际仓库库存）：**
 
-| StockItemID | 专辑 | 成色 | 售价 | 状态 |
-|-------------|------|------|------|------|
-| 27 | Rumours | New | ¥51.20 | Available |
-| 28 | Rumours | New | ¥51.20 | **Sold** (Alice订单6) |
-| 29-已调拨 | Led Zeppelin IV | NM | - | 已调拨至上海 |
-| 30 | Led Zeppelin IV | New | ¥60.80 | Available |
-| 31 | Led Zeppelin IV | Mint | ¥57.76 | **Sold** (Bob订单7) |
-| 32 | Led Zeppelin IV | Mint | ¥57.76 | Available |
-| 33 | The Wall | New | ¥67.20 | Available |
-| 34 | The Wall | VG+ | ¥47.04 | **Sold** (Diana订单8) |
-| 35 | The Wall | VG+ | ¥47.04 | Available |
-| 36 | Rumours | VG | ¥26.40 | Available |
-| 37 | Led Zeppelin IV | VG | ¥33.44 | Available |
-| 38 | The Wall | NM | ¥57.12 | Available |
-| 39 | Rumours | Mint | ¥48.64 | Available |
-| 40 | Led Zeppelin IV | NM | ¥51.68 | Available |
-| 41 | The Wall | Mint | ¥63.84 | Available |
+| StockItemID | 专辑 | 成色 | 售价 | 状态 | 备注 |
+|-------------|------|------|------|------|------|
+| 26-已调拨 | Rumours | New | ¥51.20 | - | 已调拨至长沙店 |
+| 27 | Rumours | New | ¥51.20 | Available | |
+| 28 | Rumours | New | ¥51.20 | **Sold** | Alice订单6 |
+| 29-已调拨 | Led Zeppelin IV | New | ¥60.80 | - | 已调拨至上海店 |
+| 30 | Led Zeppelin IV | New | ¥60.80 | Available | |
+| 31 | Led Zeppelin IV | Mint | ¥57.76 | **Sold** | Bob订单7 |
+| 32 | The Wall | New | ¥67.20 | Available | |
+| 33 | The Wall | New | ¥67.20 | Available | |
+| 34 | The Wall | VG+ | ¥47.04 | **Sold** | Diana订单8 |
+| 35 | Rumours | VG | ¥26.40 | Available | |
+| 36 | Led Zeppelin IV | VG | ¥33.44 | Available | |
+| 37 | The Wall | NM | ¥57.12 | Available | |
+| 38 | Rumours | Mint | ¥48.64 | Available | |
+| 39 | Led Zeppelin IV | NM | ¥51.68 | Available | |
+| 40 | The Wall | Mint | ¥63.84 | Available | |
 
 **B20251218-WH批次：**
 
 | StockItemID | 专辑 | 成色 | 售价 | 状态 |
 |-------------|------|------|------|------|
-| 42-43 | A Night at the Opera | New | ¥57.60 | Available |
-| 44 | A Night at the Opera | Mint | ¥54.72 | Available |
-| 45-46 | Hotel California | New | ¥44.80 | Available |
-| 47 | Hotel California | VG+ | ¥29.40 | Available |
-| 48-49 | Born to Run | New | ¥41.60 | Available |
-| 50 | Born to Run | NM | ¥35.36 | Available |
-| 51 | A Night at the Opera | VG | ¥29.70 | Available |
-| 52 | Hotel California | Mint | ¥42.56 | Available |
-| 53 | Born to Run | VG+ | ¥27.30 | Available |
-| 54 | A Night at the Opera | NM | ¥48.96 | Available |
-| 55 | Hotel California | NM | ¥38.08 | Available |
-| 56 | Born to Run | Mint | ¥39.52 | Available |
+| 41-42 | A Night at the Opera | New | ¥57.60 | Available |
+| 43 | A Night at the Opera | Mint | ¥54.72 | Available |
+| 44-45 | Hotel California | New | ¥44.80 | Available |
+| 46 | Hotel California | VG+ | ¥29.40 | Available |
+| 47-48 | Born to Run | New | ¥41.60 | Available |
+| 49 | Born to Run | NM | ¥35.36 | Available |
+| 50 | A Night at the Opera | VG | ¥29.70 | Available |
+| 51 | Hotel California | Mint | ¥42.56 | Available |
+| 52 | Born to Run | VG+ | ¥27.30 | Available |
+| 53 | A Night at the Opera | NM | ¥48.96 | Available |
+| 54 | Hotel California | NM | ¥38.08 | Available |
+| 55 | Born to Run | Mint | ¥39.52 | Available |
 
-**BUY-20251211回购批次：**
-
-| StockItemID | 专辑 | 成色 | 售价 | 状态 | 来源 |
-|-------------|------|------|------|------|------|
-| 57-59 | A Night at the Opera | VG+ | ¥40.32 | Available | Bob回购 |
-| 60-61 | A Night at the Opera | VG | ¥29.70 | Available | Bob回购 |
+> **注意：** 回购库存（ID 56-58）入库到长沙店，详见长沙店库存表格。
 
 ### 2.7 已完成订单历史
 
@@ -242,14 +270,16 @@ Condition系数：
 
 | BuybackOrderID | 客户 | 店铺 | 专辑 | 数量 | 成色 | 回购单价 | 总支付 | 赠送积分 |
 |----------------|------|------|------|------|------|---------|--------|---------|
-| 1 | Bob | 仓库 | A Night at the Opera | 3 | VG+ | ¥12.00 | ¥66.00 | 33积分 |
+| 1 | Bob | 长沙店 | A Night at the Opera | 3 | VG+ | ¥12.00 | ¥36.00 | 18积分 |
+
+> **注意：** 回购只能在零售店（长沙店、上海店）进行，仓库不支持回购功能。回购入库的库存ID为56-58，入库到长沙店。
 
 ### 2.9 库存调拨历史
 
 | TransferID | 库存ID | 专辑 | 从 | 到 | 状态 | 时间(天前) |
 |------------|--------|------|----|----|------|-----------|
 | 1 | 26 (Rumours New ¥51.20) | Rumours | 仓库 | 长沙店 | Completed | 25天 |
-| 2 | 29 (Led Zeppelin NM ¥51.68) | Led Zeppelin IV | 仓库 | 上海店 | Completed | 20天 |
+| 2 | 29 (Led Zeppelin IV New ¥60.80) | Led Zeppelin IV | 仓库 | 上海店 | Completed | 20天 |
 
 ---
 

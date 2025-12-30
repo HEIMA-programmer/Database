@@ -112,8 +112,10 @@
 ## 2. Buyback回购测试
 
 **测试路径:** `/public/staff/buyback.php`
-**适用店铺:** 仅零售店(Retail)
-**不适用:** 仓库(Warehouse)
+**适用店铺:** 仅零售店(Retail) - 长沙店、上海店
+**不适用:** 仓库(Warehouse) - 仓库员工无法访问回购功能
+
+> **重要说明：** 回购入库的库存会添加到**处理回购的零售店**，而非仓库。回购是二手唱片的收购渠道，与采购不同。
 
 ### 2.1 Buyback表单元素
 
@@ -145,12 +147,15 @@
 
 **数据验证点：**
 - BuybackOrder创建：Status='Completed', TotalPayment=¥20
-- BuybackOrderLine创建：2件记录
+- BuybackOrderLine创建：Quantity=2, UnitPrice=¥10
 - 生成2件StockItem：
-  - ReleaseID=3, ShopID=2
+  - ReleaseID=3（Thriller）
+  - **ShopID=2（上海店，即处理回购的店铺）**
   - ConditionGrade='VG'
   - SourceType='Buyback'
+  - SourceOrderID=BuybackOrderID
   - Status='Available'
+  - UnitPrice=使用现有相同Release+Condition的价格，或根据输入的转售价
 - Alice积分增加：+10 (floor(20×0.5))
 
 **测试用例 2.2.2: 回购成功消息验证**
@@ -178,12 +183,17 @@
 
 | 步骤 | 操作 | 预期结果 |
 |------|------|---------|
-| 1 | 确认仓库已有Opera VG+ | 现有价格¥40.32 |
-| 2 | 在长沙店回购Opera VG+ | 输入转售价¥45 |
+| 1 | 确认长沙店已有Opera VG+（Bob回购） | 现有价格¥40.32 |
+| 2 | 在上海店回购Opera VG+ | 输入转售价¥45 |
 | 3 | 提交回购 | 回购成功 |
 | 4 | **验证新库存价格** | **应为¥40.32（使用现有价格）** |
+| 5 | **验证入库店铺** | **ShopID=2（上海店）** |
 
-**说明：** 系统应自动使用现有相同Release+Condition的价格，保证价格一致性。
+**说明：** 系统应自动使用现有相同Release+Condition的价格，保证价格一致性。回购入库的库存归属于处理回购的店铺。
+
+**初始回购数据参考：**
+- BuybackOrderID=1：Bob在长沙店(ShopID=1)回购Opera VG+×3，入库到长沙店
+- 生成库存ID 56-58，ShopID=1（长沙店），UnitPrice=¥40.32
 
 ### 2.5 回购按钮功能
 

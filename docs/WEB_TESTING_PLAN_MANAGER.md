@@ -84,42 +84,62 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 | 2 | Alice在长沙店完成¥100订单 | 订单完成 |
 | 3 | 刷新Dashboard | Top Spender变为 Alice Fan |
 
-#### 小框4: Inventory Cost（库存成本）
+#### 小框4: Total Cost（店铺总成本）
+
+> **重要更新：** 此指标已从"Inventory Cost（库存成本）"改为"Total Cost（店铺总成本）"，计算逻辑也有重大变化。
 
 | 测试项 | 测试方法 | 预期结果 |
 |--------|---------|---------|
-| 初始显示 | manager_cs 登录查看 | 显示当前可用库存的采购成本总和 |
+| 初始显示 | manager_cs 登录查看 | 显示**所有库存（包含已售）的历史采购成本总和** |
+| 标题文字 | 视觉检查 | 显示"Total Cost"（非Inventory Cost） |
+| 描述文字 | 视觉检查 | 显示"Historical cost"（非Real-time cost） |
+| 数量描述 | 视觉检查 | 显示"items (incl. sold)"（包含已售库存件数） |
 | 边框颜色 | 视觉检查 | 红色边框(border-danger) |
-| 实时更新 | 调拨/销售后刷新 | 数值实时变化 |
+| 实时更新 | 调拨后刷新 | 数值随调拨转移而变化 |
 
-**库存成本计算规则：**
-- Supplier来源库存：使用 SupplierOrderLine.UnitCost
-- Buyback来源库存：使用 BuybackOrderLine.UnitPrice
+**成本计算规则（新版）：**
+- ✅ 统计所有库存（Available + Sold）的历史成本
+- ✅ 调货后成本跟随库存转移到目标店铺
+- ❌ 不再仅统计Available状态的库存成本
 
-**长沙店初始库存成本计算：**
+**成本来源：**
+| SourceType | 成本取值字段 |
+|------------|-------------|
+| Supplier（供应商采购） | SupplierOrderLine.UnitCost |
+| Buyback（回购入库） | BuybackOrderLine.UnitPrice |
 
-| StockItemID | 专辑 | 成色 | 来源成本 | 状态 |
-|-------------|------|------|---------|------|
-| 1 | Abbey Road | New | ¥20.00 | Available |
-| 2 | Abbey Road | New | ¥20.00 | Available |
-| 3 | Abbey Road | Mint | ¥20.00 | Available |
-| 4 | Dark Side | New | ¥25.00 | Available |
-| 5 | Dark Side | New | ¥25.00 | Available |
-| 6 | Dark Side | Mint | ¥25.00 | Available |
-| 7 | Dark Side | VG+ | ¥25.00 | Available |
-| 10 | Abbey Road | VG+ | ¥20.00 | Available |
-| 26 | Rumours | New | ¥20.00 | Available (调拨来) |
+**长沙店初始总成本计算（包含已售）：**
 
-**初始成本: ¥200.00** (8件×¥20或¥25 + 1件调拨)
+| StockItemID | 专辑 | 成色 | 来源成本 | 状态 | 是否计入 |
+|-------------|------|------|---------|------|---------|
+| 1 | Abbey Road | New | ¥35.00 | Available | ✅ |
+| 2 | Abbey Road | New | ¥35.00 | Available | ✅ |
+| 3 | Abbey Road | Mint | ¥33.25 | Available | ✅ |
+| 4 | Dark Side | New | ¥40.00 | Available | ✅ |
+| 5 | Dark Side | New | ¥40.00 | Available | ✅ |
+| 6 | Dark Side | Mint | ¥38.00 | Available | ✅ |
+| 7 | Dark Side | VG+ | ¥28.00 | Available | ✅ |
+| 8 | Abbey Road | New | ¥35.00 | **Sold** | ✅ (历史成本) |
+| 9 | Dark Side | Mint | ¥38.00 | **Sold** | ✅ (历史成本) |
+| 10 | Abbey Road | VG+ | ¥24.50 | Available | ✅ |
+| 26 | Rumours | New | ¥32.00 | Available | ✅ (调拨来) |
+| 56-58 | Opera | VG+ | ¥12.00×3 | Available | ✅ (回购) |
 
-**测试用例 1.1.4: 调货后库存成本变化**
+**初始总成本计算：**
+- 供应商库存成本: ¥35+35+33.25+40+40+38+28+35+38+24.50+32 = ¥378.75
+- 回购库存成本: ¥12×3 = ¥36.00
+- **总计约: ¥414.75**
+
+**测试用例 1.1.4: 调货后总成本变化**
 
 | 步骤 | 操作 | 预期结果 |
 |------|------|---------|
-| 1 | 记录长沙店Inventory Cost | 约¥200 |
-| 2 | 从仓库调拨1件Opera New(成本¥22)到长沙店 | 调拨完成 |
-| 3 | 刷新长沙店Dashboard | Inventory Cost增加约¥22 |
-| 4 | 检查仓库Dashboard | Inventory Cost减少约¥22 |
+| 1 | 记录长沙店Total Cost | 约¥415 |
+| 2 | 从仓库调拨1件Opera New(成本¥36)到长沙店 | 调拨完成 |
+| 3 | 刷新长沙店Dashboard | Total Cost增加¥36 |
+| 4 | 检查仓库Dashboard | Total Cost减少¥36 |
+
+> **注意：** 销售完成后，Total Cost**不会减少**，因为已售库存的历史成本仍计入统计。
 
 ---
 
@@ -280,13 +300,15 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 | Online Pickup | 线上自提订单收入 | 绿色 |
 | POS In-Store | 门店POS销售收入 | 绿色 |
 | Buyback | 回购支出 | 红色 |
-| Current Inventory Cost | 当前库存成本 | 红色 |
+| Total Cost | 历史库存总成本（含已售） | 红色 |
 
 **仓库(Warehouse)显示：**
 | 类型 | 说明 | 颜色 |
 |------|------|------|
 | Online Sales | 线上订单收入 | 绿色 |
-| Current Inventory Cost | 当前库存成本 | 红色 |
+| Total Cost | 历史库存总成本（含已售） | 红色 |
+
+> **注意：** Revenue Breakdown中的"Total Cost"与KPI小框中的"Total Cost"计算方式相同，都包含已售出库存的历史成本。
 
 **每行显示：**
 - 订单数量
@@ -300,8 +322,8 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 | 1 | manager_cs 查看Revenue Breakdown | 显示收支表格 |
 | 2 | 验证POS In-Store行 | 2笔订单，¥116.80 |
 | 3 | 验证Online行 | 0笔订单，¥0 |
-| 4 | 验证Buyback行 | 0笔，¥0（长沙店无回购） |
-| 5 | 验证Inventory Cost | 约¥200(根据计算) |
+| 4 | 验证Buyback行 | 1笔，¥36.00（Bob回购Opera VG+×3） |
+| 5 | 验证Total Cost | 约¥415(包含已售库存的历史成本) |
 
 **测试用例 1.2.12: Details按钮 - 查看POS订单**
 
@@ -318,8 +340,8 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 | 1 | manager_wh 登录查看Dashboard | 进入仓库Dashboard |
 | 2 | 验证Online Sales行 | 3笔订单 |
 | 3 | 计算验证 | ¥51.20+¥57.76+¥47.04=¥156.00 |
-| 4 | 验证无Buyback行 | 仓库虽有回购记录但通常不在零售分类 |
-| 5 | 验证Inventory Cost | 仓库大量库存的成本 |
+| 4 | 验证无Buyback行 | 仓库不支持回购功能 |
+| 5 | 验证Total Cost | 仓库所有库存（含已售）的历史成本 |
 
 **测试用例 1.2.14: 新订单后收支更新**
 
@@ -328,7 +350,7 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 | 1 | 记录长沙店POS收入 | ¥116.80，2笔 |
 | 2 | staff_cs 完成Alice的POS销售(¥53.20) | 订单完成 |
 | 3 | manager_cs 刷新Dashboard | POS行变为3笔，¥170.00 |
-| 4 | 同时验证Inventory Cost | 减少(库存售出) |
+| 4 | 同时验证Total Cost | **保持不变**（已售库存的历史成本仍计入） |
 
 ---
 
@@ -518,26 +540,28 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 ## 5. 调货引起的成本变化测试
 
 > 这是测试Manager Dashboard实时更新能力的关键场景
+>
+> **重要更新：** 成本计算现在使用"Total Cost"（历史总成本），包含已售库存的成本。调货时成本会从源店转移到目标店。
 
 ### 5.1 完整调货流程与成本追踪
 
 **初始状态记录：**
 
-| 店铺 | Dashboard Inventory Cost | 可用库存件数 |
+| 店铺 | Dashboard Total Cost | 库存件数（含已售） |
 |------|-------------------------|-------------|
-| 长沙店 | 约¥200 | 9件 |
-| 仓库 | 约¥800 | 30+件 |
+| 长沙店 | 约¥415 | 13件（11件可用+2件已售） |
+| 仓库 | 约¥900 | 28件（25件可用+3件已售） |
 
 **测试用例 5.1.1: 调货全流程成本变化**
 
 | 步骤 | 角色 | 操作 | 长沙店成本 | 仓库成本 | 说明 |
 |------|------|------|-----------|---------|------|
-| 1 | manager_cs | 记录当前Inventory Cost | ¥200 | ¥800 | 初始值 |
-| 2 | manager_cs | 提交调货申请(Opera New×2) | ¥200 | ¥800 | 无变化 |
-| 3 | admin | 批准申请，选择仓库为源 | ¥200 | ¥800 | 无变化 |
-| 4 | staff_wh | 确认发货 | ¥200 | ¥800 | InTransit状态不计入 |
-| 5 | staff_cs | 确认收货 | **¥244** | **¥756** | 2件Opera(¥22×2)转移 |
-| 6 | 验证 | 刷新两边Dashboard | +¥44 | -¥44 | 成本实时转移 |
+| 1 | manager_cs | 记录当前Total Cost | ¥415 | ¥900 | 初始值 |
+| 2 | manager_cs | 提交调货申请(Opera New×2) | ¥415 | ¥900 | 无变化 |
+| 3 | admin | 批准申请，选择仓库为源 | ¥415 | ¥900 | 无变化 |
+| 4 | staff_wh | 确认发货 | ¥415 | ¥900 | InTransit状态成本暂不变 |
+| 5 | staff_cs | 确认收货 | **¥487** | **¥828** | 2件Opera(¥36×2)转移 |
+| 6 | 验证 | 刷新两边Dashboard | +¥72 | -¥72 | 成本实时转移 |
 
 ### 5.2 成本变化详细验证
 
@@ -545,18 +569,18 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 
 | 步骤 | 操作 | 预期结果 |
 |------|------|---------|
-| 1 | manager_wh 查看Dashboard | 记录Inventory Cost = X |
-| 2 | 完成调货发出2件Opera | 发货成功 |
+| 1 | manager_wh 查看Dashboard | 记录Total Cost = X |
+| 2 | 完成调货发出2件Opera New | 发货成功 |
 | 3 | 目标店确认收货 | 收货成功 |
-| 4 | 刷新仓库Dashboard | Inventory Cost = X - (2×22) = X - 44 |
+| 4 | 刷新仓库Dashboard | Total Cost = X - (2×36) = X - 72 |
 
 **测试用例 5.2.2: 目标店成本增加验证**
 
 | 步骤 | 操作 | 预期结果 |
 |------|------|---------|
-| 1 | manager_cs 查看Dashboard | 记录Inventory Cost = Y |
-| 2 | 确认收货2件Opera | 收货成功 |
-| 3 | 刷新长沙店Dashboard | Inventory Cost = Y + (2×22) = Y + 44 |
+| 1 | manager_cs 查看Dashboard | 记录Total Cost = Y |
+| 2 | 确认收货2件Opera New | 收货成功 |
+| 3 | 刷新长沙店Dashboard | Total Cost = Y + (2×36) = Y + 72 |
 
 ### 5.3 Revenue Breakdown中的成本行验证
 
@@ -564,20 +588,23 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 
 | 步骤 | 操作 | 预期结果 |
 |------|------|---------|
-| 1 | manager_cs 查看Revenue Breakdown | 找到Current Inventory Cost行 |
+| 1 | manager_cs 查看Revenue Breakdown | 找到Total Cost行 |
 | 2 | 记录当前值 | Y |
 | 3 | 完成调货接收 | 收货成功 |
-| 4 | 刷新查看 | Current Inventory Cost = Y + 调入成本 |
+| 4 | 刷新查看 | Total Cost = Y + 调入成本 |
 
-### 5.4 销售后成本减少验证
+### 5.4 销售后成本变化验证
 
-**测试用例 5.4.1: 销售引起的成本变化**
+> **重要：** 新版本中销售完成后Total Cost**不会减少**，因为已售库存的历史成本仍计入统计。
+
+**测试用例 5.4.1: 销售不影响Total Cost**
 
 | 步骤 | 操作 | 预期结果 |
 |------|------|---------|
-| 1 | manager_cs 记录Inventory Cost | 值Z |
+| 1 | manager_cs 记录Total Cost | 值Z |
 | 2 | staff_cs POS销售Abbey Road New | 销售完成 |
-| 3 | 刷新Dashboard | Inventory Cost = Z - ¥20(Abbey成本) |
+| 3 | 刷新Dashboard | Total Cost = Z（**保持不变**） |
+| 4 | 验证库存件数 | 件数不变（因为包含已售库存） |
 
 ---
 
@@ -585,10 +612,12 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 
 ### A. 四个小框检查
 
-- [ ] Total Revenue显示正确（与订单金额匹配）
+- [ ] Total Revenue显示正确（仅统计Paid/Completed订单）
 - [ ] Most Popular显示畅销单品
 - [ ] Top Spender显示消费最高客户
-- [ ] Inventory Cost显示实时库存成本
+- [ ] Total Cost显示历史库存总成本（含已售）
+- [ ] Total Cost标题正确（非Inventory Cost）
+- [ ] Total Cost描述正确（Historical cost, items incl. sold）
 
 ### B. 四个大框检查
 
@@ -601,7 +630,7 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 - [ ] Low Stock调货按钮跳转正确
 - [ ] Revenue Breakdown按类型统计正确
 - [ ] Revenue Breakdown Details显示订单列表
-- [ ] Current Inventory Cost行显示正确
+- [ ] Total Cost行显示正确（含已售库存成本）
 
 ### C. 按钮功能检查
 
@@ -613,8 +642,8 @@ Manager Dashboard 包含 **四个KPI小框** 和 **四个详细大框**，需要
 ### D. 实时更新检查
 
 - [ ] 新订单后Total Revenue更新
-- [ ] 销售后Inventory Cost减少
-- [ ] 调货后两边Inventory Cost同时变化
+- [ ] 销售后Total Cost**保持不变**（已售库存成本仍计入）
+- [ ] 调货后两边Total Cost同时变化（转移成本）
 - [ ] 新客户消费后Top Spenders更新
 
 ---

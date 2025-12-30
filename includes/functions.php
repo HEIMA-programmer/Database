@@ -62,66 +62,16 @@ function hasRole($role) {
 }
 
 /**
- * 【修复】按店铺获取目录数据
+ * 【架构重构Phase3】按店铺获取目录数据
+ * 改用 DBProcedures::getCatalogByShop 和 DBProcedures::getReleaseGenres
  * 已更新以匹配 ReleaseAlbum 架构
  */
 function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') {
-    // 【修改】显示所有专辑，有库存的优先排列
-    // 构建查询条件
-    $params = [$shopId];
-    $where = "";
+    require_once __DIR__ . '/db_procedures.php';
 
-    if ($search) {
-        // 注意：Artist 表已移除，直接查询 ReleaseAlbum 中的 ArtistName
-        $where .= " AND (r.Title LIKE ? OR r.ArtistName LIKE ?)";
-        $searchParam = "%$search%";
-        $params[] = $searchParam;
-        $params[] = $searchParam;
-    }
-
-    if ($genre) {
-        $where .= " AND r.Genre = ?";
-        $params[] = $genre;
-    }
-
-    // 【修改】使用 LEFT JOIN 获取所有专辑，包括无库存的
-    // 有库存的优先显示（按库存数量降序），然后按标题排序
-    $sql = "
-        SELECT
-            r.ReleaseID,
-            r.Title,
-            r.Genre,
-            r.ReleaseYear as Year,
-            r.ArtistName,
-            COUNT(CASE WHEN si.ShopID = ? AND si.Status = 'Available' THEN si.StockItemID END) as TotalAvailable,
-            MIN(CASE WHEN si.ShopID = ? AND si.Status = 'Available' THEN si.UnitPrice END) as MinPrice,
-            MAX(CASE WHEN si.ShopID = ? AND si.Status = 'Available' THEN si.UnitPrice END) as MaxPrice,
-            GROUP_CONCAT(DISTINCT CASE WHEN si.ShopID = ? AND si.Status = 'Available' THEN si.ConditionGrade END ORDER BY
-                FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P')
-            ) as AvailableConditions
-        FROM ReleaseAlbum r
-        LEFT JOIN StockItem si ON si.ReleaseID = r.ReleaseID
-        WHERE 1=1 $where
-        GROUP BY r.ReleaseID
-        ORDER BY TotalAvailable DESC, r.Title ASC
-    ";
-
-    // 添加额外的参数用于店铺过滤
-    array_unshift($params, $shopId, $shopId, $shopId);
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // 【修改】获取所有专辑的音乐类型，而不仅仅是有库存的
-    $stmt = $pdo->prepare("
-        SELECT DISTINCT Genre
-        FROM ReleaseAlbum
-        WHERE Genre IS NOT NULL AND Genre != ''
-        ORDER BY Genre
-    ");
-    $stmt->execute();
-    $genres = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    // 【架构重构Phase3】使用 DBProcedures 替换直接SQL查询
+    $items = DBProcedures::getCatalogByShop($pdo, $shopId, $search, $genre);
+    $genres = DBProcedures::getReleaseGenres($pdo);
 
     return [
         'items' => $items,
@@ -129,34 +79,22 @@ function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') 
     ];
 }
 
+/**
+ * 【架构重构Phase3】按店铺获取专辑详情
+ * 改用 DBProcedures::getReleaseInfo 和 DBProcedures::getReleaseAvailableStock
+ */
 function getReleaseDetailsByShop($pdo, $releaseId, $shopId) {
-    // 获取Release基本信息
-    // 修正：表名 ReleaseAlbum，字段 ArtistName, LabelName
-    $stmt = $pdo->prepare("
-        SELECT r.*, r.ArtistName, r.LabelName
-        FROM ReleaseAlbum r
-        WHERE r.ReleaseID = ?
-    ");
-    $stmt->execute([$releaseId]);
-    $release = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+    require_once __DIR__ . '/db_procedures.php';
+
+    // 【架构重构Phase3】使用 DBProcedures 替换直接SQL查询
+    $release = DBProcedures::getReleaseInfo($pdo, $releaseId);
+
     if (!$release) {
         return null;
     }
-    
-    // 获取该店铺的可用库存
-    $stmt = $pdo->prepare("
-        SELECT si.*, s.Name as ShopName, s.Type as ShopType
-        FROM StockItem si
-        JOIN Shop s ON si.ShopID = s.ShopID
-        WHERE si.ReleaseID = ? AND si.ShopID = ? AND si.Status = 'Available'
-        ORDER BY 
-            FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'),
-            si.UnitPrice
-    ");
-    $stmt->execute([$releaseId, $shopId]);
-    $stockItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
+    $stockItems = DBProcedures::getReleaseAvailableStock($pdo, $releaseId, $shopId);
+
     return [
         'release' => $release,
         'stockItems' => $stockItems

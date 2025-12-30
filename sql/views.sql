@@ -1700,3 +1700,117 @@ SELECT
     s.Name AS ShopName
 FROM CustomerOrder co
 LEFT JOIN Shop s ON co.FulfilledByShopID = s.ShopID;
+
+-- ================================================
+-- 【架构重构Phase3】新增视图 - 消除所有剩余PHP直接表访问
+-- ================================================
+
+-- 90. [架构重构Phase3] 店铺KPI统计视图
+-- 替换 db_procedures.php:getShopKpiStats 中的直接表访问
+CREATE OR REPLACE VIEW vw_shop_kpi_stats AS
+SELECT
+    FulfilledByShopID AS ShopID,
+    COALESCE(SUM(CASE WHEN OrderStatus IN ('Paid', 'Completed') THEN TotalAmount ELSE 0 END), 0) AS TotalSales,
+    COALESCE(SUM(CASE WHEN OrderStatus IN ('Pending', 'Paid', 'Shipped') THEN 1 ELSE 0 END), 0) AS ActiveOrders
+FROM CustomerOrder
+GROUP BY FulfilledByShopID;
+
+-- 91. [架构重构Phase3] 调拨验证视图
+-- 替换 db_procedures.php:validateTransferFromShop/ToShop 中的直接表访问
+CREATE OR REPLACE VIEW vw_transfer_validation AS
+SELECT
+    TransferID,
+    StockItemID,
+    FromShopID,
+    ToShopID,
+    Status,
+    TransferDate,
+    AuthorizedByEmployeeID,
+    ReceivedByEmployeeID,
+    ReceivedDate
+FROM InventoryTransfer;
+
+-- 92. [架构重构Phase3] 订单验证视图
+-- 替换 db_procedures.php:validateOrderBelongsToShop 中的直接表访问
+CREATE OR REPLACE VIEW vw_order_shop_validation AS
+SELECT
+    OrderID,
+    CustomerID,
+    FulfilledByShopID,
+    OrderStatus,
+    OrderType,
+    FulfillmentType
+FROM CustomerOrder;
+
+-- 93. [架构重构Phase3] 目录按店铺分组视图
+-- 替换 functions.php:prepareCatalogPageDataByShop 中的直接表访问
+CREATE OR REPLACE VIEW vw_catalog_by_shop_grouped AS
+SELECT
+    r.ReleaseID,
+    r.Title,
+    r.Genre,
+    r.ReleaseYear AS Year,
+    r.ArtistName,
+    si.ShopID,
+    COUNT(CASE WHEN si.Status = 'Available' THEN 1 END) AS TotalAvailable,
+    MIN(CASE WHEN si.Status = 'Available' THEN si.UnitPrice END) AS MinPrice,
+    MAX(CASE WHEN si.Status = 'Available' THEN si.UnitPrice END) AS MaxPrice,
+    GROUP_CONCAT(DISTINCT CASE WHEN si.Status = 'Available' THEN si.ConditionGrade END
+        ORDER BY FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P')
+    ) AS AvailableConditions
+FROM ReleaseAlbum r
+LEFT JOIN StockItem si ON si.ReleaseID = r.ReleaseID
+GROUP BY r.ReleaseID, r.Title, r.Genre, r.ReleaseYear, r.ArtistName, si.ShopID;
+
+-- 94. [架构重构Phase3] 专辑基本信息视图
+-- 替换 functions.php:getReleaseDetailsByShop 中的直接 ReleaseAlbum 访问
+CREATE OR REPLACE VIEW vw_release_info AS
+SELECT
+    ReleaseID,
+    Title,
+    ArtistName,
+    LabelName,
+    ReleaseYear,
+    Genre,
+    Format,
+    Description,
+    BaseUnitCost
+FROM ReleaseAlbum;
+
+-- 95. [架构重构Phase3] 专辑流派列表视图
+-- 替换 functions.php:prepareCatalogPageDataByShop 中的流派查询
+CREATE OR REPLACE VIEW vw_release_genres AS
+SELECT DISTINCT Genre
+FROM ReleaseAlbum
+WHERE Genre IS NOT NULL AND Genre != ''
+ORDER BY Genre;
+
+-- 96. [架构重构Phase3] 专辑可用库存详情视图（按店铺）
+-- 替换 functions.php:getReleaseDetailsByShop 中的库存查询
+CREATE OR REPLACE VIEW vw_release_available_stock AS
+SELECT
+    si.StockItemID,
+    si.ReleaseID,
+    si.ShopID,
+    si.BatchNo,
+    si.ConditionGrade,
+    si.UnitPrice,
+    si.Status,
+    si.AcquiredDate,
+    s.Name AS ShopName,
+    s.Type AS ShopType
+FROM StockItem si
+JOIN Shop s ON si.ShopID = s.ShopID
+WHERE si.Status = 'Available';
+
+-- 97. [架构重构Phase3] 店铺库存数量统计视图
+-- 替换 db_procedures.php:getShopStockCount 中的直接表访问
+CREATE OR REPLACE VIEW vw_shop_stock_count AS
+SELECT
+    ShopID,
+    ReleaseID,
+    ConditionGrade,
+    COUNT(*) AS AvailableCount
+FROM StockItem
+WHERE Status = 'Available'
+GROUP BY ShopID, ReleaseID, ConditionGrade;

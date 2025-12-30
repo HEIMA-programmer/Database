@@ -1658,4 +1658,29 @@ BEGIN
     DELETE FROM InventoryTransfer WHERE TransferID = p_transfer_id;
 END$$
 
+-- ================================================
+-- 【架构重构Phase3】新增存储过程 - 消除剩余PHP直接写表操作
+-- ================================================
+
+-- ------------------------------------------------
+-- 29. 更新调货申请源店铺存储过程
+-- 替换 db_procedures.php:updateTransferRequestSource 中的直接 UPDATE
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_update_transfer_request_source$$
+CREATE PROCEDURE sp_update_transfer_request_source(
+    IN p_request_id INT,
+    IN p_source_shop_id INT
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        RESIGNAL;
+    END;
+
+    UPDATE ManagerRequest
+    SET ToShopID = p_source_shop_id
+    WHERE RequestID = p_request_id
+      AND RequestType = 'TransferRequest';
+END$$
+
 DELIMITER ;

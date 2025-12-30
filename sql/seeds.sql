@@ -53,8 +53,9 @@ INSERT INTO MembershipTier (TierName, MinPoints, DiscountRate) VALUES
 -- ==========================================
 -- 2. 员工账号 (密码: password123)
 -- ==========================================
+-- 【修复】Admin作为全局管理员，ShopID应为NULL，不属于任何特定店铺
 INSERT INTO Employee (ShopID, Role, Name, Username, PasswordHash, HireDate) VALUES
-(1, 'Admin', 'Super Admin', 'admin', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-01-01'),
+(NULL, 'Admin', 'Super Admin', 'admin', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-01-01'),
 (1, 'Manager', 'Changsha Manager', 'manager_cs', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-03-15'),
 (1, 'Staff', 'Changsha Staff', 'staff_cs', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-06-01'),
 (2, 'Manager', 'Shanghai Manager', 'manager_sh', '$2y$10$dfU5tM5IPYgDKUliWz6ygOmsEi52gBa0uVD2FZJIhh6iSeE05Ztq2', '2023-04-01'),
@@ -143,9 +144,10 @@ INSERT INTO SupplierOrderLine (SupplierOrderID, ReleaseID, Quantity, UnitCost) V
 -- ==========================================
 -- 7. 回购订单
 -- ==========================================
--- 改为（员工6属于仓库ShopID=3）：
+-- 【修复】只有门店可以进行回购，仓库不能回购
+-- 长沙店(ShopID=1)员工staff_cs(EmployeeID=3)处理回购
 INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, BuybackDate, Status, TotalPayment) VALUES
-(2, 6, 3, DATE_SUB(NOW(), INTERVAL 15 DAY), 'Completed', 66.00);
+(2, 3, 1, DATE_SUB(NOW(), INTERVAL 15 DAY), 'Completed', 36.00);
 
 -- 【修复】BuybackOrderID 都改为 1，因为只有一个回购订单
 INSERT INTO BuybackOrderLine (BuybackOrderID, ReleaseID, Quantity, UnitPrice, ConditionGrade) VALUES
@@ -236,15 +238,13 @@ INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, Co
 (10, 3, 'Supplier', 4, 'B20251218-WH', 'NM', 'Available', 38.08, DATE_SUB(NOW(), INTERVAL 9 DAY)),
 (11, 3, 'Supplier', 4, 'B20251218-WH', 'Mint', 'Available', 39.52, DATE_SUB(NOW(), INTERVAL 9 DAY));
 
--- 回购二手唱片 - ID 56-60
--- 回购时采用现有售价（如无现有库存则按算法计算）
--- Album 9 VG+ = 40.32, VG = 29.70
+-- 回购二手唱片 - ID 56-58
+-- 【修复】回购入库到长沙店(ShopID=1)而不是仓库
+-- Album 9 VG+ = 40.32 (回购数量3张)
 INSERT INTO StockItem (ReleaseID, ShopID, SourceType, SourceOrderID, BatchNo, ConditionGrade, Status, UnitPrice, AcquiredDate) VALUES
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY)),
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY)),
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY)),
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG', 'Available', 29.70, DATE_SUB(NOW(), INTERVAL 15 DAY)),
-(9, 3, 'Buyback', 1, 'BUY-20251211', 'VG', 'Available', 29.70, DATE_SUB(NOW(), INTERVAL 15 DAY));
+(9, 1, 'Buyback', 1, 'BUY-20251215', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY)),
+(9, 1, 'Buyback', 1, 'BUY-20251215', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY)),
+(9, 1, 'Buyback', 1, 'BUY-20251215', 'VG+', 'Available', 40.32, DATE_SUB(NOW(), INTERVAL 15 DAY));
 
 -- ==========================================
 -- 9. 销售订单 - 【修复】使用正确的算法价格

@@ -676,17 +676,27 @@ function prepareDashboardData($pdo, $shopId = null) {
         // 【重构】计算当前店铺所有available库存的实时成本
         // 成本 = 当前店内所有专辑的采购成本之和（实时，考虑调货等变动）
         // 这确保了调货时成本会自动更新（调出则减少，调入则增加）
+        // 【修复】对于Supplier来源，使用condition系数计算实际成本
+        // 因为同一SupplierOrderLine可能对应不同condition的库存
+        // Condition系数：New=1.00, Mint=0.95, NM=0.85, VG+=0.70, VG=0.55
         $inventoryCostStmt = $pdo->prepare("
             SELECT
                 COALESCE(SUM(
                     CASE
                         WHEN si.SourceType = 'Supplier' THEN
                             COALESCE(
-                                (SELECT sol.UnitCost
+                                (SELECT sol.UnitCost *
+                                    CASE si.ConditionGrade
+                                        WHEN 'New' THEN 1.00
+                                        WHEN 'Mint' THEN 0.95
+                                        WHEN 'NM' THEN 0.85
+                                        WHEN 'VG+' THEN 0.70
+                                        WHEN 'VG' THEN 0.55
+                                        ELSE 1.00
+                                    END
                                  FROM SupplierOrderLine sol
                                  WHERE sol.SupplierOrderID = si.SourceOrderID
                                  AND sol.ReleaseID = si.ReleaseID
-                                 AND sol.ConditionGrade = si.ConditionGrade
                                  LIMIT 1),
                                 0
                             )

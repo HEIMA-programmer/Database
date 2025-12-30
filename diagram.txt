@@ -1,7 +1,7 @@
 @startuml
-' E-R Diagram v6 - Retro Echo Records (REFACTORED)
+' E-R Diagram v7 - Retro Echo Records (REFACTORED)
 ' 重构版：PurchaseOrder拆分为SupplierOrder和BuybackOrder
-' 新增：ManagerRequest表、CustomerOrder履约字段
+' 新增：ManagerRequest表、CustomerOrder履约字段、BaseUnitCost定价基础
 ' 优化了业务流程清晰度和数据一致性
 
 skinparam linetype ortho
@@ -23,6 +23,7 @@ package "1. Product Catalog" <<Rectangle>> {
         +Genre : varchar(50)
         +Format : varchar(50)
         +Description : text
+        +BaseUnitCost : decimal(10,2) {Default 25.00}
     }
 
     class "Track" as TRACK {
@@ -112,6 +113,8 @@ package "4. Procurement (Refactored)" <<Rectangle>> {
         --
         +Quantity : int
         +UnitCost : decimal(10,2)
+        +ConditionGrade : enum('New','Mint','NM','VG+','VG')
+        +SalePrice : decimal(10,2) {Nullable}
     }
 
     class "BuybackOrder" as BUYORDER {
@@ -315,6 +318,22 @@ note right of MGRREQ
   - TransferRequest: 调货申请
   - Manager发起，Admin审批
   - 完整的审批追踪
+end note
+
+note right of RELEASE
+  <b>定价基础：</b>
+  - BaseUnitCost: 基础采购成本
+  - 实际成本 = BaseUnitCost x Condition系数
+  - Condition系数: New=1.00, Mint=0.95,
+    NM=0.85, VG+=0.70, VG=0.55
+  - 售价 = 实际成本 x 利润率
+end note
+
+note right of SUPPLINE
+  <b>采购明细：</b>
+  - ConditionGrade: 采购成色
+  - SalePrice: 预设售价（可选）
+  - 入库时自动计算建议售价
 end note
 
 @enduml

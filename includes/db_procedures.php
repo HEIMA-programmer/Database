@@ -925,10 +925,11 @@ class DBProcedures {
 
     /**
      * 获取供应商列表
+     * 【架构重构】改用视图替换直接表访问
      */
     public static function getSupplierList($pdo) {
         try {
-            return $pdo->query("SELECT * FROM Supplier ORDER BY Name ASC")->fetchAll();
+            return $pdo->query("SELECT * FROM vw_supplier_list")->fetchAll();
         } catch (PDOException $e) {
             error_log("getSupplierList Error: " . $e->getMessage());
             return [];
@@ -1562,6 +1563,897 @@ class DBProcedures {
             return $pdo->query("SELECT * FROM vw_stock_price_by_condition ORDER BY Title, ShopName, FIELD(ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG')")->fetchAll();
         } catch (PDOException $e) {
             error_log("getAllStockPrices Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // =============================================
+    // 【架构重构Phase2】新增包装方法
+    // =============================================
+
+    // ----------------
+    // 购物车验证相关
+    // ----------------
+
+    /**
+     * 验证购物车商品可用性
+     * 替换 cart.php 中的直接表访问
+     */
+    public static function validateCartItem($pdo, $stockItemId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_cart_item_validation
+                WHERE StockItemID = ? AND ShopID = ? AND Status = 'Available'
+            ");
+            $stmt->execute([$stockItemId, $shopId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("validateCartItem Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 获取购物车商品详情（带店铺信息）
+     * 替换 cart.php 中的购物车数据获取
+     */
+    public static function getCartItemsDetail($pdo, $stockIds) {
+        if (empty($stockIds)) return [];
+        try {
+            $placeholders = implode(',', array_fill(0, count($stockIds), '?'));
+            $sql = "SELECT * FROM vw_cart_items_detail WHERE StockItemID IN ($placeholders) AND Status = 'Available'";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($stockIds);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getCartItemsDetail Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // ----------------
+    // 订单取消验证
+    // ----------------
+
+    /**
+     * 验证订单可否取消
+     * 替换 cancel_order.php 中的直接表访问
+     */
+    public static function getOrderForCancelValidation($pdo, $orderId, $customerId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_order_cancel_validation
+                WHERE OrderID = ? AND CustomerID = ?
+            ");
+            $stmt->execute([$orderId, $customerId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getOrderForCancelValidation Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ----------------
+    // 员工店铺信息
+    // ----------------
+
+    /**
+     * 获取员工及其店铺信息
+     * 替换 pos.php, fulfillment.php, buyback.php 中的员工信息查询
+     */
+    public static function getEmployeeShopInfo($pdo, $employeeId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_employee_shop_info WHERE EmployeeID = ?");
+            $stmt->execute([$employeeId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getEmployeeShopInfo Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ----------------
+    // POS库存相关
+    // ----------------
+
+    /**
+     * 获取POS分组库存列表
+     * 替换 pos.php 中的库存分组查询
+     */
+    public static function getPosStockGrouped($pdo, $shopId, $search = '') {
+        try {
+            $sql = "SELECT * FROM vw_pos_stock_grouped WHERE ShopID = ?";
+            $params = [$shopId];
+
+            if (!empty($search)) {
+                $sql .= " AND (Title LIKE ? OR ArtistName LIKE ?)";
+                $params[] = "%$search%";
+                $params[] = "%$search%";
+            }
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getPosStockGrouped Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取订单行详情
+     * 替换 pos.php 中的订单明细查询
+     */
+    public static function getOrderLineDetail($pdo, $orderId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_order_line_detail WHERE OrderID = ?");
+            $stmt->execute([$orderId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getOrderLineDetail Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】验证POS添加商品
+     * 替换 pos.php 中的add_item验证查询
+     */
+    public static function validatePosCartItem($pdo, $stockItemId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_pos_cart_item_validation
+                WHERE StockItemID = ? AND ShopID = ?
+            ");
+            $stmt->execute([$stockItemId, $shopId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("validatePosCartItem Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取POS可用库存ID（按组过滤）
+     * 替换 pos.php 中的add_multiple库存ID查询
+     */
+    public static function getPosAvailableStockIds($pdo, $shopId, $releaseId, $conditionGrade, $unitPrice) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT StockItemID FROM vw_pos_available_stock_ids
+                WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ? AND UnitPrice = ?
+            ");
+            $stmt->execute([$shopId, $releaseId, $conditionGrade, $unitPrice]);
+            return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } catch (PDOException $e) {
+            error_log("getPosAvailableStockIds Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取简单客户列表
+     * 替换 pos.php 中的客户下拉框查询
+     */
+    public static function getCustomerListSimple($pdo, $limit = 100) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_customer_list_simple LIMIT ?");
+            $stmt->execute([$limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getCustomerListSimple Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // ----------------
+    // Fulfillment调拨相关
+    // ----------------
+
+    /**
+     * 获取待发货调拨列表（源店铺视角）
+     * 替换 fulfillment.php 中的待发货调拨查询
+     */
+    public static function getFulfillmentPendingTransfers($pdo, $fromShopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_fulfillment_pending_transfers WHERE FromShopID = ?");
+            $stmt->execute([$fromShopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getFulfillmentPendingTransfers Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取进货中调拨列表（目标店铺视角）
+     * 替换 fulfillment.php 中的待收货调拨查询
+     */
+    public static function getFulfillmentIncomingTransfers($pdo, $toShopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_fulfillment_incoming_transfers WHERE ToShopID = ?");
+            $stmt->execute([$toShopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getFulfillmentIncomingTransfers Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取待发货订单列表
+     * 替换 fulfillment.php 中的待发货订单查询
+     */
+    public static function getFulfillmentShippingOrders($pdo, $shopId = null) {
+        try {
+            if ($shopId !== null) {
+                $stmt = $pdo->prepare("SELECT * FROM vw_fulfillment_shipping_orders WHERE ShopID = ?");
+                $stmt->execute([$shopId]);
+            } else {
+                $stmt = $pdo->query("SELECT * FROM vw_fulfillment_shipping_orders");
+            }
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getFulfillmentShippingOrders Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取已发货订单列表
+     * 替换 fulfillment.php 中的已发货订单查询
+     */
+    public static function getFulfillmentShippedOrders($pdo, $shopId = null) {
+        try {
+            if ($shopId !== null) {
+                $stmt = $pdo->prepare("SELECT * FROM vw_fulfillment_shipped_orders WHERE ShopID = ?");
+                $stmt->execute([$shopId]);
+            } else {
+                $stmt = $pdo->query("SELECT * FROM vw_fulfillment_shipped_orders");
+            }
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getFulfillmentShippedOrders Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 确认调拨发货
+     * 替换 fulfillment.php 中的调拨发货操作
+     */
+    public static function confirmTransferDispatch($pdo, $transferId, $employeeId) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_confirm_transfer_dispatch(?, ?)");
+            return $stmt->execute([$transferId, $employeeId]);
+        } catch (PDOException $e) {
+            error_log("confirmTransferDispatch Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 确认订单收货
+     * 替换 fulfillment.php 中的确认收货操作
+     */
+    public static function confirmOrderReceived($pdo, $orderId) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_confirm_order_received(?)");
+            return $stmt->execute([$orderId]);
+        } catch (PDOException $e) {
+            error_log("confirmOrderReceived Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取待发货调拨分组列表（源店铺视角）
+     * 替换 fulfillment.php 中的待发货调拨分组查询
+     */
+    public static function getFulfillmentPendingTransfersGrouped($pdo, $fromShopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_fulfillment_pending_transfers_grouped WHERE FromShopID = ?");
+            $stmt->execute([$fromShopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getFulfillmentPendingTransfersGrouped Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取待接收调拨分组列表（目标店铺视角）
+     * 替换 fulfillment.php 中的待接收调拨分组查询
+     */
+    public static function getFulfillmentIncomingTransfersGrouped($pdo, $toShopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_fulfillment_incoming_transfers_grouped WHERE ToShopID = ?");
+            $stmt->execute([$toShopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getFulfillmentIncomingTransfersGrouped Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取订单履行列表（按状态过滤）
+     * 替换 fulfillment.php 中的订单列表查询
+     */
+    public static function getFulfillmentOrders($pdo, $shopId, $statusFilter = '') {
+        try {
+            $sql = "SELECT * FROM vw_fulfillment_orders WHERE FulfilledByShopID = ?";
+            $params = [$shopId];
+
+            switch ($statusFilter) {
+                case 'pending':
+                    $sql .= " AND OrderStatus IN ('Pending', 'Paid')";
+                    break;
+                case 'shipping':
+                    $sql .= " AND OrderStatus = 'Shipped'";
+                    break;
+                case 'completed':
+                    $sql .= " AND OrderStatus = 'Completed'";
+                    break;
+                case 'cancelled':
+                    $sql .= " AND OrderStatus = 'Cancelled'";
+                    break;
+            }
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getFulfillmentOrders Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取订单状态统计
+     * 替换 fulfillment.php 中的状态统计查询
+     */
+    public static function getFulfillmentOrderStatusCounts($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT OrderStatus, cnt FROM vw_fulfillment_order_status_counts WHERE FulfilledByShopID = ?");
+            $stmt->execute([$shopId]);
+            $result = [];
+            while ($row = $stmt->fetch()) {
+                $result[$row['OrderStatus']] = $row['cnt'];
+            }
+            return $result;
+        } catch (PDOException $e) {
+            error_log("getFulfillmentOrderStatusCounts Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】验证订单属于指定店铺
+     * 替换 fulfillment.php 中的订单验证查询
+     */
+    public static function validateOrderBelongsToShop($pdo, $orderId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT FulfilledByShopID, OrderStatus FROM CustomerOrder WHERE OrderID = ?");
+            $stmt->execute([$orderId]);
+            $order = $stmt->fetch();
+            if ($order && $order['FulfilledByShopID'] == $shopId) {
+                return $order;
+            }
+            return false;
+        } catch (PDOException $e) {
+            error_log("validateOrderBelongsToShop Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】验证调拨属于指定店铺（源店铺）
+     * 替换 fulfillment.php 中的调拨验证查询
+     */
+    public static function validateTransferFromShop($pdo, $transferId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND FromShopID = ?");
+            $stmt->execute([$transferId, $shopId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("validateTransferFromShop Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】验证调拨属于指定店铺（目标店铺）
+     * 替换 fulfillment.php 中的调拨验证查询
+     */
+    public static function validateTransferToShop($pdo, $transferId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND ToShopID = ?");
+            $stmt->execute([$transferId, $shopId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("validateTransferToShop Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ----------------
+    // Warehouse库存调配
+    // ----------------
+
+    /**
+     * 获取仓库库存列表
+     * 替换 warehouse_dispatch.php 中的仓库库存查询
+     */
+    public static function getWarehouseStock($pdo, $warehouseId = null) {
+        try {
+            if ($warehouseId !== null) {
+                $stmt = $pdo->prepare("SELECT * FROM vw_warehouse_stock WHERE ShopID = ?");
+                $stmt->execute([$warehouseId]);
+            } else {
+                $stmt = $pdo->query("SELECT * FROM vw_warehouse_stock");
+            }
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getWarehouseStock Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取零售店铺列表
+     * 替换 warehouse_dispatch.php 中的零售店铺查询
+     */
+    public static function getRetailShops($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM vw_retail_shops")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getRetailShops Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 调配仓库库存到零售店铺
+     * 替换 warehouse_dispatch.php 中的库存调拨操作
+     */
+    public static function dispatchWarehouseStock($pdo, $warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_dispatch_warehouse_stock(?, ?, ?, ?, ?, @dispatched_count)");
+            $stmt->execute([$warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity]);
+            $result = $pdo->query("SELECT @dispatched_count AS dispatched_count")->fetch();
+            return (int)$result['dispatched_count'];
+        } catch (PDOException $e) {
+            error_log("dispatchWarehouseStock Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    // ----------------
+    // Buyback相关
+    // ----------------
+
+    /**
+     * 获取回购价格参考
+     * 替换 buyback.php 中的现有库存价格查询
+     */
+    public static function getBuybackPriceReference($pdo, $releaseId = null) {
+        try {
+            if ($releaseId !== null) {
+                $stmt = $pdo->prepare("SELECT * FROM vw_buyback_price_reference WHERE ReleaseID = ?");
+                $stmt->execute([$releaseId]);
+            } else {
+                $stmt = $pdo->query("SELECT * FROM vw_buyback_price_reference");
+            }
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getBuybackPriceReference Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取最近回购订单
+     * 替换 buyback.php 中的最近回购查询
+     */
+    public static function getRecentBuybackOrders($pdo, $shopId, $limit = 10) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_recent_buyback_orders WHERE ShopID = ? LIMIT ?");
+            $stmt->execute([$shopId, $limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getRecentBuybackOrders Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取专辑列表（含基础成本）
+     * 替换 buyback.php 中的专辑列表查询
+     */
+    public static function getReleaseListWithCost($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM vw_release_list_with_cost")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getReleaseListWithCost Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取客户列表（含积分）
+     * 替换 buyback.php 中的客户下拉框查询
+     */
+    public static function getCustomerListWithPoints($pdo) {
+        try {
+            return $pdo->query("SELECT * FROM vw_customer_list_with_points")->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getCustomerListWithPoints Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取库存价格映射
+     * 替换 buyback.php 中的价格映射查询
+     */
+    public static function getStockPriceMap($pdo) {
+        try {
+            $result = [];
+            $rows = $pdo->query("SELECT * FROM vw_stock_price_map")->fetchAll();
+            foreach ($rows as $row) {
+                $key = $row['ReleaseID'] . '_' . $row['ConditionGrade'];
+                $result[$key] = $row['CurrentPrice'];
+            }
+            return $result;
+        } catch (PDOException $e) {
+            error_log("getStockPriceMap Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取最近回购详情
+     * 替换 buyback.php 中的最近回购详情查询
+     */
+    public static function getRecentBuybacksDetail($pdo, $shopId, $limit = 15) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_recent_buybacks_detail WHERE ShopID = ? LIMIT ?");
+            $stmt->execute([$shopId, $limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getRecentBuybacksDetail Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // ----------------
+    // Admin申请处理相关
+    // ----------------
+
+    /**
+     * 获取申请库存验证信息
+     * 替换 admin/requests.php 中的库存验证查询
+     */
+    public static function getRequestStockVerification($pdo, $requestId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_request_stock_verification WHERE RequestID = ?");
+            $stmt->execute([$requestId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getRequestStockVerification Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取调货申请详情
+     * 替换 requests.php 中的申请信息查询
+     */
+    public static function getTransferRequestInfo($pdo, $requestId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_transfer_request_info WHERE RequestID = ?");
+            $stmt->execute([$requestId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getTransferRequestInfo Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】检查店铺库存数量
+     * 替换 requests.php 中的库存验证查询
+     */
+    public static function getShopStockCount($pdo, $shopId, $releaseId, $conditionGrade) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as available
+                FROM StockItem
+                WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ? AND Status = 'Available'
+            ");
+            $stmt->execute([$shopId, $releaseId, $conditionGrade]);
+            $result = $stmt->fetch();
+            return $result ? (int)$result['available'] : 0;
+        } catch (PDOException $e) {
+            error_log("getShopStockCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】获取其他店铺的库存信息
+     * 替换 requests.php 中的getOtherShopsInventory函数
+     */
+    public static function getOtherShopsInventory($pdo, $releaseId, $conditionGrade, $excludeShopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_shop_inventory_by_release
+                WHERE ReleaseID = ? AND ConditionGrade = ? AND ShopID != ?
+                ORDER BY AvailableQuantity DESC
+            ");
+            $stmt->execute([$releaseId, $conditionGrade, $excludeShopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getOtherShopsInventory Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase2】更新调货申请的源店铺
+     * 替换 requests.php 中的ToShopID更新
+     */
+    public static function updateTransferRequestSource($pdo, $requestId, $sourceShopId) {
+        try {
+            $stmt = $pdo->prepare("UPDATE ManagerRequest SET ToShopID = ? WHERE RequestID = ? AND RequestType = 'TransferRequest'");
+            return $stmt->execute([$sourceShopId, $requestId]);
+        } catch (PDOException $e) {
+            error_log("updateTransferRequestSource Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 获取其他店铺的同款库存
+     * 替换 admin/requests.php 中的跨店库存查询
+     */
+    public static function getOtherShopsInventory($pdo, $releaseId, $conditionGrade, $excludeShopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_other_shops_inventory
+                WHERE ReleaseID = ? AND ConditionGrade = ? AND ShopID != ?
+                ORDER BY AvailableQuantity DESC
+            ");
+            $stmt->execute([$releaseId, $conditionGrade, $excludeShopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getOtherShopsInventory Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // ----------------
+    // Checkout相关
+    // ----------------
+
+    /**
+     * 验证Checkout库存可用性
+     * 替换 checkout.php 中的库存验证查询
+     */
+    public static function validateCheckoutStock($pdo, $stockIds) {
+        if (empty($stockIds)) return [];
+        try {
+            $placeholders = implode(',', array_fill(0, count($stockIds), '?'));
+            $sql = "SELECT * FROM vw_checkout_stock_validation WHERE StockItemID IN ($placeholders)";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($stockIds);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("validateCheckoutStock Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 创建完整的在线订单
+     * 替换 checkout.php 中的订单创建流程
+     */
+    public static function createOnlineOrderComplete($pdo, $customerId, $shopId, $stockItemIds, $fulfillmentType, $shippingAddress, $shippingCost) {
+        try {
+            // 将数组转换为逗号分隔的字符串
+            $stockIdsStr = implode(',', $stockItemIds);
+
+            $stmt = $pdo->prepare("CALL sp_create_online_order_complete(?, ?, ?, ?, ?, ?, @order_id, @total_amount)");
+            $stmt->execute([$customerId, $shopId, $stockIdsStr, $fulfillmentType, $shippingAddress, $shippingCost]);
+            $result = $pdo->query("SELECT @order_id AS order_id, @total_amount AS total_amount")->fetch();
+
+            if ($result['order_id'] > 0) {
+                return [
+                    'order_id' => $result['order_id'],
+                    'total_amount' => $result['total_amount']
+                ];
+            } elseif ($result['order_id'] == -2) {
+                return ['error' => 'no_available_items'];
+            }
+            return false;
+        } catch (PDOException $e) {
+            error_log("createOnlineOrderComplete Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ----------------
+    // POS订单相关
+    // ----------------
+
+    /**
+     * 创建POS门店订单
+     * 替换 pos.php 中的订单创建流程
+     */
+    public static function createPosOrder($pdo, $customerId, $employeeId, $shopId, $stockItemIds) {
+        try {
+            // 将数组转换为逗号分隔的字符串
+            $stockIdsStr = implode(',', $stockItemIds);
+
+            $stmt = $pdo->prepare("CALL sp_create_pos_order(?, ?, ?, ?, @order_id, @total_amount)");
+            $stmt->execute([$customerId, $employeeId, $shopId, $stockIdsStr]);
+            $result = $pdo->query("SELECT @order_id AS order_id, @total_amount AS total_amount")->fetch();
+
+            if ($result['order_id'] > 0) {
+                return [
+                    'order_id' => $result['order_id'],
+                    'total_amount' => $result['total_amount']
+                ];
+            } elseif ($result['order_id'] == -2) {
+                return ['error' => 'no_available_items'];
+            }
+            return false;
+        } catch (PDOException $e) {
+            error_log("createPosOrder Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ----------------
+    // 通用订单操作
+    // ----------------
+
+    /**
+     * 更新订单状态
+     * 通用订单状态更新，替换各页面中的直接UPDATE
+     */
+    public static function updateOrderStatus($pdo, $orderId, $newStatus, $employeeId = null) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_update_order_status(?, ?, ?)");
+            return $stmt->execute([$orderId, $newStatus, $employeeId]);
+        } catch (PDOException $e) {
+            error_log("updateOrderStatus Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ----------------
+    // 店铺ID查询
+    // ----------------
+
+    /**
+     * 按类型获取店铺ID
+     * 替换 functions.php 中的 getShopIdByType
+     */
+    public static function getShopIdByType($pdo, $shopType) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_get_shop_id_by_type(?, @shop_id)");
+            $stmt->execute([$shopType]);
+            $result = $pdo->query("SELECT @shop_id AS shop_id")->fetch();
+            return $result['shop_id'];
+        } catch (PDOException $e) {
+            error_log("getShopIdByType Error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    // ----------------
+    // Dashboard数据相关
+    // ----------------
+
+    /**
+     * 获取店铺Walk-in顾客收入
+     * 替换 functions.php:prepareDashboardData 中的walk-in收入查询
+     */
+    public static function getShopWalkInRevenue($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_shop_walk_in_revenue WHERE ShopID = ?");
+            $stmt->execute([$shopId]);
+            $result = $stmt->fetch();
+            return $result ?: ['OrderCount' => 0, 'TotalSpent' => 0];
+        } catch (PDOException $e) {
+            error_log("getShopWalkInRevenue Error: " . $e->getMessage());
+            return ['OrderCount' => 0, 'TotalSpent' => 0];
+        }
+    }
+
+    /**
+     * 获取店铺库存成本
+     * 替换 functions.php:prepareDashboardData 中的库存成本计算
+     */
+    public static function getShopInventoryCost($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_shop_inventory_cost WHERE ShopID = ?");
+            $stmt->execute([$shopId]);
+            $result = $stmt->fetch();
+            return $result ?: ['TotalInventoryCost' => 0, 'InventoryCount' => 0];
+        } catch (PDOException $e) {
+            error_log("getShopInventoryCost Error: " . $e->getMessage());
+            return ['TotalInventoryCost' => 0, 'InventoryCount' => 0];
+        }
+    }
+
+    /**
+     * 获取店铺采购统计
+     * 替换 functions.php:prepareDashboardData 中的采购统计查询
+     */
+    public static function getShopProcurementStats($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_shop_procurement_stats WHERE ShopID = ?");
+            $stmt->execute([$shopId]);
+            $result = $stmt->fetch();
+            return $result ?: ['ProcurementCount' => 0];
+        } catch (PDOException $e) {
+            error_log("getShopProcurementStats Error: " . $e->getMessage());
+            return ['ProcurementCount' => 0];
+        }
+    }
+
+    // ----------------
+    // Release详情相关
+    // ----------------
+
+    /**
+     * 获取专辑店铺库存分组
+     * 替换 functions.php:prepareReleaseDetailData 中的库存分组查询
+     */
+    public static function getReleaseShopStockGrouped($pdo, $releaseId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_release_shop_stock_grouped
+                WHERE ReleaseID = ? AND ShopID = ?
+                ORDER BY FIELD(ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'), UnitPrice
+            ");
+            $stmt->execute([$releaseId, $shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getReleaseShopStockGrouped Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // ----------------
+    // 购物车库存相关
+    // ----------------
+
+    /**
+     * 获取可用库存ID列表（用于添加到购物车）
+     * 替换 functions.php:addMultipleToCart 中的库存ID查询
+     */
+    public static function getAvailableStockIdsByCondition($pdo, $releaseId, $conditionGrade, $shopId = null) {
+        try {
+            if ($shopId !== null) {
+                $stmt = $pdo->prepare("
+                    SELECT StockItemID FROM vw_available_stock_ids
+                    WHERE ReleaseID = ? AND ConditionGrade = ? AND ShopID = ?
+                ");
+                $stmt->execute([$releaseId, $conditionGrade, $shopId]);
+            } else {
+                $stmt = $pdo->prepare("
+                    SELECT StockItemID FROM vw_available_stock_ids
+                    WHERE ReleaseID = ? AND ConditionGrade = ?
+                ");
+                $stmt->execute([$releaseId, $conditionGrade]);
+            }
+            return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } catch (PDOException $e) {
+            error_log("getAvailableStockIdsByCondition Error: " . $e->getMessage());
             return [];
         }
     }

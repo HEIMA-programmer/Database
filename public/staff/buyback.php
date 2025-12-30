@@ -14,14 +14,8 @@ requireRole('Staff');
 // 【修复】使用正确的Session结构
 $employeeId = $_SESSION['user_id'];
 $shopId = $_SESSION['shop_id'];
-$stmt = $pdo->prepare("
-    SELECT e.*, s.Name as ShopName, s.Type as ShopType
-    FROM Employee e
-    JOIN Shop s ON e.ShopID = s.ShopID
-    WHERE e.EmployeeID = ?
-");
-$stmt->execute([$employeeId]);
-$employee = $stmt->fetch(PDO::FETCH_ASSOC);
+// 【架构重构Phase2】使用DBProcedures替换直接SQL
+$employee = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
 
 // 仓库员工不能进行回购
 if ($employee['ShopType'] == 'Warehouse') {
@@ -92,13 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// 获取Release列表（包含BaseUnitCost用于计算建议价格）
-$stmt = $pdo->query("
-    SELECT r.ReleaseID, r.Title, r.ArtistName, r.Genre, r.BaseUnitCost
-    FROM ReleaseAlbum r
-    ORDER BY r.Title
-");
-$releases = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// 【架构重构Phase2】获取Release列表（包含BaseUnitCost用于计算建议价格）
+$releases = DBProcedures::getReleaseListWithCost($pdo);
 
 // 【新增】构建专辑基础成本映射表（用于JavaScript计算建议价格）
 $baseCostMap = [];
@@ -106,26 +95,14 @@ foreach ($releases as $r) {
     $baseCostMap[$r['ReleaseID']] = (float)$r['BaseUnitCost'];
 }
 
-// 【修复】获取客户列表（移除不存在的Phone字段）
-$stmt = $pdo->query("SELECT CustomerID, Name, Email, Points FROM Customer ORDER BY Name");
-$customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// 【架构重构Phase2】获取客户列表（含积分）
+$customers = DBProcedures::getCustomerListWithPoints($pdo);
 
 // 条件等级选项 - 【修复】只保留前5个标准条件
 $conditions = ['New', 'Mint', 'NM', 'VG+', 'VG'];
 
-// 【新增】获取当前库存价格映射（按Release和Condition分组）
-// 用于在回购时自动填充resale价格，确保价格一致性
-$stmt = $pdo->query("
-    SELECT ReleaseID, ConditionGrade, MAX(UnitPrice) as CurrentPrice
-    FROM StockItem
-    WHERE Status = 'Available'
-    GROUP BY ReleaseID, ConditionGrade
-");
-$priceMap = [];
-while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    $key = $row['ReleaseID'] . '_' . $row['ConditionGrade'];
-    $priceMap[$key] = $row['CurrentPrice'];
-}
+// 【架构重构Phase2】获取当前库存价格映射
+$priceMap = DBProcedures::getStockPriceMap($pdo);
 
 require_once __DIR__ . '/../../includes/header.php';
 // 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单
@@ -252,25 +229,8 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
             <div class="card-body p-0">
                 <?php
-                // 【修复】获取所有buyback详细信息
-                $stmt = $pdo->prepare("
-                    SELECT bo.BuybackOrderID, bo.BuybackDate, bo.TotalPayment, bo.Status,
-                           c.Name as CustomerName, c.Email as CustomerEmail,
-                           r.Title, r.ArtistName,
-                           bol.Quantity, bol.UnitPrice, bol.ConditionGrade,
-                           (bol.Quantity * bol.UnitPrice) as LineTotal,
-                           e.Name as ProcessedByName
-                    FROM BuybackOrder bo
-                    LEFT JOIN Customer c ON bo.CustomerID = c.CustomerID
-                    JOIN BuybackOrderLine bol ON bo.BuybackOrderID = bol.BuybackOrderID
-                    JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
-                    JOIN Employee e ON bo.ProcessedByEmployeeID = e.EmployeeID
-                    WHERE bo.ShopID = ?
-                    ORDER BY bo.BuybackDate DESC
-                    LIMIT 15
-                ");
-                $stmt->execute([$shopId]);
-                $recentBuybacks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                // 【架构重构Phase2】使用DBProcedures替换直接SQL
+                $recentBuybacks = DBProcedures::getRecentBuybacksDetail($pdo, $shopId, 15);
                 ?>
 
                 <?php if (empty($recentBuybacks)): ?>

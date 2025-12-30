@@ -1173,4 +1173,443 @@ BEGIN
       AND Status = 'Available';
 END$$
 
+-- ================================================
+-- 【架构重构Phase2】新增存储过程 - 消除剩余PHP直接写表操作
+-- ================================================
+
+-- ------------------------------------------------
+-- 20. 确认调拨发货存储过程
+-- 替换 fulfillment.php 中的调拨发货操作
+-- 状态从 Pending 变为 InTransit，库存状态变为 InTransit
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_confirm_transfer_dispatch$$
+CREATE PROCEDURE sp_confirm_transfer_dispatch(
+    IN p_transfer_id INT,
+    IN p_employee_id INT
+)
+BEGIN
+    DECLARE v_stock_item_id INT;
+    DECLARE v_current_status VARCHAR(20);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        RESIGNAL;
+    END;
+
+    -- 获取调拨信息
+    SELECT StockItemID, Status INTO v_stock_item_id, v_current_status
+    FROM InventoryTransfer
+    WHERE TransferID = p_transfer_id
+    FOR UPDATE;
+
+    IF v_current_status != 'Pending' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transfer is not in Pending status';
+    END IF;
+
+    -- 更新调拨状态为 InTransit
+    UPDATE InventoryTransfer
+    SET Status = 'InTransit'
+    WHERE TransferID = p_transfer_id;
+
+    -- 更新库存状态为 InTransit
+    UPDATE StockItem
+    SET Status = 'InTransit'
+    WHERE StockItemID = v_stock_item_id;
+END$$
+
+-- ------------------------------------------------
+-- 21. Warehouse库存调配存储过程
+-- 替换 warehouse_dispatch.php 中的库存调拨操作
+-- 直接将库存从Warehouse调配到零售店铺
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_dispatch_warehouse_stock$$
+CREATE PROCEDURE sp_dispatch_warehouse_stock(
+    IN p_warehouse_id INT,
+    IN p_target_shop_id INT,
+    IN p_release_id INT,
+    IN p_condition_grade VARCHAR(10),
+    IN p_quantity INT,
+    OUT p_dispatched_count INT
+)
+BEGIN
+    DECLARE v_stock_item_id INT;
+    DECLARE v_counter INT DEFAULT 0;
+    DECLARE done INT DEFAULT FALSE;
+
+    DECLARE stock_cursor CURSOR FOR
+        SELECT StockItemID
+        FROM StockItem
+        WHERE ShopID = p_warehouse_id
+          AND ReleaseID = p_release_id
+          AND ConditionGrade = p_condition_grade
+          AND Status = 'Available'
+        ORDER BY StockItemID
+        LIMIT 100; -- 安全限制
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        SET p_dispatched_count = v_counter;
+        RESIGNAL;
+    END;
+
+    OPEN stock_cursor;
+    dispatch_loop: LOOP
+        IF v_counter >= p_quantity THEN
+            LEAVE dispatch_loop;
+        END IF;
+
+        FETCH stock_cursor INTO v_stock_item_id;
+        IF done THEN
+            LEAVE dispatch_loop;
+        END IF;
+
+        -- 直接更新库存位置（不创建调拨记录，因为是Admin统一调配）
+        UPDATE StockItem
+        SET ShopID = p_target_shop_id
+        WHERE StockItemID = v_stock_item_id;
+
+        SET v_counter = v_counter + 1;
+    END LOOP;
+    CLOSE stock_cursor;
+
+    SET p_dispatched_count = v_counter;
+END$$
+
+-- ------------------------------------------------
+-- 22. 创建在线订单完整流程存储过程
+-- 替换 checkout.php 中的订单创建流程
+-- 包含订单创建、添加商品、计算折扣、设置运费
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_create_online_order_complete$$
+CREATE PROCEDURE sp_create_online_order_complete(
+    IN p_customer_id INT,
+    IN p_shop_id INT,
+    IN p_stock_item_ids TEXT, -- 逗号分隔的 StockItemID 列表
+    IN p_fulfillment_type VARCHAR(20), -- 'Shipping' or 'Pickup'
+    IN p_shipping_address TEXT,
+    IN p_shipping_cost DECIMAL(10,2),
+    OUT p_order_id INT,
+    OUT p_total_amount DECIMAL(10,2)
+)
+BEGIN
+    DECLARE v_stock_item_id INT;
+    DECLARE v_unit_price DECIMAL(10,2);
+    DECLARE v_stock_status VARCHAR(20);
+    DECLARE v_subtotal DECIMAL(10,2) DEFAULT 0;
+    DECLARE v_discount_rate DECIMAL(3,2) DEFAULT 0;
+    DECLARE v_discount_amount DECIMAL(10,2) DEFAULT 0;
+    DECLARE v_pos INT DEFAULT 1;
+    DECLARE v_next_pos INT;
+    DECLARE v_id_str VARCHAR(20);
+    DECLARE v_items_processed INT DEFAULT 0;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        SET p_order_id = -1;
+        SET p_total_amount = 0;
+        RESIGNAL;
+    END;
+
+    -- 获取客户折扣率
+    IF p_customer_id IS NOT NULL THEN
+        SELECT mt.DiscountRate INTO v_discount_rate
+        FROM Customer c
+        JOIN MembershipTier mt ON c.TierID = mt.TierID
+        WHERE c.CustomerID = p_customer_id;
+    END IF;
+
+    -- 创建订单
+    INSERT INTO CustomerOrder (
+        CustomerID, FulfilledByShopID, OrderType, OrderStatus,
+        FulfillmentType, ShippingAddress, ShippingCost
+    ) VALUES (
+        p_customer_id, p_shop_id, 'Online', 'Pending',
+        p_fulfillment_type, p_shipping_address, COALESCE(p_shipping_cost, 0)
+    );
+
+    SET p_order_id = LAST_INSERT_ID();
+
+    -- 解析并处理每个 StockItemID
+    SET p_stock_item_ids = CONCAT(p_stock_item_ids, ',');
+
+    parse_loop: WHILE v_pos > 0 DO
+        SET v_next_pos = LOCATE(',', p_stock_item_ids, v_pos);
+        IF v_next_pos = 0 THEN
+            LEAVE parse_loop;
+        END IF;
+
+        SET v_id_str = TRIM(SUBSTRING(p_stock_item_ids, v_pos, v_next_pos - v_pos));
+        IF v_id_str != '' THEN
+            SET v_stock_item_id = CAST(v_id_str AS UNSIGNED);
+
+            -- 验证并锁定库存
+            SELECT Status, UnitPrice INTO v_stock_status, v_unit_price
+            FROM StockItem
+            WHERE StockItemID = v_stock_item_id
+            FOR UPDATE;
+
+            IF v_stock_status = 'Available' THEN
+                -- 添加订单行
+                INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale)
+                VALUES (p_order_id, v_stock_item_id, v_unit_price);
+
+                -- 预留库存
+                UPDATE StockItem
+                SET Status = 'Reserved'
+                WHERE StockItemID = v_stock_item_id;
+
+                SET v_subtotal = v_subtotal + v_unit_price;
+                SET v_items_processed = v_items_processed + 1;
+            END IF;
+        END IF;
+
+        SET v_pos = v_next_pos + 1;
+    END WHILE;
+
+    -- 计算折扣
+    SET v_discount_amount = v_subtotal * v_discount_rate;
+
+    -- 计算总金额（小计 - 折扣 + 运费）
+    SET p_total_amount = v_subtotal - v_discount_amount + COALESCE(p_shipping_cost, 0);
+
+    -- 更新订单金额
+    UPDATE CustomerOrder
+    SET TotalAmount = p_total_amount,
+        DiscountApplied = v_discount_amount
+    WHERE OrderID = p_order_id;
+
+    -- 如果没有处理任何商品，取消订单
+    IF v_items_processed = 0 THEN
+        DELETE FROM CustomerOrder WHERE OrderID = p_order_id;
+        SET p_order_id = -2; -- 表示没有可用商品
+    END IF;
+END$$
+
+-- ------------------------------------------------
+-- 23. 更新订单状态存储过程
+-- 通用订单状态更新，替换各页面中的直接UPDATE
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_update_order_status$$
+CREATE PROCEDURE sp_update_order_status(
+    IN p_order_id INT,
+    IN p_new_status VARCHAR(20),
+    IN p_employee_id INT
+)
+BEGIN
+    DECLARE v_current_status VARCHAR(20);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        RESIGNAL;
+    END;
+
+    SELECT OrderStatus INTO v_current_status
+    FROM CustomerOrder
+    WHERE OrderID = p_order_id
+    FOR UPDATE;
+
+    -- 验证状态转换合法性
+    IF v_current_status = 'Cancelled' OR v_current_status = 'Completed' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot update terminal order status';
+    END IF;
+
+    UPDATE CustomerOrder
+    SET OrderStatus = p_new_status,
+        ProcessedByEmployeeID = COALESCE(ProcessedByEmployeeID, p_employee_id)
+    WHERE OrderID = p_order_id;
+
+    -- 如果取消订单，释放库存
+    IF p_new_status = 'Cancelled' THEN
+        UPDATE StockItem s
+        JOIN OrderLine ol ON s.StockItemID = ol.StockItemID
+        SET s.Status = 'Available'
+        WHERE ol.OrderID = p_order_id AND s.Status = 'Reserved';
+    END IF;
+END$$
+
+-- ------------------------------------------------
+-- 24. POS创建门店订单完整流程
+-- 替换 pos.php 中的订单创建流程
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_create_pos_order$$
+CREATE PROCEDURE sp_create_pos_order(
+    IN p_customer_id INT, -- 可为NULL（walk-in customer）
+    IN p_employee_id INT,
+    IN p_shop_id INT,
+    IN p_stock_item_ids TEXT, -- 逗号分隔的 StockItemID 列表
+    OUT p_order_id INT,
+    OUT p_total_amount DECIMAL(10,2)
+)
+BEGIN
+    DECLARE v_stock_item_id INT;
+    DECLARE v_unit_price DECIMAL(10,2);
+    DECLARE v_stock_status VARCHAR(20);
+    DECLARE v_subtotal DECIMAL(10,2) DEFAULT 0;
+    DECLARE v_discount_rate DECIMAL(3,2) DEFAULT 0;
+    DECLARE v_discount_amount DECIMAL(10,2) DEFAULT 0;
+    DECLARE v_pos INT DEFAULT 1;
+    DECLARE v_next_pos INT;
+    DECLARE v_id_str VARCHAR(20);
+    DECLARE v_items_processed INT DEFAULT 0;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        SET p_order_id = -1;
+        SET p_total_amount = 0;
+        RESIGNAL;
+    END;
+
+    -- 获取客户折扣率
+    IF p_customer_id IS NOT NULL THEN
+        SELECT mt.DiscountRate INTO v_discount_rate
+        FROM Customer c
+        JOIN MembershipTier mt ON c.TierID = mt.TierID
+        WHERE c.CustomerID = p_customer_id;
+    END IF;
+
+    -- 创建订单
+    INSERT INTO CustomerOrder (
+        CustomerID, FulfilledByShopID, ProcessedByEmployeeID,
+        OrderType, OrderStatus
+    ) VALUES (
+        p_customer_id, p_shop_id, p_employee_id,
+        'InStore', 'Pending'
+    );
+
+    SET p_order_id = LAST_INSERT_ID();
+
+    -- 解析并处理每个 StockItemID
+    SET p_stock_item_ids = CONCAT(p_stock_item_ids, ',');
+
+    parse_loop: WHILE v_pos > 0 DO
+        SET v_next_pos = LOCATE(',', p_stock_item_ids, v_pos);
+        IF v_next_pos = 0 THEN
+            LEAVE parse_loop;
+        END IF;
+
+        SET v_id_str = TRIM(SUBSTRING(p_stock_item_ids, v_pos, v_next_pos - v_pos));
+        IF v_id_str != '' THEN
+            SET v_stock_item_id = CAST(v_id_str AS UNSIGNED);
+
+            -- 验证库存属于指定店铺且可用
+            SELECT Status, UnitPrice INTO v_stock_status, v_unit_price
+            FROM StockItem
+            WHERE StockItemID = v_stock_item_id AND ShopID = p_shop_id
+            FOR UPDATE;
+
+            IF v_stock_status = 'Available' THEN
+                -- 添加订单行
+                INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale)
+                VALUES (p_order_id, v_stock_item_id, v_unit_price);
+
+                -- 预留库存
+                UPDATE StockItem
+                SET Status = 'Reserved'
+                WHERE StockItemID = v_stock_item_id;
+
+                SET v_subtotal = v_subtotal + v_unit_price;
+                SET v_items_processed = v_items_processed + 1;
+            END IF;
+        END IF;
+
+        SET v_pos = v_next_pos + 1;
+    END WHILE;
+
+    -- 计算折扣
+    SET v_discount_amount = v_subtotal * v_discount_rate;
+
+    -- 计算总金额
+    SET p_total_amount = v_subtotal - v_discount_amount;
+
+    -- 更新订单金额
+    UPDATE CustomerOrder
+    SET TotalAmount = p_total_amount,
+        DiscountApplied = v_discount_amount
+    WHERE OrderID = p_order_id;
+
+    -- 如果没有处理任何商品，删除订单
+    IF v_items_processed = 0 THEN
+        DELETE FROM CustomerOrder WHERE OrderID = p_order_id;
+        SET p_order_id = -2;
+    END IF;
+END$$
+
+-- ------------------------------------------------
+-- 25. 获取店铺ID存储过程（按类型）
+-- 替换 functions.php 中的 getShopIdByType
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_get_shop_id_by_type$$
+CREATE PROCEDURE sp_get_shop_id_by_type(
+    IN p_shop_type VARCHAR(20),
+    OUT p_shop_id INT
+)
+BEGIN
+    SELECT ShopID INTO p_shop_id
+    FROM Shop
+    WHERE Type = p_shop_type
+    LIMIT 1;
+END$$
+
+-- ------------------------------------------------
+-- 26. 验证购物车商品存储过程
+-- 替换 cart.php 中的商品验证
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_validate_cart_item$$
+CREATE PROCEDURE sp_validate_cart_item(
+    IN p_stock_item_id INT,
+    IN p_shop_id INT,
+    OUT p_valid INT,
+    OUT p_title VARCHAR(255),
+    OUT p_artist VARCHAR(255),
+    OUT p_price DECIMAL(10,2),
+    OUT p_condition VARCHAR(10)
+)
+BEGIN
+    DECLARE v_status VARCHAR(20);
+
+    SET p_valid = 0;
+
+    SELECT si.Status, r.Title, r.ArtistName, si.UnitPrice, si.ConditionGrade
+    INTO v_status, p_title, p_artist, p_price, p_condition
+    FROM StockItem si
+    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+    WHERE si.StockItemID = p_stock_item_id
+      AND si.ShopID = p_shop_id;
+
+    IF v_status = 'Available' THEN
+        SET p_valid = 1;
+    END IF;
+END$$
+
+-- ------------------------------------------------
+-- 27. 确认订单收货存储过程
+-- 替换 fulfillment.php / customer 端确认收货
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_confirm_order_received$$
+CREATE PROCEDURE sp_confirm_order_received(
+    IN p_order_id INT
+)
+BEGIN
+    DECLARE v_status VARCHAR(20);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        RESIGNAL;
+    END;
+
+    SELECT OrderStatus INTO v_status
+    FROM CustomerOrder
+    WHERE OrderID = p_order_id
+    FOR UPDATE;
+
+    IF v_status != 'Shipped' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order must be in Shipped status to confirm receipt';
+    END IF;
+
+    -- 调用完成订单存储过程
+    CALL sp_complete_order(p_order_id);
+END$$
+
 DELIMITER ;

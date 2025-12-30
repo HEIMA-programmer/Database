@@ -10,6 +10,7 @@
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Customer');
 
 // 初始化购物车
@@ -37,17 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 }
                 
-                // 检查商品是否可用
-                $stmt = $pdo->prepare("
-                    SELECT si.StockItemID, si.ReleaseID, si.UnitPrice, si.ConditionGrade,
-                        r.Title, r.ArtistName
-                    FROM StockItem si
-                    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-                    -- 删除 JOIN Artist 行，因为 Artist 表不存在
-                    WHERE si.StockItemID = ? AND si.ShopID = ? AND si.Status = 'Available'
-                ");
-                $stmt->execute([$stockItemId, $shopId]);
-                $item = $stmt->fetch(PDO::FETCH_ASSOC);
+                // 【架构重构Phase2】使用DBProcedures替换直接SQL
+                $item = DBProcedures::validateCartItem($pdo, $stockItemId, $shopId);
                 
                 if ($item) {
                     // 检查是否已在购物车
@@ -108,17 +100,8 @@ $total = 0;
 $shopInfo = null;
 
 if (!empty($_SESSION['cart'])) {
-    $placeholders = implode(',', array_fill(0, count($_SESSION['cart']), '?'));
-    $stmt = $pdo->prepare("
-        SELECT si.StockItemID, si.ReleaseID, si.UnitPrice, si.ConditionGrade, si.ShopID,
-            r.Title, r.ArtistName, s.Name as ShopName, s.Type as ShopType
-        FROM StockItem si
-        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-        JOIN Shop s ON si.ShopID = s.ShopID
-        WHERE si.StockItemID IN ($placeholders) AND si.Status = 'Available'
-    ");
-    $stmt->execute($_SESSION['cart']);
-    $cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // 【架构重构Phase2】使用DBProcedures替换直接SQL
+    $cartItems = DBProcedures::getCartItemsDetail($pdo, $_SESSION['cart']);
 
     // 验证所有商品属于同一店铺
     $shopIds = array_unique(array_column($cartItems, 'ShopID'));

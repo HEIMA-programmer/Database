@@ -14,14 +14,8 @@ requireRole('Staff');
 // 【修复】使用正确的Session结构
 $employeeId = $_SESSION['user_id'];
 $shopId = $_SESSION['shop_id'];
-$stmt = $pdo->prepare("
-    SELECT e.*, s.Name as ShopName, s.Type as ShopType
-    FROM Employee e
-    JOIN Shop s ON e.ShopID = s.ShopID
-    WHERE e.EmployeeID = ?
-");
-$stmt->execute([$employeeId]);
-$employee = $stmt->fetch(PDO::FETCH_ASSOC);
+// 【架构重构Phase2】使用DBProcedures替换直接SQL
+$employee = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
 
 // 仓库员工不能使用POS
 if ($employee['ShopType'] == 'Warehouse') {
@@ -43,16 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'add_item':
             $stockItemId = (int)($_POST['stock_item_id'] ?? 0);
             if ($stockItemId > 0) {
-                // 验证库存属于本店铺且可用
-                $stmt = $pdo->prepare("
-                    SELECT si.*, r.Title, r.ArtistName -- 直接使用 r.ArtistName
-                    FROM StockItem si
-                    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-                    -- 删除 Artist JOIN
-                    WHERE si.StockItemID = ? AND si.ShopID = ? AND si.Status = 'Available'
-                ");
-                $stmt->execute([$stockItemId, $shopId]);
-                $item = $stmt->fetch(PDO::FETCH_ASSOC);
+                // 【架构重构Phase2】使用DBProcedures替换直接SQL
+                $item = DBProcedures::validatePosCartItem($pdo, $stockItemId, $shopId);
 
                 if ($item && !in_array($stockItemId, $_SESSION['pos_cart'])) {
                     $_SESSION['pos_cart'][] = $stockItemId;
@@ -73,15 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quantity = (int)($_POST['quantity'] ?? 1);
 
             if ($releaseId > 0 && $condition && $quantity > 0) {
-                // 获取可用的库存ID（排除已在购物车中的）
-                $stmt = $pdo->prepare("
-                    SELECT StockItemID
-                    FROM StockItem
-                    WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ? AND UnitPrice = ? AND Status = 'Available'
-                    ORDER BY StockItemID
-                ");
-                $stmt->execute([$shopId, $releaseId, $condition, $unitPrice]);
-                $allIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                // 【架构重构Phase2】使用DBProcedures替换直接SQL
+                $allIds = DBProcedures::getPosAvailableStockIds($pdo, $shopId, $releaseId, $condition, $unitPrice);
 
                 // 排除已在购物车中的
                 $availableIds = array_diff($allIds, $_SESSION['pos_cart']);
@@ -114,45 +93,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
         case 'checkout':
             $customerId = (int)($_POST['customer_id'] ?? 0);
-            
+
             if (empty($_SESSION['pos_cart'])) {
                 flash('Cart is empty.', 'warning');
                 break;
             }
-            
-            try {
-                $pdo->beginTransaction();
 
-                // 【修复】使用正确的字段名 FulfilledByShopID，移除不存在的 FulfillmentType
-                $stmt = $pdo->prepare("
-                    INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, ProcessedByEmployeeID, OrderType, OrderStatus)
-                    VALUES (?, ?, ?, 'InStore', 'Pending')
-                ");
-                $stmt->execute([$customerId ?: null, $shopId, $employeeId]);
-                $orderId = $pdo->lastInsertId();
+            // 【架构重构Phase2】使用DBProcedures替换直接SQL
+            $result = DBProcedures::createPosOrder($pdo, $customerId ?: null, $employeeId, $shopId, $_SESSION['pos_cart']);
 
-                // 【修复】添加订单行 - 需要先获取商品价格
-                foreach ($_SESSION['pos_cart'] as $stockItemId) {
-                    // 获取库存商品价格
-                    $priceStmt = $pdo->prepare("SELECT UnitPrice FROM StockItem WHERE StockItemID = ?");
-                    $priceStmt->execute([$stockItemId]);
-                    $priceAtSale = $priceStmt->fetchColumn();
-                    DBProcedures::addOrderItem($pdo, $orderId, $stockItemId, $priceAtSale);
-                }
-                
-                // 【修复】直接完成订单 - 现在支持InStore订单从Pending完成
-                DBProcedures::completeOrder($pdo, $orderId);
-                
-                $pdo->commit();
-                
-                // 清空购物车
+            if (isset($result['order_id']) && $result['order_id'] > 0) {
                 $_SESSION['pos_cart'] = [];
-                
-                flash("Sale completed! Order #$orderId", 'success');
-                
-            } catch (Exception $e) {
-                $pdo->rollBack();
-                flash('Checkout failed: ' . $e->getMessage(), 'danger');
+                flash("Sale completed! Order #{$result['order_id']}", 'success');
+            } elseif (isset($result['error'])) {
+                if ($result['error'] === 'no_available_items') {
+                    flash('Checkout failed: Some items are no longer available.', 'danger');
+                } else {
+                    flash('Checkout failed: ' . $result['error'], 'danger');
+                }
+            } else {
+                flash('Checkout failed: Unknown error.', 'danger');
             }
             break;
     }
@@ -162,87 +122,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // 获取购物车商品
+// 【架构重构Phase2】使用DBProcedures替换直接SQL
 $cartItems = [];
 $total = 0;
 if (!empty($_SESSION['pos_cart'])) {
-    $placeholders = implode(',', array_fill(0, count($_SESSION['pos_cart']), '?'));
-    $stmt = $pdo->prepare("
-        SELECT si.*, r.Title, r.ArtistName
-        FROM StockItem si
-        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-        WHERE si.StockItemID IN ($placeholders) AND si.Status = 'Available'
-    ");
-    $stmt->execute($_SESSION['pos_cart']);
-    $cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+    $cartItems = DBProcedures::getCartItemsDetail($pdo, $_SESSION['pos_cart']);
+
     foreach ($cartItems as $item) {
         $total += $item['UnitPrice'];
     }
-    
+
     // 清理已不可用的商品
     $availableIds = array_column($cartItems, 'StockItemID');
     $_SESSION['pos_cart'] = array_values(array_intersect($_SESSION['pos_cart'], $availableIds));
 }
 
-// 【修改】获取所有专辑（默认显示，无需搜索）
-// 按专辑和成色分组，显示数量，有库存的优先显示
+// 【架构重构Phase2】获取店铺库存分组数据
 $search = $_GET['q'] ?? '';
-
-// 构建搜索条件
-$searchWhere = "";
-$searchParams = [$shopId];
-if ($search) {
-    $searchWhere = "AND (r.Title LIKE ? OR r.ArtistName LIKE ?)";
-    $searchParam = "%$search%";
-    $searchParams[] = $searchParam;
-    $searchParams[] = $searchParam;
-}
-
-// 【修改】获取所有专辑，包括无库存的，按库存数量排序
-$stmt = $pdo->prepare("
-    SELECT
-        r.ReleaseID,
-        r.Title,
-        r.ArtistName,
-        r.Genre,
-        COALESCE(stock.ConditionGrade, '-') as ConditionGrade,
-        COALESCE(stock.UnitPrice, 0) as UnitPrice,
-        COALESCE(stock.AvailableQuantity, 0) as AvailableQuantity
-    FROM ReleaseAlbum r
-    LEFT JOIN (
-        SELECT
-            ReleaseID,
-            ConditionGrade,
-            UnitPrice,
-            COUNT(*) as AvailableQuantity
-        FROM StockItem
-        WHERE ShopID = ? AND Status = 'Available'
-        GROUP BY ReleaseID, ConditionGrade, UnitPrice
-    ) stock ON r.ReleaseID = stock.ReleaseID
-    WHERE 1=1 $searchWhere
-    ORDER BY stock.AvailableQuantity DESC, r.Title ASC, FIELD(stock.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG')
-    LIMIT 100
-");
-$stmt->execute($searchParams);
-$availableStockGrouped = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$availableStockGrouped = DBProcedures::getPosStockGrouped($pdo, $shopId, $search);
 
 // 计算每组中已在购物车的数量
 foreach ($availableStockGrouped as &$group) {
-    if ($group['AvailableQuantity'] > 0 && $group['ConditionGrade'] !== '-') {
-        // 获取该组的所有库存ID
-        $idsStmt = $pdo->prepare("
-            SELECT StockItemID FROM StockItem
-            WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ? AND UnitPrice = ? AND Status = 'Available'
-        ");
-        $idsStmt->execute([$shopId, $group['ReleaseID'], $group['ConditionGrade'], $group['UnitPrice']]);
-        $allIds = $idsStmt->fetchAll(PDO::FETCH_COLUMN);
+    if ($group['Quantity'] > 0) {
+        // 【架构重构Phase2】使用DBProcedures获取库存ID
+        $allIds = DBProcedures::getPosAvailableStockIds($pdo, $shopId, $group['ReleaseID'], $group['ConditionGrade'], $group['UnitPrice']);
 
         // 计算已在购物车中的数量
         $inCartCount = count(array_intersect($allIds, $_SESSION['pos_cart']));
+        $group['AvailableQuantity'] = $group['Quantity'];
         $group['InCartCount'] = $inCartCount;
-        $group['RemainingQuantity'] = $group['AvailableQuantity'] - $inCartCount;
+        $group['RemainingQuantity'] = $group['Quantity'] - $inCartCount;
         $group['AllStockIds'] = $allIds;
     } else {
+        $group['AvailableQuantity'] = 0;
         $group['InCartCount'] = 0;
         $group['RemainingQuantity'] = 0;
         $group['AllStockIds'] = [];
@@ -250,10 +162,8 @@ foreach ($availableStockGrouped as &$group) {
 }
 unset($group);
 
-// 【修复】获取客户列表（移除不存在的Phone字段）
-$stmt = $pdo->prepare("SELECT CustomerID, Name, Email FROM Customer ORDER BY Name LIMIT 100");
-$stmt->execute();
-$customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// 【架构重构Phase2】获取客户列表
+$customers = DBProcedures::getCustomerListSimple($pdo, 100);
 
 // 【新增】获取历史交易记录
 $posHistory = DBProcedures::getPosHistory($pdo, $shopId, 10);
@@ -310,9 +220,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <div>
                                         <strong class="<?= $hasStock ? 'text-white' : 'text-muted' ?>"><?= h($group['Title']) ?></strong>
                                         <span class="<?= $hasStock ? 'text-warning' : 'text-secondary' ?>">- <?= h($group['ArtistName']) ?></span>
-                                        <?php if ($group['ConditionGrade'] !== '-'): ?>
-                                            <span class="badge bg-secondary ms-2"><?= h($group['ConditionGrade']) ?></span>
-                                        <?php endif; ?>
+                                        <span class="badge bg-secondary ms-2"><?= h($group['ConditionGrade']) ?></span>
                                         <?php if ($hasStock): ?>
                                             <span class="badge bg-info ms-1"><?= $group['RemainingQuantity'] ?> available</span>
                                             <?php if ($group['InCartCount'] > 0): ?>
@@ -548,26 +456,13 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <?php
 // 预加载订单详情数据
+// 【架构重构Phase2】使用DBProcedures替换直接SQL
 $orderDetailsData = [];
 foreach ($posHistory as $order) {
     $orderId = $order['OrderID'];
-    $stmt = $pdo->prepare("
-        SELECT
-            ol.PriceAtSale,
-            r.Title,
-            r.ArtistName,
-            si.ConditionGrade,
-            r.Genre,
-            r.ReleaseYear
-        FROM OrderLine ol
-        JOIN StockItem si ON ol.StockItemID = si.StockItemID
-        JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-        WHERE ol.OrderID = ?
-    ");
-    $stmt->execute([$orderId]);
     $orderDetailsData[$orderId] = [
         'info' => $order,
-        'items' => $stmt->fetchAll(PDO::FETCH_ASSOC)
+        'items' => DBProcedures::getOrderLineDetail($pdo, $orderId)
     ];
 }
 ?>

@@ -176,24 +176,25 @@ function getCartCount() {
 
 /**
  * [架构重构] 动态获取特定类型的店铺ID
+ * 【架构重构Phase2】改用DBProcedures替换直接表访问
  */
 function getShopIdByType($pdo, $type) {
-    static $cache = []; 
-    
+    static $cache = [];
+
     if (isset($cache[$type])) {
         return $cache[$type];
     }
 
+    require_once __DIR__ . '/db_procedures.php';
+
     try {
-        $stmt = $pdo->prepare("SELECT ShopID FROM Shop WHERE Type = ? LIMIT 1");
-        $stmt->execute([$type]);
-        $id = $stmt->fetchColumn();
-        
+        $id = DBProcedures::getShopIdByType($pdo, $type);
+
         if ($id) {
             $cache[$type] = $id;
             return $id;
         }
-        
+
         error_log("Critical Warning: No shop found for type '$type'. Operations may fail.");
         return false; // 返回 false 让调用者处理错误
     } catch (Exception $e) {
@@ -664,61 +665,16 @@ function prepareDashboardData($pdo, $shopId = null) {
         $expense = DBProcedures::getShopTotalExpense($pdo, $shopId);
         $popularItems = DBProcedures::getPopularItems($pdo, $shopId, 1);
 
-        // 【新增】获取Walk-in customer（CustomerID为NULL）的收入统计
-        $walkInStmt = $pdo->prepare("
-            SELECT COUNT(DISTINCT OrderID) as OrderCount, COALESCE(SUM(TotalAmount), 0) as TotalSpent
-            FROM CustomerOrder
-            WHERE FulfilledByShopID = ? AND CustomerID IS NULL AND OrderStatus IN ('Paid', 'Completed')
-        ");
-        $walkInStmt->execute([$shopId]);
-        $walkInRevenue = $walkInStmt->fetch(PDO::FETCH_ASSOC);
+        // 【架构重构Phase2】使用DBProcedures替换直接SQL查询
 
-        // 【重构】计算当前店铺所有库存的历史成本（包括已售出的库存）
-        // 成本 = 本店历史上所有库存的采购成本之和（Available + Sold）
-        // 调货时成本会转移：调出则减少，调入则增加
-        // 已售库存的ShopID保持为销售时的店铺，成本归属不变
-        $inventoryCostStmt = $pdo->prepare("
-            SELECT
-                COALESCE(SUM(
-                    CASE
-                        WHEN si.SourceType = 'Supplier' THEN
-                            COALESCE(
-                                (SELECT sol.UnitCost
-                                 FROM SupplierOrderLine sol
-                                 WHERE sol.SupplierOrderID = si.SourceOrderID
-                                 AND sol.ReleaseID = si.ReleaseID
-                                 AND sol.ConditionGrade = si.ConditionGrade
-                                 LIMIT 1),
-                                0
-                            )
-                        WHEN si.SourceType = 'Buyback' THEN
-                            COALESCE(
-                                (SELECT bol.UnitPrice
-                                 FROM BuybackOrderLine bol
-                                 WHERE bol.BuybackOrderID = si.SourceOrderID
-                                 AND bol.ReleaseID = si.ReleaseID
-                                 AND bol.ConditionGrade = si.ConditionGrade
-                                 LIMIT 1),
-                                0
-                            )
-                        ELSE 0
-                    END
-                ), 0) as TotalInventoryCost,
-                COUNT(*) as InventoryCount
-            FROM StockItem si
-            WHERE si.ShopID = ? AND si.Status IN ('Available', 'Sold')
-        ");
-        $inventoryCostStmt->execute([$shopId]);
-        $inventoryCost = $inventoryCostStmt->fetch(PDO::FETCH_ASSOC);
+        // 获取Walk-in customer收入统计
+        $walkInRevenue = DBProcedures::getShopWalkInRevenue($pdo, $shopId);
 
-        // 【保留】历史采购统计（用于显示采购订单数量）
-        $procurementStmt = $pdo->prepare("
-            SELECT COUNT(so.SupplierOrderID) as ProcurementCount
-            FROM SupplierOrder so
-            WHERE so.DestinationShopID = ? AND so.Status = 'Received'
-        ");
-        $procurementStmt->execute([$shopId]);
-        $procurementStats = $procurementStmt->fetch(PDO::FETCH_ASSOC);
+        // 获取库存成本
+        $inventoryCost = DBProcedures::getShopInventoryCost($pdo, $shopId);
+
+        // 获取采购统计
+        $procurementStats = DBProcedures::getShopProcurementStats($pdo, $shopId);
 
         // 【重构】Total Expense = 当前库存的实时成本
         // 这包括了从供应商采购的成本和回购的成本，且会随着调货自动更新
@@ -984,22 +940,10 @@ function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
 
     if ($shopId > 0) {
         // ====== 针对特定店铺的逻辑 ======
-        
+        // 【架构重构Phase2】使用DBProcedures替换直接SQL查询
+
         // A. 获取该店铺的分组库存 (必须包含 AvailableQuantity 字段，release.php 依赖此字段)
-        $stmt = $pdo->prepare("
-            SELECT 
-                ConditionGrade,
-                UnitPrice,
-                COUNT(*) as AvailableQuantity
-            FROM StockItem
-            WHERE ReleaseID = ? AND ShopID = ? AND Status = 'Available'
-            GROUP BY ConditionGrade, UnitPrice
-            ORDER BY 
-                FIELD(ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'),
-                UnitPrice
-        ");
-        $stmt->execute([$releaseId, $shopId]);
-        $stockItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stockItems = DBProcedures::getReleaseShopStockGrouped($pdo, $releaseId, $shopId);
 
         // B. 重新计算该店铺的统计数据 (覆盖 $release 中的全局数据)
         $totalAvailable = 0;
@@ -1066,21 +1010,8 @@ function addMultipleToCart($pdo, $releaseId, $conditionGrade, $quantity) {
     // 【修复】获取用户当前选择的店铺ID
     $shopId = $_SESSION['selected_shop_id'] ?? null;
 
-    // 【修复】获取该condition的可用数量，排除已在购物车中的
-    $stmt = $pdo->prepare("
-        SELECT StockItemID
-        FROM StockItem
-        WHERE ReleaseID = ? AND ConditionGrade = ? AND Status = 'Available'
-        " . ($shopId ? "AND ShopID = ?" : "") . "
-        ORDER BY StockItemID
-    ");
-
-    if ($shopId) {
-        $stmt->execute([$releaseId, $conditionGrade, $shopId]);
-    } else {
-        $stmt->execute([$releaseId, $conditionGrade]);
-    }
-    $allStockIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    // 【架构重构Phase2】使用DBProcedures替换直接SQL查询
+    $allStockIds = DBProcedures::getAvailableStockIdsByCondition($pdo, $releaseId, $conditionGrade, $shopId);
 
     // 排除已在购物车中的
     $availableIds = array_diff($allStockIds, $_SESSION['cart']);
@@ -1364,35 +1295,29 @@ function handleShipOrder($pdo, $orderId) {
 /**
  * 处理订单送达确认
  * 【修复】添加事务管理
+ * 【架构重构Phase2】使用DBProcedures替换直接SQL验证
  */
 function handleDeliveryConfirmation($pdo, $orderId) {
     require_once __DIR__ . '/db_procedures.php';
 
-    // 先验证订单状态
     try {
-        $stmt = $pdo->prepare("SELECT TotalAmount, OrderStatus FROM CustomerOrder WHERE OrderID = ? AND OrderType = 'Online' AND OrderStatus = 'Shipped'");
-        $stmt->execute([$orderId]);
-        $order = $stmt->fetch();
-
-        if (!$order) {
-            return ['success' => false, 'message' => 'Order not found or not shipped.'];
-        }
-
         $pdo->beginTransaction();
-        $success = DBProcedures::completeOrder($pdo, $orderId);
+
+        // 【架构重构】使用存储过程验证订单状态并完成订单
+        $success = DBProcedures::confirmOrderReceived($pdo, $orderId);
 
         if ($success) {
             $pdo->commit();
             return ['success' => true, 'message' => "Order #$orderId delivery confirmed!"];
         } else {
             $pdo->rollBack();
-            return ['success' => false, 'message' => 'Failed to complete order.'];
+            return ['success' => false, 'message' => 'Order not found or not shipped.'];
         }
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+        return ['success' => false, 'message' => 'Order not found or not shipped.'];
     }
 }
 

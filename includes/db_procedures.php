@@ -152,27 +152,27 @@ class DBProcedures {
     }
 
     /**
-     * 【修复】获取指定条件的可用库存ID列表
+     * 【架构重构Phase3】获取指定条件的可用库存ID列表
+     * 改用 vw_available_stock_ids 视图
      * @param int|null $shopId 店铺ID，如果为null则查询所有店铺
      */
     public static function getAvailableStockIds($pdo, $releaseId, $conditionGrade, $quantity, $shopId = null) {
         try {
             $sql = "
-                SELECT s.StockItemID
-                FROM StockItem s
-                WHERE s.ReleaseID = ?
-                  AND s.ConditionGrade = ?
-                  AND s.Status = 'Available'
+                SELECT StockItemID
+                FROM vw_available_stock_ids
+                WHERE ReleaseID = ?
+                  AND ConditionGrade = ?
             ";
             $params = [$releaseId, $conditionGrade];
 
             // 如果指定了店铺ID，则过滤店铺
             if ($shopId !== null) {
-                $sql .= " AND s.ShopID = ?";
+                $sql .= " AND ShopID = ?";
                 $params[] = $shopId;
             }
 
-            $sql .= " ORDER BY s.StockItemID LIMIT ?";
+            $sql .= " ORDER BY StockItemID LIMIT ?";
             $params[] = $quantity;
 
             $stmt = $pdo->prepare($sql);
@@ -1186,20 +1186,20 @@ class DBProcedures {
     // =============================================
 
     /**
-     * 获取店铺的KPI统计（限定店铺）
+     * 【架构重构Phase3】获取店铺的KPI统计（限定店铺）
+     * 改用 vw_shop_kpi_stats 视图
      * 营业额只统计已确认收入（Paid/Completed状态的订单）
      */
     public static function getShopKpiStats($pdo, $shopId) {
         try {
             $stmt = $pdo->prepare("
-                SELECT
-                    COALESCE(SUM(co.TotalAmount), 0) AS TotalSales,
-                    (SELECT COUNT(*) FROM CustomerOrder WHERE FulfilledByShopID = ? AND OrderStatus IN ('Pending', 'Paid', 'Shipped')) AS ActiveOrders
-                FROM CustomerOrder co
-                WHERE co.FulfilledByShopID = ? AND co.OrderStatus IN ('Paid', 'Completed')
+                SELECT TotalSales, ActiveOrders
+                FROM vw_shop_kpi_stats
+                WHERE ShopID = ?
             ");
-            $stmt->execute([$shopId, $shopId]);
-            return $stmt->fetch();
+            $stmt->execute([$shopId]);
+            $result = $stmt->fetch();
+            return $result ?: ['TotalSales' => 0, 'ActiveOrders' => 0];
         } catch (PDOException $e) {
             error_log("getShopKpiStats Error: " . $e->getMessage());
             return ['TotalSales' => 0, 'ActiveOrders' => 0];
@@ -1962,12 +1962,13 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】验证订单属于指定店铺
+     * 【架构重构Phase3】验证订单属于指定店铺
+     * 改用 vw_order_shop_validation 视图
      * 替换 fulfillment.php 中的订单验证查询
      */
     public static function validateOrderBelongsToShop($pdo, $orderId, $shopId) {
         try {
-            $stmt = $pdo->prepare("SELECT FulfilledByShopID, OrderStatus FROM CustomerOrder WHERE OrderID = ?");
+            $stmt = $pdo->prepare("SELECT FulfilledByShopID, OrderStatus FROM vw_order_shop_validation WHERE OrderID = ?");
             $stmt->execute([$orderId]);
             $order = $stmt->fetch();
             if ($order && $order['FulfilledByShopID'] == $shopId) {
@@ -1981,12 +1982,13 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】验证调拨属于指定店铺（源店铺）
+     * 【架构重构Phase3】验证调拨属于指定店铺（源店铺）
+     * 改用 vw_transfer_validation 视图
      * 替换 fulfillment.php 中的调拨验证查询
      */
     public static function validateTransferFromShop($pdo, $transferId, $shopId) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND FromShopID = ?");
+            $stmt = $pdo->prepare("SELECT * FROM vw_transfer_validation WHERE TransferID = ? AND FromShopID = ?");
             $stmt->execute([$transferId, $shopId]);
             return $stmt->fetch();
         } catch (PDOException $e) {
@@ -1996,12 +1998,13 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】验证调拨属于指定店铺（目标店铺）
+     * 【架构重构Phase3】验证调拨属于指定店铺（目标店铺）
+     * 改用 vw_transfer_validation 视图
      * 替换 fulfillment.php 中的调拨验证查询
      */
     public static function validateTransferToShop($pdo, $transferId, $shopId) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM InventoryTransfer WHERE TransferID = ? AND ToShopID = ?");
+            $stmt = $pdo->prepare("SELECT * FROM vw_transfer_validation WHERE TransferID = ? AND ToShopID = ?");
             $stmt->execute([$transferId, $shopId]);
             return $stmt->fetch();
         } catch (PDOException $e) {
@@ -2195,15 +2198,16 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】检查店铺库存数量
+     * 【架构重构Phase3】检查店铺库存数量
+     * 改用 vw_shop_stock_count 视图
      * 替换 requests.php 中的库存验证查询
      */
     public static function getShopStockCount($pdo, $shopId, $releaseId, $conditionGrade) {
         try {
             $stmt = $pdo->prepare("
-                SELECT COUNT(*) as available
-                FROM StockItem
-                WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ? AND Status = 'Available'
+                SELECT AvailableCount as available
+                FROM vw_shop_stock_count
+                WHERE ShopID = ? AND ReleaseID = ? AND ConditionGrade = ?
             ");
             $stmt->execute([$shopId, $releaseId, $conditionGrade]);
             $result = $stmt->fetch();
@@ -2215,16 +2219,15 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构】获取店铺库存分组列表
+     * 【架构重构Phase3】获取店铺库存分组列表
+     * 改用 vw_shop_inventory_by_release 视图（已包含Title和ArtistName）
      * 替换 manager/requests.php 中的库存查询
      */
     public static function getShopInventoryGrouped($pdo, $shopId) {
         try {
             $stmt = $pdo->prepare("
-                SELECT ReleaseID, ShopName, ConditionGrade, AvailableQuantity AS Quantity, UnitPrice,
-                       (SELECT Title FROM ReleaseAlbum WHERE ReleaseID = v.ReleaseID) AS Title,
-                       (SELECT ArtistName FROM ReleaseAlbum WHERE ReleaseID = v.ReleaseID) AS ArtistName
-                FROM vw_shop_inventory_by_release v
+                SELECT ReleaseID, ShopName, ConditionGrade, AvailableQuantity AS Quantity, UnitPrice, Title, ArtistName
+                FROM vw_shop_inventory_by_release
                 WHERE ShopID = ?
                 ORDER BY Title, ConditionGrade
             ");
@@ -2256,13 +2259,14 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】更新调货申请的源店铺
+     * 【架构重构Phase3】更新调货申请的源店铺
+     * 改用 sp_update_transfer_request_source 存储过程
      * 替换 requests.php 中的ToShopID更新
      */
     public static function updateTransferRequestSource($pdo, $requestId, $sourceShopId) {
         try {
-            $stmt = $pdo->prepare("UPDATE ManagerRequest SET ToShopID = ? WHERE RequestID = ? AND RequestType = 'TransferRequest'");
-            return $stmt->execute([$sourceShopId, $requestId]);
+            $stmt = $pdo->prepare("CALL sp_update_transfer_request_source(?, ?)");
+            return $stmt->execute([$requestId, $sourceShopId]);
         } catch (PDOException $e) {
             error_log("updateTransferRequestSource Error: " . $e->getMessage());
             return false;
@@ -2510,6 +2514,115 @@ class DBProcedures {
         } catch (PDOException $e) {
             error_log("getAvailableStockIdsByCondition Error: " . $e->getMessage());
             return [];
+        }
+    }
+
+    // ================================================
+    // 【架构重构Phase3】新增方法 - 消除 functions.php 直接表访问
+    // ================================================
+
+    /**
+     * 【架构重构Phase3】按店铺获取目录数据
+     * 替换 functions.php:prepareCatalogPageDataByShop 中的直接表访问
+     */
+    public static function getCatalogByShop($pdo, $shopId, $search = '', $genre = '') {
+        try {
+            $sql = "
+                SELECT ReleaseID, Title, Genre, Year, ArtistName, TotalAvailable, MinPrice, MaxPrice, AvailableConditions
+                FROM vw_catalog_by_shop_grouped
+                WHERE (ShopID = ? OR ShopID IS NULL)
+            ";
+            $params = [$shopId];
+
+            if ($search) {
+                $sql .= " AND (Title LIKE ? OR ArtistName LIKE ?)";
+                $searchParam = "%$search%";
+                $params[] = $searchParam;
+                $params[] = $searchParam;
+            }
+
+            if ($genre) {
+                $sql .= " AND Genre = ?";
+                $params[] = $genre;
+            }
+
+            $sql .= " GROUP BY ReleaseID ORDER BY TotalAvailable DESC, Title ASC";
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getCatalogByShop Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase3】获取所有专辑流派列表
+     * 替换 functions.php:prepareCatalogPageDataByShop 中的流派查询
+     */
+    public static function getReleaseGenres($pdo) {
+        try {
+            $stmt = $pdo->query("SELECT Genre FROM vw_release_genres");
+            return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } catch (PDOException $e) {
+            error_log("getReleaseGenres Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase3】获取专辑基本信息
+     * 替换 functions.php:getReleaseDetailsByShop 中的 ReleaseAlbum 查询
+     */
+    public static function getReleaseInfo($pdo, $releaseId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_release_info WHERE ReleaseID = ?");
+            $stmt->execute([$releaseId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getReleaseInfo Error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 【架构重构Phase3】获取专辑的可用库存详情（按店铺）
+     * 替换 functions.php:getReleaseDetailsByShop 中的 StockItem 查询
+     */
+    public static function getReleaseAvailableStock($pdo, $releaseId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_release_available_stock
+                WHERE ReleaseID = ? AND ShopID = ?
+                ORDER BY
+                    FIELD(ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'),
+                    UnitPrice
+            ");
+            $stmt->execute([$releaseId, $shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getReleaseAvailableStock Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 【架构重构Phase3】验证订单是否可取消
+     * 替换 cancel_order.php 中的直接 CustomerOrder 查询
+     */
+    public static function validateOrderForCancel($pdo, $orderId, $customerId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT OrderID, CustomerID, OrderStatus, OrderType
+                FROM vw_order_shop_validation
+                WHERE OrderID = ? AND CustomerID = ?
+            ");
+            $stmt->execute([$orderId, $customerId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("validateOrderForCancel Error: " . $e->getMessage());
+            return false;
         }
     }
 }

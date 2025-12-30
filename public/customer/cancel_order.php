@@ -20,16 +20,10 @@ if (!$orderId) {
 }
 
 try {
-    // 验证订单属于当前客户且状态为Pending
-    $stmt = $pdo->prepare("
-        SELECT OrderID, OrderStatus, CustomerID
-        FROM CustomerOrder
-        WHERE OrderID = ? AND CustomerID = ? AND OrderStatus = 'Pending'
-    ");
-    $stmt->execute([$orderId, $customerId]);
-    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+    // 【架构重构Phase3】使用 DBProcedures::validateOrderForCancel 替换直接SQL查询
+    $order = DBProcedures::validateOrderForCancel($pdo, $orderId, $customerId);
 
-    if (!$order) {
+    if (!$order || $order['OrderStatus'] !== 'Pending') {
         echo json_encode(['success' => false, 'message' => 'Order not found or cannot be cancelled']);
         exit();
     }

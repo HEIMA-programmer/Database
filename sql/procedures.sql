@@ -1612,4 +1612,50 @@ BEGIN
     CALL sp_complete_order(p_order_id);
 END$$
 
+-- ------------------------------------------------
+-- 28. 取消调拨存储过程
+-- 替换 fulfillment.php 中的 DELETE FROM InventoryTransfer
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_cancel_transfer$$
+CREATE PROCEDURE sp_cancel_transfer(
+    IN p_transfer_id INT,
+    IN p_shop_id INT -- 用于验证权限
+)
+BEGIN
+    DECLARE v_from_shop_id INT;
+    DECLARE v_status VARCHAR(20);
+    DECLARE v_stock_item_id INT;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        RESIGNAL;
+    END;
+
+    -- 验证调拨记录存在且属于该店铺
+    SELECT FromShopID, Status, StockItemID INTO v_from_shop_id, v_status, v_stock_item_id
+    FROM InventoryTransfer
+    WHERE TransferID = p_transfer_id
+    FOR UPDATE;
+
+    IF v_from_shop_id IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transfer not found';
+    END IF;
+
+    IF v_from_shop_id != p_shop_id THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transfer does not belong to this shop';
+    END IF;
+
+    IF v_status != 'Pending' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only pending transfers can be cancelled';
+    END IF;
+
+    -- 恢复库存状态为Available
+    UPDATE StockItem
+    SET Status = 'Available'
+    WHERE StockItemID = v_stock_item_id;
+
+    -- 删除调拨记录
+    DELETE FROM InventoryTransfer WHERE TransferID = p_transfer_id;
+END$$
+
 DELIMITER ;

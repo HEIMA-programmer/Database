@@ -59,11 +59,11 @@ $suppliers = $pageData['suppliers'];
 $releases = $pageData['releases'];
 $pendingPOs = $pageData['pending_orders'];
 
-// 【重构】从数据库获取每个专辑的BaseUnitCost
+// 【架构重构】使用DBProcedures获取专辑基础成本
 $releaseBaseUnitCosts = [];
-$stmt = $pdo->query("SELECT ReleaseID, COALESCE(BaseUnitCost, 25.00) as BaseUnitCost FROM ReleaseAlbum");
-while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    $releaseBaseUnitCosts[$row['ReleaseID']] = (float)$row['BaseUnitCost'];
+$releasesWithCost = DBProcedures::getReleaseListWithCost($pdo);
+foreach ($releasesWithCost as $row) {
+    $releaseBaseUnitCosts[$row['ReleaseID']] = (float)($row['BaseUnitCost'] ?? 25.00);
 }
 
 // 为每个专辑和每种condition构建价格配置

@@ -53,9 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         DBProcedures::confirmTransferDispatch($pdo, $transferId, $employeeId);
                         $processedCount++;
                     } elseif ($action === 'cancel_transfer') {
-                        // 取消调拨（删除记录）
-                        $stmt = $pdo->prepare("DELETE FROM InventoryTransfer WHERE TransferID = ?");
-                        $stmt->execute([$transferId]);
+                        // 【架构重构】使用存储过程取消调拨
+                        DBProcedures::cancelTransfer($pdo, $transferId, $shopId);
                         $processedCount++;
                     }
                 }

@@ -9,6 +9,7 @@
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Customer');
 
 // 检查购物车
@@ -18,19 +19,8 @@ if (empty($_SESSION['cart'])) {
     exit;
 }
 
-// 获取购物车商品和店铺信息
-$placeholders = implode(',', array_fill(0, count($_SESSION['cart']), '?'));
-$stmt = $pdo->prepare("
-    SELECT si.StockItemID, si.ReleaseID, si.UnitPrice, si.ConditionGrade, si.ShopID,
-           r.Title, r.ArtistName, s.Name as ShopName, s.Type as ShopType, s.Address as ShopAddress
-	FROM StockItem si
-    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-    -- 删除 Artist JOIN
-    JOIN Shop s ON si.ShopID = s.ShopID
-    WHERE si.StockItemID IN ($placeholders) AND si.Status = 'Available'
-");
-$stmt->execute($_SESSION['cart']);
-$cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// 【架构重构】使用DBProcedures获取购物车商品和店铺信息
+$cartItems = DBProcedures::getCheckoutCartItems($pdo, $_SESSION['cart']);
 
 // 验证商品可用性
 if (count($cartItems) != count($_SESSION['cart'])) {
@@ -50,16 +40,9 @@ $shopInfo = [
 // 计算总价
 $total = array_sum(array_column($cartItems, 'UnitPrice'));
 
-// 【修复】使用正确的Session结构获取客户ID
+// 【架构重构】使用DBProcedures获取客户信息
 $customerId = $_SESSION['user_id'];
-$stmt = $pdo->prepare("
-    SELECT c.*, mt.TierName, mt.DiscountRate
-    FROM Customer c
-    LEFT JOIN MembershipTier mt ON c.TierID = mt.TierID
-    WHERE c.CustomerID = ?
-");
-$stmt->execute([$customerId]);
-$customer = $stmt->fetch(PDO::FETCH_ASSOC);
+$customer = DBProcedures::getCustomerProfile($pdo, $customerId);
 
 // 计算折扣
 $discount = 0;
@@ -98,60 +81,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
-            $pdo->beginTransaction();
-
-            // 【修复】创建订单 - 保存履行方式、地址和运费
-            $stmt = $pdo->prepare("
-                INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, OrderType, OrderStatus, FulfillmentType, ShippingAddress, ShippingCost)
-                VALUES (?, ?, 'Online', 'Pending', ?, ?, ?)
-            ");
-            $stmt->execute([
+            // 【架构重构】使用存储过程创建订单
+            $stockItemIds = array_column($cartItems, 'StockItemID');
+            $result = DBProcedures::createOnlineOrderComplete(
+                $pdo,
                 $customerId,
                 $shopInfo['ShopID'],
+                $stockItemIds,
                 $fulfillmentType,
                 $fulfillmentType == 'Shipping' ? $shippingAddress : null,
                 $shippingCost
-            ]);
-            $orderId = $pdo->lastInsertId();
-            
-            // 添加订单行并锁定库存
-            foreach ($cartItems as $item) {
-                // 再次验证库存状态
-                $stmt = $pdo->prepare("SELECT Status FROM StockItem WHERE StockItemID = ? FOR UPDATE");
-                $stmt->execute([$item['StockItemID']]);
-                $status = $stmt->fetchColumn();
-                
-                if ($status != 'Available') {
-                    throw new Exception("Item '{$item['Title']}' is no longer available.");
-                }
-                
-                // 添加订单行
-                $stmt = $pdo->prepare("
-                    INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale)
-                    VALUES (?, ?, ?)
-                ");
-                $stmt->execute([$orderId, $item['StockItemID'], $item['UnitPrice']]);
-                
-                // 锁定库存
-                $stmt = $pdo->prepare("UPDATE StockItem SET Status = 'Reserved' WHERE StockItemID = ?");
-                $stmt->execute([$item['StockItemID']]);
+            );
+
+            if ($result && isset($result['order_id']) && $result['order_id'] > 0) {
+                $orderId = $result['order_id'];
+
+                // 清空购物车
+                $_SESSION['cart'] = [];
+
+                flash('Order #' . $orderId . ' created! Please complete your payment.', 'info');
+                header('Location: pay.php?order_id=' . $orderId);
+                exit;
+            } elseif (isset($result['error']) && $result['error'] == 'no_available_items') {
+                $errors[] = 'Some items are no longer available. Please review your cart.';
+            } else {
+                $errors[] = 'Order creation failed. Please try again.';
             }
-            
-            // 【修复】更新订单总额（包含运费）
-            $stmt = $pdo->prepare("UPDATE CustomerOrder SET TotalAmount = ? WHERE OrderID = ?");
-            $stmt->execute([$finalTotalWithShipping, $orderId]);
-            
-            $pdo->commit();
-            
-            // 清空购物车
-            $_SESSION['cart'] = [];
-            
-            flash('Order #' . $orderId . ' created! Please complete your payment.', 'info');
-            header('Location: pay.php?order_id=' . $orderId);
-            exit;
-            
         } catch (Exception $e) {
-            $pdo->rollBack();
             $errors[] = 'Order failed: ' . $e->getMessage();
         }
     }

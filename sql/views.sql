@@ -421,6 +421,7 @@ JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID;
 
 -- 21. [架构重构] 取货订单验证视图
 -- 替换 pickup.php 中的直接 CustomerOrder 查询
+-- 【架构重构】添加 FulfillmentType 字段用于取货验证
 CREATE OR REPLACE VIEW vw_order_for_pickup AS
 SELECT
     OrderID,
@@ -428,7 +429,8 @@ SELECT
     FulfilledByShopID AS ShopID,
     TotalAmount,
     OrderStatus,
-    OrderType
+    OrderType,
+    FulfillmentType
 FROM CustomerOrder;
 
 -- 22. [架构重构] 专辑简单列表视图 - 用于下拉选择
@@ -1463,14 +1465,9 @@ WHERE Status = 'Available'
 ORDER BY StockItemID;
 
 -- 76. [架构重构Phase2] 简单客户列表视图
--- 替换 pos.php 中的客户下拉框查询
+-- 【冗余精简】此视图与vw_customer_simple_list相同，创建别名保持兼容
 CREATE OR REPLACE VIEW vw_customer_list_simple AS
-SELECT
-    CustomerID,
-    Name,
-    Email
-FROM Customer
-ORDER BY Name;
+SELECT * FROM vw_customer_simple_list;
 
 -- 77. [架构重构Phase2] POS购物车商品验证视图
 -- 替换 pos.php 中的添加商品验证查询
@@ -1675,3 +1672,31 @@ JOIN Shop s ON si.ShopID = s.ShopID
 WHERE si.Status = 'Available'
 GROUP BY si.ShopID, s.Name, s.Type, si.ReleaseID, si.ConditionGrade
 HAVING AvailableQuantity > 0;
+
+-- 88. [架构重构] 结账购物车商品视图（含店铺地址）
+-- 替换 checkout.php 中的购物车数据获取
+CREATE OR REPLACE VIEW vw_checkout_cart_items AS
+SELECT
+    si.StockItemID,
+    si.ReleaseID,
+    si.UnitPrice,
+    si.ConditionGrade,
+    si.ShopID,
+    si.Status,
+    r.Title,
+    r.ArtistName,
+    s.Name AS ShopName,
+    s.Type AS ShopType,
+    s.Address AS ShopAddress
+FROM StockItem si
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+JOIN Shop s ON si.ShopID = s.ShopID;
+
+-- 89. [架构重构] 客户订单详情视图
+-- 替换 db_procedures.php:getCustomerOrderDetail 中的直接表访问
+CREATE OR REPLACE VIEW vw_customer_order_detail AS
+SELECT
+    co.*,
+    s.Name AS ShopName
+FROM CustomerOrder co
+LEFT JOIN Shop s ON co.FulfilledByShopID = s.ShopID;

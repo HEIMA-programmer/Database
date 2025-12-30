@@ -1073,14 +1073,14 @@ class DBProcedures {
 
     /**
      * 获取订单用于取货验证
-     * 【修复】添加 FulfillmentType = 'Pickup' 验证，防止Shipping订单被错误取货
+     * 【架构重构】使用视图替换直接表访问
      */
     public static function getOrderForPickupValidation($pdo, $orderId, $shopId) {
         try {
             $stmt = $pdo->prepare("
                 SELECT OrderID, TotalAmount, OrderStatus, FulfillmentType
-                FROM CustomerOrder
-                WHERE OrderID = ? AND FulfilledByShopID = ? AND OrderStatus = 'Paid' AND FulfillmentType = 'Pickup'
+                FROM vw_order_for_pickup
+                WHERE OrderID = ? AND ShopID = ? AND OrderStatus = 'Paid' AND FulfillmentType = 'Pickup'
             ");
             $stmt->execute([$orderId, $shopId]);
             return $stmt->fetch();
@@ -1122,10 +1122,11 @@ class DBProcedures {
 
     /**
      * 获取订单详情（客户端）
+     * 【架构重构】使用视图替换直接表访问
      */
     public static function getCustomerOrderDetail($pdo, $orderId, $customerId) {
         try {
-            $stmt = $pdo->prepare("SELECT co.*, s.Name as ShopName FROM CustomerOrder co LEFT JOIN Shop s ON co.FulfilledByShopID = s.ShopID WHERE co.OrderID = ? AND co.CustomerID = ?");
+            $stmt = $pdo->prepare("SELECT * FROM vw_customer_order_detail WHERE OrderID = ? AND CustomerID = ?");
             $stmt->execute([$orderId, $customerId]);
             return $stmt->fetch();
         } catch (PDOException $e) {
@@ -1611,6 +1612,24 @@ class DBProcedures {
         }
     }
 
+    /**
+     * 【架构重构】获取结账购物车商品详情（含店铺地址）
+     * 替换 checkout.php 中的购物车数据获取
+     */
+    public static function getCheckoutCartItems($pdo, $stockIds) {
+        if (empty($stockIds)) return [];
+        try {
+            $placeholders = implode(',', array_fill(0, count($stockIds), '?'));
+            $sql = "SELECT * FROM vw_checkout_cart_items WHERE StockItemID IN ($placeholders) AND Status = 'Available'";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($stockIds);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getCheckoutCartItems Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
     // ----------------
     // 订单取消验证
     // ----------------
@@ -1842,6 +1861,20 @@ class DBProcedures {
             return $stmt->execute([$orderId]);
         } catch (PDOException $e) {
             error_log("confirmOrderReceived Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 【架构重构】取消调拨
+     * 替换 fulfillment.php 中的 DELETE FROM InventoryTransfer
+     */
+    public static function cancelTransfer($pdo, $transferId, $shopId) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_cancel_transfer(?, ?)");
+            return $stmt->execute([$transferId, $shopId]);
+        } catch (PDOException $e) {
+            error_log("cancelTransfer Error: " . $e->getMessage());
             return false;
         }
     }
@@ -2178,6 +2211,28 @@ class DBProcedures {
         } catch (PDOException $e) {
             error_log("getShopStockCount Error: " . $e->getMessage());
             return 0;
+        }
+    }
+
+    /**
+     * 【架构重构】获取店铺库存分组列表
+     * 替换 manager/requests.php 中的库存查询
+     */
+    public static function getShopInventoryGrouped($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT ReleaseID, ShopName, ConditionGrade, AvailableQuantity AS Quantity, UnitPrice,
+                       (SELECT Title FROM ReleaseAlbum WHERE ReleaseID = v.ReleaseID) AS Title,
+                       (SELECT ArtistName FROM ReleaseAlbum WHERE ReleaseID = v.ReleaseID) AS ArtistName
+                FROM vw_shop_inventory_by_release v
+                WHERE ShopID = ?
+                ORDER BY Title, ConditionGrade
+            ");
+            $stmt->execute([$shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopInventoryGrouped Error: " . $e->getMessage());
+            return [];
         }
     }
 

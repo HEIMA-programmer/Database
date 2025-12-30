@@ -94,18 +94,8 @@ $otherShops = array_filter($shops, fn($s) => $s['ShopID'] != $shopId);
 // 获取专辑列表（用于新建申请）
 $releases = DBProcedures::getReleaseList($pdo);
 
-// 【新增】获取当前店铺的库存信息（用于调价申请的album和condition选项）
-$shopInventoryStmt = $pdo->prepare("
-    SELECT DISTINCT si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade,
-           si.UnitPrice, COUNT(*) as Quantity
-    FROM StockItem si
-    JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-    WHERE si.ShopID = ? AND si.Status = 'Available'
-    GROUP BY si.ReleaseID, si.ConditionGrade, si.UnitPrice
-    ORDER BY r.Title, si.ConditionGrade
-");
-$shopInventoryStmt->execute([$shopId]);
-$shopInventory = $shopInventoryStmt->fetchAll(PDO::FETCH_ASSOC);
+// 【架构重构】使用DBProcedures获取当前店铺的库存信息
+$shopInventory = DBProcedures::getShopInventoryGrouped($pdo, $shopId);
 
 // 构建库存价格映射（用于JS自动填充）
 $inventoryPriceMap = [];

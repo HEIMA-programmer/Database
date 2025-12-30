@@ -673,10 +673,10 @@ function prepareDashboardData($pdo, $shopId = null) {
         $walkInStmt->execute([$shopId]);
         $walkInRevenue = $walkInStmt->fetch(PDO::FETCH_ASSOC);
 
-        // 【重构】计算当前店铺所有available库存的实时成本
-        // 成本 = 当前店内所有专辑的采购成本之和（实时，考虑调货等变动）
-        // 这确保了调货时成本会自动更新（调出则减少，调入则增加）
-        // 【修复】直接使用SupplierOrderLine.UnitCost（seeds数据已修正，每个订单只有一个Condition）
+        // 【重构】计算当前店铺所有库存的历史成本（包括已售出的库存）
+        // 成本 = 本店历史上所有库存的采购成本之和（Available + Sold）
+        // 调货时成本会转移：调出则减少，调入则增加
+        // 已售库存的ShopID保持为销售时的店铺，成本归属不变
         $inventoryCostStmt = $pdo->prepare("
             SELECT
                 COALESCE(SUM(
@@ -706,7 +706,7 @@ function prepareDashboardData($pdo, $shopId = null) {
                 ), 0) as TotalInventoryCost,
                 COUNT(*) as InventoryCount
             FROM StockItem si
-            WHERE si.ShopID = ? AND si.Status = 'Available'
+            WHERE si.ShopID = ? AND si.Status IN ('Available', 'Sold')
         ");
         $inventoryCostStmt->execute([$shopId]);
         $inventoryCost = $inventoryCostStmt->fetch(PDO::FETCH_ASSOC);

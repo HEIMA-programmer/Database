@@ -1398,10 +1398,9 @@ BEGIN
     -- 计算总金额（小计 - 折扣 + 运费）
     SET p_total_amount = v_subtotal - v_discount_amount + COALESCE(p_shipping_cost, 0);
 
-    -- 更新订单金额
+    -- 更新订单金额（TotalAmount 已包含折扣，无需单独记录折扣金额）
     UPDATE CustomerOrder
-    SET TotalAmount = p_total_amount,
-        DiscountApplied = v_discount_amount
+    SET TotalAmount = p_total_amount
     WHERE OrderID = p_order_id;
 
     -- 如果没有处理任何商品，取消订单
@@ -1547,10 +1546,9 @@ BEGIN
     -- 计算总金额
     SET p_total_amount = v_subtotal - v_discount_amount;
 
-    -- 更新订单金额
+    -- 更新订单金额（TotalAmount 已包含折扣，无需单独记录折扣金额）
     UPDATE CustomerOrder
-    SET TotalAmount = p_total_amount,
-        DiscountApplied = v_discount_amount
+    SET TotalAmount = p_total_amount
     WHERE OrderID = p_order_id;
 
     -- 如果没有处理任何商品，删除订单

@@ -102,7 +102,8 @@ $customers = DBProcedures::getCustomerListWithPoints($pdo);
 $conditions = ['New', 'Mint', 'NM', 'VG+', 'VG'];
 
 // 【架构重构Phase2】获取当前库存价格映射
-$priceMap = DBProcedures::getStockPriceMap($pdo);
+// 【修复】传入当前店铺ID，确保只获取本店铺的价格（解决多店铺价格调整后缓存不一致问题）
+$priceMap = DBProcedures::getStockPriceMap($pdo, $shopId);
 
 require_once __DIR__ . '/../../includes/header.php';
 // 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单

@@ -2239,11 +2239,14 @@ class DBProcedures {
     /**
      * 【架构重构Phase2】获取库存价格映射
      * 替换 buyback.php 中的价格映射查询
+     * 【修复】添加 shopId 参数，确保只获取当前店铺的价格
      */
-    public static function getStockPriceMap($pdo) {
+    public static function getStockPriceMap($pdo, $shopId) {
         try {
             $result = [];
-            $rows = $pdo->query("SELECT * FROM vw_stock_price_map")->fetchAll();
+            $stmt = $pdo->prepare("SELECT * FROM vw_stock_price_map WHERE ShopID = ?");
+            $stmt->execute([$shopId]);
+            $rows = $stmt->fetchAll();
             foreach ($rows as $row) {
                 $key = $row['ReleaseID'] . '_' . $row['ConditionGrade'];
                 $result[$key] = $row['CurrentPrice'];

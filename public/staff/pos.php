@@ -193,6 +193,16 @@ require_once __DIR__ . '/../../includes/header.php';
 // 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单
 ?>
 
+<!-- 【修复】无库存商品的样式 -->
+<style>
+.out-of-stock-item {
+    opacity: 0.7;
+}
+.out-of-stock-item .text-muted {
+    color: #8a8a8a !important;
+}
+</style>
+
 <div class="row mb-4">
     <div class="col">
         <h1 class="display-5 text-warning fw-bold">
@@ -235,10 +245,11 @@ require_once __DIR__ . '/../../includes/header.php';
                             <?php
                             $hasStock = $group['RemainingQuantity'] > 0;
                             $isOutOfStock = ($group['Quantity'] ?? 0) == 0;
-                            $itemClass = $hasStock ? '' : ($isOutOfStock ? 'opacity-40' : 'opacity-60');
-                            $conditionBadgeClass = ($group['ConditionGrade'] === 'N/A') ? 'bg-dark text-muted' : 'bg-secondary';
+                            // 【修复】无库存商品使用更柔和的样式，保持可见性
+                            $itemClass = $hasStock ? '' : 'out-of-stock-item';
+                            $conditionBadgeClass = ($group['ConditionGrade'] === 'N/A') ? 'bg-dark text-muted border border-secondary' : 'bg-secondary';
                             ?>
-                            <div class="list-group-item bg-dark border-secondary <?= $itemClass ?>" style="<?= $isOutOfStock ? 'border-left: 3px solid #6c757d !important;' : '' ?>">
+                            <div class="list-group-item bg-dark border-secondary <?= $itemClass ?>" style="<?= $isOutOfStock ? 'border-left: 3px solid #6c757d !important; background-color: #1a1a1a !important;' : '' ?>">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div class="flex-grow-1">
                                         <div class="d-flex align-items-center flex-wrap gap-1">

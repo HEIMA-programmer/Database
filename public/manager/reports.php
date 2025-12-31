@@ -9,12 +9,14 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Manager');
 
-// 获取当前Manager的店铺ID
-$shopId = $_SESSION['user']['ShopID'] ?? null;
+// 【修复】兼容多种session结构
+$shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;
 $shopType = $_SESSION['user']['ShopType'] ?? 'Retail';
 
 if (!$shopId) {
-    die('Error: Shop ID not found in session.');
+    flash('Shop ID not found in session. Please re-login.', 'warning');
+    header('Location: dashboard.php');
+    exit;
 }
 
 // 获取报表数据

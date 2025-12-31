@@ -355,14 +355,9 @@ FROM StockItem;
 
 -- 17. [架构重构] 客户查找视图 - 通过 Email 查找会员
 -- 替换 pos_checkout.php 中的直接 Customer 查询
+-- 【视图优化】改为引用 vw_customer_simple_list，消除冗余定义
 CREATE OR REPLACE VIEW vw_customer_lookup AS
-SELECT
-    CustomerID,
-    Name,
-    Email,
-    TierID,
-    Points
-FROM Customer;
+SELECT CustomerID, Name, Email, TierID, Points FROM vw_customer_simple_list;
 
 -- 18. [架构重构] 商品详情视图 - 包含完整的专辑和店铺信息
 -- 替换 product.php 中的多表联接查询
@@ -437,6 +432,7 @@ FROM CustomerOrder;
 
 -- 22. [架构重构] 专辑简单列表视图 - 用于下拉选择
 -- 替换 buyback.php 中的直接 ReleaseAlbum 查询
+-- 【视图优化】扩展为包含BaseUnitCost，作为专辑视图的基础视图
 CREATE OR REPLACE VIEW vw_release_simple_list AS
 SELECT
     ReleaseID,
@@ -444,17 +440,21 @@ SELECT
     ArtistName,
     Genre,
     Format,
-    ReleaseYear
+    ReleaseYear,
+    BaseUnitCost
 FROM ReleaseAlbum
 ORDER BY Title;
 
 -- 23. [架构重构] 客户简单列表视图 - 用于下拉选择
 -- 替换 buyback.php 中的直接 Customer 查询
+-- 【视图优化】扩展为包含Points和TierID，作为客户视图的基础视图
 CREATE OR REPLACE VIEW vw_customer_simple_list AS
 SELECT
     CustomerID,
     Name,
-    Email
+    Email,
+    TierID,
+    Points
 FROM Customer
 ORDER BY Name;
 
@@ -1466,10 +1466,8 @@ FROM StockItem
 WHERE Status = 'Available'
 ORDER BY StockItemID;
 
--- 76. [架构重构Phase2] 简单客户列表视图
--- 【冗余精简】此视图与vw_customer_simple_list相同，创建别名保持兼容
-CREATE OR REPLACE VIEW vw_customer_list_simple AS
-SELECT * FROM vw_customer_simple_list;
+-- 76. [视图优化] vw_customer_list_simple 已删除
+-- 原为 vw_customer_simple_list 的纯别名，PHP代码已更新直接使用 vw_customer_simple_list
 
 -- 77. [架构重构Phase2] POS购物车商品验证视图
 -- 替换 pos.php 中的添加商品验证查询
@@ -1586,26 +1584,15 @@ GROUP BY FulfilledByShopID, OrderStatus;
 
 -- 82. [架构重构Phase2] 专辑列表视图（含基础成本）
 -- 替换 buyback.php 中的专辑列表查询
+-- 【视图优化】改为引用 vw_release_simple_list，消除冗余定义
 CREATE OR REPLACE VIEW vw_release_list_with_cost AS
-SELECT
-    ReleaseID,
-    Title,
-    ArtistName,
-    Genre,
-    BaseUnitCost
-FROM ReleaseAlbum
-ORDER BY Title;
+SELECT ReleaseID, Title, ArtistName, Genre, BaseUnitCost FROM vw_release_simple_list;
 
 -- 83. [架构重构Phase2] 客户列表视图（含积分）
 -- 替换 buyback.php 中的客户下拉框查询
+-- 【视图优化】改为引用 vw_customer_simple_list，消除冗余定义
 CREATE OR REPLACE VIEW vw_customer_list_with_points AS
-SELECT
-    CustomerID,
-    Name,
-    Email,
-    Points
-FROM Customer
-ORDER BY Name;
+SELECT CustomerID, Name, Email, Points FROM vw_customer_simple_list;
 
 -- 84. [架构重构Phase2] 库存价格映射视图
 -- 替换 buyback.php 中的价格映射查询

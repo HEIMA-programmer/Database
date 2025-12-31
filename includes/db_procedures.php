@@ -1740,10 +1740,11 @@ class DBProcedures {
     /**
      * 【架构重构Phase2】获取简单客户列表
      * 替换 pos.php 中的客户下拉框查询
+     * 【视图优化】改用 vw_customer_simple_list，删除冗余别名视图
      */
     public static function getCustomerListSimple($pdo, $limit = 100) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_customer_list_simple LIMIT ?");
+            $stmt = $pdo->prepare("SELECT * FROM vw_customer_simple_list LIMIT ?");
             $stmt->execute([$limit]);
             return $stmt->fetchAll();
         } catch (PDOException $e) {

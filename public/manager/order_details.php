@@ -9,13 +9,14 @@ requireRole('Manager');
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 
-$shopId = $_SESSION['user']['ShopID'] ?? null;
+// 【修复】兼容多种session结构
+$shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;
 $shopType = $_SESSION['user']['ShopType'] ?? 'Retail';
 $isWarehouse = ($shopType === 'Warehouse');
 $type = $_GET['type'] ?? 'all';
 
-
 if (!$shopId) {
+    flash('Shop ID not found in session. Please re-login.', 'warning');
     header('Location: dashboard.php');
     exit;
 }

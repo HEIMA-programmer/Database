@@ -1731,14 +1731,15 @@ class DBProcedures {
                 }
             }
 
-            // 按标题排序
+            // 【修复】按库存优先排序：有货的在前面，无货的在后面
             usort($stockItems, function($a, $b) {
-                $titleCmp = strcmp($a['Title'], $b['Title']);
-                if ($titleCmp != 0) return $titleCmp;
-                // 有库存的排在前面
-                if ($a['Quantity'] > 0 && $b['Quantity'] == 0) return -1;
-                if ($a['Quantity'] == 0 && $b['Quantity'] > 0) return 1;
-                return 0;
+                // 首先按是否有库存排序（有库存的在前）
+                $aHasStock = ($a['Quantity'] ?? 0) > 0;
+                $bHasStock = ($b['Quantity'] ?? 0) > 0;
+                if ($aHasStock && !$bHasStock) return -1;
+                if (!$aHasStock && $bHasStock) return 1;
+                // 其次按标题排序
+                return strcmp($a['Title'], $b['Title']);
             });
 
             return $stockItems;

@@ -1402,6 +1402,7 @@ GROUP BY FulfilledByShopID;
 
 -- 71. [架构重构] 店铺库存成本视图
 -- 替换 functions.php:prepareDashboardData 中的库存成本计算
+-- 【修复】包含Reserved状态，因为Reserved商品仍然是库存的一部分
 CREATE OR REPLACE VIEW vw_shop_inventory_cost AS
 SELECT
     si.ShopID,
@@ -1415,7 +1416,7 @@ SELECT
                      AND sol.ReleaseID = si.ReleaseID
                      AND sol.ConditionGrade = si.ConditionGrade
                      LIMIT 1),
-                    0
+                    si.UnitCost
                 )
             WHEN si.SourceType = 'Buyback' THEN
                 COALESCE(
@@ -1425,14 +1426,14 @@ SELECT
                      AND bol.ReleaseID = si.ReleaseID
                      AND bol.ConditionGrade = si.ConditionGrade
                      LIMIT 1),
-                    0
+                    si.UnitCost
                 )
-            ELSE 0
+            ELSE COALESCE(si.UnitCost, 0)
         END
     ), 0) AS TotalInventoryCost,
     COUNT(*) AS InventoryCount
 FROM StockItem si
-WHERE si.Status IN ('Available', 'Sold')
+WHERE si.Status IN ('Available', 'Reserved', 'Sold')
 GROUP BY si.ShopID;
 
 -- 72. [架构重构] 店铺采购统计视图

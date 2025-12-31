@@ -9,12 +9,14 @@ requireRole('Manager');
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 
-$shopId = $_SESSION['user']['ShopID'] ?? null;
+// 【修复】兼容多种session结构
+$shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;
 $shopType = $_SESSION['user']['ShopType'] ?? 'Retail';
 $isWarehouse = ($shopType === 'Warehouse');
 $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
 
 if (!$shopId || !$customerId) {
+    flash('Invalid session or customer ID.', 'warning');
     header('Location: dashboard.php');
     exit;
 }

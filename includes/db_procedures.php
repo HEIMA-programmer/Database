@@ -805,28 +805,52 @@ class DBProcedures {
     /**
      * 完成订单
      * 【修复】执行存储过程后验证订单状态是否真正更新为Completed
+     * 【调试增强】增加详细日志输出
      */
     public static function completeOrder($pdo, $orderId) {
         try {
+            error_log("=== completeOrder START: orderId=$orderId ===");
+
+            // 先检查订单当前状态
+            $preCheck = $pdo->prepare("SELECT OrderStatus, OrderType FROM CustomerOrder WHERE OrderID = ?");
+            $preCheck->execute([$orderId]);
+            $preResult = $preCheck->fetch();
+            error_log("PRE-CHECK: OrderID=$orderId, Status=" . ($preResult['OrderStatus'] ?? 'NULL') . ", Type=" . ($preResult['OrderType'] ?? 'NULL'));
+            $preCheck->closeCursor();
+
+            // 执行存储过程
             $stmt = $pdo->prepare("CALL sp_complete_order(?)");
-            $stmt->execute([$orderId]);
+            $executeResult = $stmt->execute([$orderId]);
+            error_log("sp_complete_order execute result: " . ($executeResult ? 'true' : 'false'));
+
+            // 检查是否有错误信息
+            $errorInfo = $stmt->errorInfo();
+            if ($errorInfo[0] !== '00000') {
+                error_log("sp_complete_order error: " . json_encode($errorInfo));
+            }
 
             // 清除可能的多结果集
             while ($stmt->nextRowset()) {}
+            $stmt->closeCursor();
 
             // 验证订单状态是否真的变成了Completed
-            $checkStmt = $pdo->prepare("SELECT OrderStatus FROM CustomerOrder WHERE OrderID = ?");
+            $checkStmt = $pdo->prepare("SELECT OrderStatus, OrderType FROM CustomerOrder WHERE OrderID = ?");
             $checkStmt->execute([$orderId]);
             $result = $checkStmt->fetch();
+            $checkStmt->closeCursor();
+
+            error_log("POST-CHECK: OrderID=$orderId, Status=" . ($result['OrderStatus'] ?? 'NULL') . ", Type=" . ($result['OrderType'] ?? 'NULL'));
 
             if (!$result || $result['OrderStatus'] !== 'Completed') {
-                error_log("completeOrder Verification Failed: Order $orderId status is " . ($result['OrderStatus'] ?? 'NULL'));
+                error_log("completeOrder Verification Failed: Order $orderId status is " . ($result['OrderStatus'] ?? 'NULL') . " (expected: Completed)");
                 return false;
             }
 
+            error_log("=== completeOrder SUCCESS: orderId=$orderId ===");
             return true;
         } catch (PDOException $e) {
-            error_log("completeOrder Error: " . $e->getMessage());
+            error_log("completeOrder PDOException: " . $e->getMessage());
+            error_log("completeOrder Stack: " . $e->getTraceAsString());
             return false;
         }
     }

@@ -1400,10 +1400,10 @@ FROM CustomerOrder
 WHERE CustomerID IS NULL AND OrderStatus IN ('Paid', 'Completed')
 GROUP BY FulfilledByShopID;
 
--- 71. [架构重构] 店铺库存成本视图
+-- 71. [架构重构] 店铺历史库存总成本视图
 -- 替换 functions.php:prepareDashboardData 中的库存成本计算
--- 【修复】包含Reserved状态，因为Reserved商品仍然是库存的一部分
--- 【修复】移除对不存在的 si.UnitCost 列的引用，使用 ReleaseAlbum.BaseUnitCost 作为回退
+-- 【修复】包含 Available/Reserved/Sold 三种状态，计算历史上所有的库存成本
+-- 【修复】移除对不存在的 si.UnitCost 列的引用，从对应的订单表查询真正的采购成本
 CREATE OR REPLACE VIEW vw_shop_inventory_cost AS
 SELECT
     si.ShopID,
@@ -1437,7 +1437,7 @@ SELECT
     ), 0) AS TotalInventoryCost,
     COUNT(*) AS InventoryCount
 FROM StockItem si
-WHERE si.Status IN ('Available', 'Reserved')
+WHERE si.Status IN ('Available', 'Reserved', 'Sold')
 GROUP BY si.ShopID;
 
 -- 72. [架构重构] 店铺采购统计视图

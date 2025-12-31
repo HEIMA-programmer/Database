@@ -124,12 +124,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // 获取购物车商品
 // 【架构重构Phase2】使用DBProcedures替换直接SQL
 $cartItems = [];
+$cartItemsGrouped = []; // 【新增】分组后的购物车商品
 $total = 0;
 if (!empty($_SESSION['pos_cart'])) {
     $cartItems = DBProcedures::getCartItemsDetail($pdo, $_SESSION['pos_cart']);
 
     foreach ($cartItems as $item) {
         $total += $item['UnitPrice'];
+    }
+
+    // 【新增】按ReleaseID+ConditionGrade分组
+    foreach ($cartItems as $item) {
+        $key = $item['ReleaseID'] . '_' . $item['ConditionGrade'];
+        if (!isset($cartItemsGrouped[$key])) {
+            $cartItemsGrouped[$key] = [
+                'ReleaseID' => $item['ReleaseID'],
+                'Title' => $item['Title'],
+                'ArtistName' => $item['ArtistName'],
+                'ConditionGrade' => $item['ConditionGrade'],
+                'UnitPrice' => $item['UnitPrice'],
+                'Quantity' => 0,
+                'TotalPrice' => 0,
+                'StockItemIDs' => []
+            ];
+        }
+        $cartItemsGrouped[$key]['Quantity']++;
+        $cartItemsGrouped[$key]['TotalPrice'] += $item['UnitPrice'];
+        $cartItemsGrouped[$key]['StockItemIDs'][] = $item['StockItemID'];
     }
 
     // 清理已不可用的商品
@@ -213,25 +234,38 @@ require_once __DIR__ . '/../../includes/header.php';
                         <?php foreach ($availableStockGrouped as $group): ?>
                             <?php
                             $hasStock = $group['RemainingQuantity'] > 0;
-                            $itemClass = $hasStock ? '' : 'opacity-50';
+                            $isOutOfStock = ($group['Quantity'] ?? 0) == 0;
+                            $itemClass = $hasStock ? '' : ($isOutOfStock ? 'opacity-40' : 'opacity-60');
+                            $conditionBadgeClass = ($group['ConditionGrade'] === 'N/A') ? 'bg-dark text-muted' : 'bg-secondary';
                             ?>
-                            <div class="list-group-item bg-dark border-secondary <?= $itemClass ?>">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong class="<?= $hasStock ? 'text-white' : 'text-muted' ?>"><?= h($group['Title']) ?></strong>
-                                        <span class="<?= $hasStock ? 'text-warning' : 'text-secondary' ?>">- <?= h($group['ArtistName']) ?></span>
-                                        <span class="badge bg-secondary ms-2"><?= h($group['ConditionGrade']) ?></span>
-                                        <?php if ($hasStock): ?>
-                                            <span class="badge bg-info ms-1"><?= $group['RemainingQuantity'] ?> available</span>
-                                            <?php if ($group['InCartCount'] > 0): ?>
-                                                <span class="badge bg-success ms-1"><?= $group['InCartCount'] ?> in cart</span>
+                            <div class="list-group-item bg-dark border-secondary <?= $itemClass ?>" style="<?= $isOutOfStock ? 'border-left: 3px solid #6c757d !important;' : '' ?>">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center flex-wrap gap-1">
+                                            <strong class="<?= $hasStock ? 'text-white' : 'text-muted' ?>"><?= h($group['Title']) ?></strong>
+                                            <span class="<?= $hasStock ? 'text-warning' : 'text-secondary' ?> small">- <?= h($group['ArtistName']) ?></span>
+                                        </div>
+                                        <div class="mt-1">
+                                            <span class="badge <?= $conditionBadgeClass ?>"><?= h($group['ConditionGrade']) ?></span>
+                                            <?php if ($hasStock): ?>
+                                                <span class="badge bg-info"><?= $group['RemainingQuantity'] ?> available</span>
+                                                <?php if ($group['InCartCount'] > 0): ?>
+                                                    <span class="badge bg-success"><?= $group['InCartCount'] ?> in cart</span>
+                                                <?php endif; ?>
+                                            <?php elseif ($isOutOfStock): ?>
+                                                <span class="badge bg-dark text-muted border border-secondary">Out of Stock</span>
+                                            <?php else: ?>
+                                                <span class="badge bg-danger">All in cart</span>
                                             <?php endif; ?>
-                                        <?php else: ?>
-                                            <span class="badge bg-danger ms-1">0 in stock</span>
-                                        <?php endif; ?>
+                                        </div>
                                     </div>
-                                    <div class="<?= $hasStock ? 'text-warning' : 'text-muted' ?> fw-bold">
-                                        <?= $group['UnitPrice'] > 0 ? formatPrice($group['UnitPrice']) : '--' ?>
+                                    <div class="text-end ms-2">
+                                        <div class="<?= $hasStock ? 'text-warning' : 'text-muted' ?> fw-bold">
+                                            <?= ($group['UnitPrice'] ?? 0) > 0 ? formatPrice($group['UnitPrice']) : '--' ?>
+                                        </div>
+                                        <?php if ($isOutOfStock): ?>
+                                            <small class="text-muted">参考价</small>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <?php if ($hasStock): ?>
@@ -293,34 +327,59 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
     
     <!-- 右侧：购物车和结账 -->
+    <!-- 【修复】移除sticky-top，改用position-sticky并设置max-height避免遮挡 -->
     <div class="col-lg-5">
-        <div class="card bg-dark border-warning sticky-top" style="top: 20px;">
+        <div class="card bg-dark border-warning position-sticky" style="top: 80px; max-height: calc(100vh - 100px); overflow-y: auto;">
             <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0"><i class="fa-solid fa-shopping-cart me-2"></i>Current Sale</h5>
+                <h5 class="mb-0">
+                    <i class="fa-solid fa-shopping-cart me-2"></i>Current Sale
+                    <?php if (!empty($cartItems)): ?>
+                        <span class="badge bg-dark text-warning ms-2"><?= count($cartItems) ?> items</span>
+                    <?php endif; ?>
+                </h5>
             </div>
             <div class="card-body">
-                <?php if (empty($cartItems)): ?>
+                <?php if (empty($cartItemsGrouped)): ?>
                     <p class="text-muted text-center py-4">
                         <i class="fa-solid fa-cart-shopping fa-3x mb-3 d-block"></i>
                         No items in cart. Search and add items to begin.
                     </p>
                 <?php else: ?>
-                    <div class="list-group mb-3">
-                        <?php foreach ($cartItems as $item): ?>
-                            <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
-                                <div>
-                                    <div class="text-white"><?= h($item['Title']) ?></div>
-                                    <small class="text-muted"><?= h($item['ArtistName']) ?> | <?= h($item['ConditionGrade']) ?></small>
+                    <!-- 【修改】使用分组后的数据显示，同release同condition合并为一行 -->
+                    <div class="list-group mb-3" style="max-height: 300px; overflow-y: auto;">
+                        <?php foreach ($cartItemsGrouped as $group): ?>
+                            <div class="list-group-item bg-dark border-secondary">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="text-white fw-semibold"><?= h($group['Title']) ?></div>
+                                        <small class="text-muted"><?= h($group['ArtistName']) ?></small>
+                                        <div class="mt-1">
+                                            <span class="badge bg-secondary"><?= h($group['ConditionGrade']) ?></span>
+                                            <?php if ($group['Quantity'] > 1): ?>
+                                                <span class="badge bg-info">x<?= $group['Quantity'] ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="text-warning fw-bold">
+                                            <?= formatPrice($group['TotalPrice']) ?>
+                                        </div>
+                                        <?php if ($group['Quantity'] > 1): ?>
+                                            <small class="text-muted"><?= formatPrice($group['UnitPrice']) ?> each</small>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="text-warning"><?= formatPrice($item['UnitPrice']) ?></span>
-                                    <form method="POST" class="d-inline">
-                                        <input type="hidden" name="action" value="remove_item">
-                                        <input type="hidden" name="stock_item_id" value="<?= $item['StockItemID'] ?>">
-                                        <button type="submit" class="btn btn-outline-danger btn-sm">
-                                            <i class="fa-solid fa-times"></i>
-                                        </button>
-                                    </form>
+                                <div class="mt-2 d-flex justify-content-end gap-1">
+                                    <?php foreach ($group['StockItemIDs'] as $idx => $stockId): ?>
+                                        <form method="POST" class="d-inline">
+                                            <input type="hidden" name="action" value="remove_item">
+                                            <input type="hidden" name="stock_item_id" value="<?= $stockId ?>">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove 1">
+                                                <i class="fa-solid fa-minus"></i>
+                                            </button>
+                                        </form>
+                                        <?php break; // 只显示一个删除按钮 ?>
+                                    <?php endforeach; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>

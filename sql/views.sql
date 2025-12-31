@@ -355,9 +355,9 @@ FROM StockItem;
 
 -- 17. [架构重构] 客户查找视图 - 通过 Email 查找会员
 -- 替换 pos_checkout.php 中的直接 Customer 查询
--- 【视图优化】改为引用 vw_customer_simple_list，消除冗余定义
+-- 注：此视图需独立定义，不依赖其他视图（避免创建顺序问题）
 CREATE OR REPLACE VIEW vw_customer_lookup AS
-SELECT CustomerID, Name, Email, TierID, Points FROM vw_customer_simple_list;
+SELECT CustomerID, Name, Email, TierID, Points FROM Customer;
 
 -- 18. [架构重构] 商品详情视图 - 包含完整的专辑和店铺信息
 -- 替换 product.php 中的多表联接查询

@@ -37,17 +37,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dispatch_stock'])) {
     } elseif ($quantity < 1) {
         flash("Quantity must be at least 1.", 'danger');
     } else {
-        // 【架构重构Phase2】使用DBProcedures替换直接SQL
-        $dispatchedCount = DBProcedures::dispatchWarehouseStock(
+        // 【新增】使用带确认流程的调配方法
+        // 创建调拨记录，需要仓库员工确认发货后才能完成
+        $initiatedCount = DBProcedures::initiateWarehouseDispatch(
             $pdo,
             $warehouseId,
             $targetShopId,
             $releaseId,
             $conditionGrade,
-            $quantity
+            $quantity,
+            $employeeId
         );
 
-        if ($dispatchedCount > 0) {
+        if ($initiatedCount > 0) {
             // 获取目标店铺名称
             $targetShopName = '';
             foreach ($retailShops as $shop) {
@@ -57,9 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dispatch_stock'])) {
                 }
             }
 
-            flash("Successfully dispatched $dispatchedCount item(s) to $targetShopName.", 'success');
+            flash("已创建 $initiatedCount 件商品到 $targetShopName 的调拨请求。请等待仓库员工确认发货。", 'success');
         } else {
-            flash("Dispatch failed: Not enough stock available or an error occurred.", 'danger');
+            flash("调配失败：库存不足或发生错误。", 'danger');
         }
     }
 
@@ -224,9 +226,13 @@ require_once __DIR__ . '/../../includes/header.php';
                         <small class="text-muted">最大可调配: <span id="dispatch_max_qty_hint">-</span></small>
                     </div>
 
-                    <div class="alert alert-warning">
+                    <div class="alert alert-info">
                         <i class="fa-solid fa-info-circle me-2"></i>
-                        调配后，库存将从Warehouse转移到目标店铺，采购成本将计入目标店铺的支出。
+                        <strong>调配流程说明：</strong><br>
+                        1. Admin创建调配请求（当前步骤）<br>
+                        2. 仓库员工确认发货<br>
+                        3. 目标店铺员工确认收货<br>
+                        调拨完成后库存才会正式转移到目标店铺。
                     </div>
                 </div>
                 <div class="modal-footer border-secondary">

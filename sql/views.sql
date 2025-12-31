@@ -1618,14 +1618,16 @@ SELECT CustomerID, Name, Email, Points FROM vw_customer_simple_list;
 
 -- 84. [架构重构Phase2] 库存价格映射视图
 -- 替换 buyback.php 中的价格映射查询
+-- 【修复】添加 ShopID 字段，确保多店铺场景下价格隔离正确
 CREATE OR REPLACE VIEW vw_stock_price_map AS
 SELECT
+    ShopID,
     ReleaseID,
     ConditionGrade,
     MAX(UnitPrice) as CurrentPrice
 FROM StockItem
 WHERE Status = 'Available'
-GROUP BY ReleaseID, ConditionGrade;
+GROUP BY ShopID, ReleaseID, ConditionGrade;
 
 -- 85. [架构重构Phase2] 最近回购记录详情视图
 -- 替换 buyback.php 中的最近回购查询

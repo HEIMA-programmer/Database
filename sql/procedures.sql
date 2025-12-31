@@ -824,16 +824,28 @@ CREATE PROCEDURE sp_add_supplier(
     OUT p_supplier_id INT
 )
 BEGIN
+    DECLARE v_existing_count INT DEFAULT 0;
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         SET p_supplier_id = -1;
         RESIGNAL;
     END;
 
-    INSERT INTO Supplier (Name, Email)
-    VALUES (p_name, p_email);
+    -- 【新增】检查是否存在同名供应商
+    SELECT COUNT(*) INTO v_existing_count
+    FROM Supplier
+    WHERE Name = p_name;
 
-    SET p_supplier_id = LAST_INSERT_ID();
+    IF v_existing_count > 0 THEN
+        -- 返回-2表示重名
+        SET p_supplier_id = -2;
+    ELSE
+        INSERT INTO Supplier (Name, Email)
+        VALUES (p_name, p_email);
+
+        SET p_supplier_id = LAST_INSERT_ID();
+    END IF;
 END$$
 
 -- ------------------------------------------------
@@ -906,16 +918,28 @@ CREATE PROCEDURE sp_add_release(
     OUT p_release_id INT
 )
 BEGIN
+    DECLARE v_existing_count INT DEFAULT 0;
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         SET p_release_id = -1;
         RESIGNAL;
     END;
 
-    INSERT INTO ReleaseAlbum (Title, ArtistName, LabelName, ReleaseYear, Genre, Format, Description)
-    VALUES (p_title, p_artist, p_label, p_year, p_genre, 'Vinyl', p_description);
+    -- 【新增】检查是否存在同名同艺术家的release
+    SELECT COUNT(*) INTO v_existing_count
+    FROM ReleaseAlbum
+    WHERE Title = p_title AND ArtistName = p_artist;
 
-    SET p_release_id = LAST_INSERT_ID();
+    IF v_existing_count > 0 THEN
+        -- 返回-2表示重名
+        SET p_release_id = -2;
+    ELSE
+        INSERT INTO ReleaseAlbum (Title, ArtistName, LabelName, ReleaseYear, Genre, Format, Description)
+        VALUES (p_title, p_artist, p_label, p_year, p_genre, 'Vinyl', p_description);
+
+        SET p_release_id = LAST_INSERT_ID();
+    END IF;
 END$$
 
 -- ------------------------------------------------
@@ -1533,6 +1557,10 @@ BEGIN
     IF v_items_processed = 0 THEN
         DELETE FROM CustomerOrder WHERE OrderID = p_order_id;
         SET p_order_id = -2;
+    ELSE
+        -- 【修复】POS订单直接完成，不需要经过Pending状态
+        -- 调用完成订单存储过程，自动更新库存状态为Sold并处理积分
+        CALL sp_complete_order(p_order_id);
     END IF;
 END$$
 

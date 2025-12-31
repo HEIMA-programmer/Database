@@ -1137,6 +1137,23 @@ WHERE si.Status = 'Available'
 GROUP BY si.ShopID, si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade
 ORDER BY r.Title, FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG');
 
+-- 57b. [新增] POS所有Release视图（包括无库存的）
+-- 用于在POS界面显示所有release，即使本店没有库存
+CREATE OR REPLACE VIEW vw_pos_all_releases AS
+SELECT
+    r.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    r.Genre,
+    r.ReleaseYear,
+    COALESCE(
+        (SELECT MIN(si2.UnitPrice) FROM StockItem si2
+         WHERE si2.ReleaseID = r.ReleaseID AND si2.Status = 'Available'),
+        r.BaseUnitCost * 1.5
+    ) AS SuggestedPrice
+FROM ReleaseAlbum r
+ORDER BY r.Title;
+
 -- 58. [架构重构] 待处理调拨列表（源店铺视角）
 -- 替换 fulfillment.php 中的待发货调拨查询
 CREATE OR REPLACE VIEW vw_fulfillment_pending_transfers AS

@@ -666,6 +666,7 @@ function prepareDashboardData($pdo, $shopId = null) {
 
 /**
  * 准备用户管理页面数据
+ * 【修改】移除Admin角色选项，防止通过UI创建Admin账户
  */
 function prepareUsersPageData($pdo) {
     require_once __DIR__ . '/db_procedures.php';
@@ -674,7 +675,7 @@ function prepareUsersPageData($pdo) {
         'employees' => DBProcedures::getEmployeeList($pdo),
         'customers' => DBProcedures::getCustomerList($pdo),
         'shops'     => DBProcedures::getShopList($pdo),
-        'roles'     => ['Admin', 'Manager', 'Staff']
+        'roles'     => ['Manager', 'Staff']  // 【修改】移除Admin选项
     ];
 }
 
@@ -1116,7 +1117,11 @@ function handleSupplierAction($pdo, $action, $data) {
     switch ($action) {
         case 'add':
             $result = DBProcedures::addSupplier($pdo, $data['name'], $data['email']);
-            if ($result) {
+            if ($result === -2) {
+                // 【新增】重名检查
+                return ['success' => false, 'message' => "Supplier '{$data['name']}' already exists. Cannot add duplicate."];
+            }
+            if ($result && $result > 0) {
                 return ['success' => true, 'message' => 'Supplier added successfully.'];
             }
             return ['success' => false, 'message' => 'Failed to add supplier.'];
@@ -1151,7 +1156,11 @@ function handleReleaseAction($pdo, $action, $data) {
     switch ($action) {
         case 'add':
             $result = DBProcedures::addRelease($pdo, $data['title'], $data['artist'], $data['label'], $data['year'], $data['genre'], $data['desc']);
-            if ($result) {
+            if ($result === -2) {
+                // 【新增】重名检查
+                return ['success' => false, 'message' => "Release '{$data['title']}' by '{$data['artist']}' already exists. Cannot add duplicate."];
+            }
+            if ($result && $result > 0) {
                 return ['success' => true, 'message' => 'New release added to catalog.'];
             }
             return ['success' => false, 'message' => 'Failed to add release.'];

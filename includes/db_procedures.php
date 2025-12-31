@@ -931,7 +931,8 @@ class DBProcedures {
             $stmt = $pdo->prepare("CALL sp_add_supplier(?, ?, @supplier_id)");
             $stmt->execute([$name, $email]);
             $result = $pdo->query("SELECT @supplier_id AS supplier_id")->fetch();
-            return $result['supplier_id'] > 0 ? $result['supplier_id'] : false;
+            // 【修改】返回实际的ID值（包括-2表示重名）
+            return $result['supplier_id'];
         } catch (PDOException $e) {
             error_log("addSupplier Error: " . $e->getMessage());
             return false;
@@ -979,7 +980,8 @@ class DBProcedures {
             $stmt = $pdo->prepare("CALL sp_add_release(?, ?, ?, ?, ?, ?, @release_id)");
             $stmt->execute([$title, $artist, $label, $year, $genre, $desc]);
             $result = $pdo->query("SELECT @release_id AS release_id")->fetch();
-            return $result['release_id'] > 0 ? $result['release_id'] : false;
+            // 【修改】返回实际的ID值（包括-2表示重名）
+            return $result['release_id'];
         } catch (PDOException $e) {
             error_log("addRelease Error: " . $e->getMessage());
             return false;
@@ -1668,6 +1670,7 @@ class DBProcedures {
      */
     public static function getPosStockGrouped($pdo, $shopId, $search = '') {
         try {
+            // 【修改】首先获取有库存的release分组
             $sql = "SELECT * FROM vw_pos_stock_grouped WHERE ShopID = ?";
             $params = [$shopId];
 
@@ -1679,7 +1682,66 @@ class DBProcedures {
 
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
-            return $stmt->fetchAll();
+            $stockItems = $stmt->fetchAll();
+
+            // 创建已有库存的release+condition组合的键集
+            $existingKeys = [];
+            foreach ($stockItems as $item) {
+                $key = $item['ReleaseID'] . '_' . $item['ConditionGrade'];
+                $existingKeys[$key] = true;
+            }
+
+            // 【新增】获取所有release（包括无库存的）
+            $sqlAll = "SELECT * FROM vw_pos_all_releases WHERE 1=1";
+            $paramsAll = [];
+
+            if (!empty($search)) {
+                $sqlAll .= " AND (Title LIKE ? OR ArtistName LIKE ?)";
+                $paramsAll[] = "%$search%";
+                $paramsAll[] = "%$search%";
+            }
+
+            $stmtAll = $pdo->prepare($sqlAll);
+            $stmtAll->execute($paramsAll);
+            $allReleases = $stmtAll->fetchAll();
+
+            // 为没有库存的release创建一个默认条目（显示为0库存）
+            foreach ($allReleases as $release) {
+                // 检查这个release是否已经有库存条目
+                $hasStock = false;
+                foreach ($stockItems as $item) {
+                    if ($item['ReleaseID'] == $release['ReleaseID']) {
+                        $hasStock = true;
+                        break;
+                    }
+                }
+
+                // 如果没有任何库存，添加一个"N/A"条目显示为0
+                if (!$hasStock) {
+                    $stockItems[] = [
+                        'ShopID' => $shopId,
+                        'ReleaseID' => $release['ReleaseID'],
+                        'Title' => $release['Title'],
+                        'ArtistName' => $release['ArtistName'],
+                        'ConditionGrade' => 'N/A',
+                        'Quantity' => 0,
+                        'UnitPrice' => $release['SuggestedPrice'],
+                        'StockItemIds' => ''
+                    ];
+                }
+            }
+
+            // 按标题排序
+            usort($stockItems, function($a, $b) {
+                $titleCmp = strcmp($a['Title'], $b['Title']);
+                if ($titleCmp != 0) return $titleCmp;
+                // 有库存的排在前面
+                if ($a['Quantity'] > 0 && $b['Quantity'] == 0) return -1;
+                if ($a['Quantity'] == 0 && $b['Quantity'] > 0) return 1;
+                return 0;
+            });
+
+            return $stockItems;
         } catch (PDOException $e) {
             error_log("getPosStockGrouped Error: " . $e->getMessage());
             return [];
@@ -2608,6 +2670,68 @@ class DBProcedures {
         } catch (PDOException $e) {
             error_log("validateOrderForCancel Error: " . $e->getMessage());
             return false;
+        }
+    }
+
+    // ----------------
+    // 【新增】库存成本明细相关
+    // ----------------
+
+    /**
+     * 获取店铺已售商品成本明细
+     */
+    public static function getShopSoldInventoryCost($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT
+                    si.StockItemID,
+                    r.Title,
+                    r.ArtistName,
+                    si.ConditionGrade,
+                    si.UnitCost,
+                    si.UnitCost AS TotalCost,
+                    1 AS Quantity,
+                    si.DateSold,
+                    si.SourceType
+                FROM StockItem si
+                JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+                WHERE si.ShopID = ? AND si.Status = 'Sold'
+                ORDER BY si.DateSold DESC
+            ");
+            $stmt->execute([$shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopSoldInventoryCost Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺当前库存成本明细
+     */
+    public static function getShopCurrentInventoryCost($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT
+                    si.StockItemID,
+                    r.Title,
+                    r.ArtistName,
+                    si.ConditionGrade,
+                    si.UnitCost,
+                    si.UnitCost AS TotalCost,
+                    1 AS Quantity,
+                    si.AcquiredDate,
+                    si.SourceType
+                FROM StockItem si
+                JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+                WHERE si.ShopID = ? AND si.Status = 'Available'
+                ORDER BY r.Title, si.ConditionGrade
+            ");
+            $stmt->execute([$shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopCurrentInventoryCost Error: " . $e->getMessage());
+            return [];
         }
     }
 }

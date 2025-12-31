@@ -337,7 +337,10 @@ require_once __DIR__ . '/../../includes/header.php';
                             </td>
                             <td class="text-end text-warning fw-bold"><?= formatPrice($procurementCost) ?></td>
                             <td class="text-center">
-                                <span class="badge bg-info">Historical</span>
+                                <!-- 【新增】添加detail按钮 -->
+                                <a href="inventory_cost_details.php" class="btn btn-sm btn-outline-warning">
+                                    <i class="fa-solid fa-list"></i>
+                                </a>
                             </td>
                         </tr>
                     </tbody>

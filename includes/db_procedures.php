@@ -2053,6 +2053,22 @@ class DBProcedures {
         }
     }
 
+    /**
+     * 发起仓库库存调配（带确认流程）
+     * 创建调拨记录，需要仓库员工确认发货后才能完成
+     */
+    public static function initiateWarehouseDispatch($pdo, $warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity, $employeeId) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_initiate_warehouse_dispatch(?, ?, ?, ?, ?, ?, @initiated_count)");
+            $stmt->execute([$warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity, $employeeId]);
+            $result = $pdo->query("SELECT @initiated_count AS initiated_count")->fetch();
+            return (int)$result['initiated_count'];
+        } catch (PDOException $e) {
+            error_log("initiateWarehouseDispatch Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
     // ----------------
     // Buyback相关
     // ----------------

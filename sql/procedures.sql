@@ -1683,4 +1683,73 @@ BEGIN
       AND RequestType = 'TransferRequest';
 END$$
 
+-- ------------------------------------------------
+-- 29. 仓库库存调配发起存储过程（带确认流程）
+-- 创建调拨记录而不是直接移动库存，需要仓库员工确认发货
+-- ------------------------------------------------
+DROP PROCEDURE IF EXISTS sp_initiate_warehouse_dispatch$$
+CREATE PROCEDURE sp_initiate_warehouse_dispatch(
+    IN p_warehouse_id INT,
+    IN p_target_shop_id INT,
+    IN p_release_id INT,
+    IN p_condition_grade VARCHAR(10),
+    IN p_quantity INT,
+    IN p_employee_id INT,
+    OUT p_initiated_count INT
+)
+BEGIN
+    DECLARE v_stock_item_id INT;
+    DECLARE v_counter INT DEFAULT 0;
+    DECLARE done INT DEFAULT FALSE;
+
+    DECLARE stock_cursor CURSOR FOR
+        SELECT StockItemID
+        FROM StockItem
+        WHERE ShopID = p_warehouse_id
+          AND ReleaseID = p_release_id
+          AND ConditionGrade = p_condition_grade
+          AND Status = 'Available'
+        ORDER BY StockItemID
+        LIMIT 100; -- 安全限制
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        SET p_initiated_count = v_counter;
+        RESIGNAL;
+    END;
+
+    OPEN stock_cursor;
+    dispatch_loop: LOOP
+        IF v_counter >= p_quantity THEN
+            LEAVE dispatch_loop;
+        END IF;
+
+        FETCH stock_cursor INTO v_stock_item_id;
+        IF done THEN
+            LEAVE dispatch_loop;
+        END IF;
+
+        -- 创建调拨记录（状态为Pending，需要仓库员工确认发货）
+        INSERT INTO InventoryTransfer (
+            StockItemID, FromShopID, ToShopID,
+            AuthorizedByEmployeeID, Status
+        ) VALUES (
+            v_stock_item_id, p_warehouse_id, p_target_shop_id,
+            p_employee_id, 'Pending'
+        );
+
+        -- 更新库存状态为Reserved，防止被其他操作使用
+        UPDATE StockItem
+        SET Status = 'Reserved'
+        WHERE StockItemID = v_stock_item_id;
+
+        SET v_counter = v_counter + 1;
+    END LOOP;
+    CLOSE stock_cursor;
+
+    SET p_initiated_count = v_counter;
+END$$
+
 DELIMITER ;

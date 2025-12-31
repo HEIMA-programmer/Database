@@ -138,20 +138,6 @@ class DBProcedures {
     }
 
     /**
-     * 【新增】获取专辑基本信息
-     */
-    public static function getReleaseInfo($pdo, $releaseId) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_customer_catalog_grouped WHERE ReleaseID = ?");
-            $stmt->execute([$releaseId]);
-            return $stmt->fetch();
-        } catch (PDOException $e) {
-            error_log("getReleaseInfo Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
      * 【架构重构Phase3】获取指定条件的可用库存ID列表
      * 改用 vw_available_stock_ids 视图
      * @param int|null $shopId 店铺ID，如果为null则查询所有店铺
@@ -657,10 +643,11 @@ class DBProcedures {
 
     /**
      * 获取回购订单列表
+     * 【架构重构】使用 ShopID 直接查询，消除子查询对 Shop 表的直接访问
      */
     public static function getBuybackOrders($pdo, $shopId, $limit = 10) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_buyback_orders WHERE ShopName = (SELECT Name FROM Shop WHERE ShopID = ?) ORDER BY BuybackDate DESC LIMIT ?");
+            $stmt = $pdo->prepare("SELECT * FROM vw_buyback_orders WHERE ShopID = ? ORDER BY BuybackDate DESC LIMIT ?");
             $stmt->execute([$shopId, $limit]);
             return $stmt->fetchAll();
         } catch (PDOException $e) {
@@ -2235,25 +2222,6 @@ class DBProcedures {
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             error_log("getShopInventoryGrouped Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 【架构重构Phase2】获取其他店铺的库存信息
-     * 替换 requests.php 中的getOtherShopsInventory函数
-     */
-    public static function getOtherShopsInventory($pdo, $releaseId, $conditionGrade, $excludeShopId) {
-        try {
-            $stmt = $pdo->prepare("
-                SELECT * FROM vw_shop_inventory_by_release
-                WHERE ReleaseID = ? AND ConditionGrade = ? AND ShopID != ?
-                ORDER BY AvailableQuantity DESC
-            ");
-            $stmt->execute([$releaseId, $conditionGrade, $excludeShopId]);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getOtherShopsInventory Error: " . $e->getMessage());
             return [];
         }
     }

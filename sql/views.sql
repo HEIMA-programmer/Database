@@ -265,9 +265,11 @@ GROUP BY so.SupplierOrderID, s.Name, e.Name, sh.Name, so.OrderDate, so.Status, s
 
 -- 13. [Admin/Staff View] Buyback Orders
 -- 【修复】使用 LEFT JOIN 支持匿名客户回购（CustomerID 可为 NULL）
+-- 【架构重构】添加 ShopID 字段，消除 PHP 代码中的子查询
 CREATE OR REPLACE VIEW vw_buyback_orders AS
 SELECT
     bo.BuybackOrderID,
+    bo.ShopID,
     COALESCE(c.Name, 'Walk-in Customer') AS CustomerName,
     COALESCE(c.Email, '-') AS CustomerEmail,
     e.Name AS ProcessedBy,
@@ -281,7 +283,7 @@ LEFT JOIN Customer c ON bo.CustomerID = c.CustomerID
 JOIN Employee e ON bo.ProcessedByEmployeeID = e.EmployeeID
 JOIN Shop sh ON bo.ShopID = sh.ShopID
 LEFT JOIN BuybackOrderLine bol ON bo.BuybackOrderID = bol.BuybackOrderID
-GROUP BY bo.BuybackOrderID, c.Name, c.Email, e.Name, sh.Name, bo.BuybackDate, bo.Status, bo.TotalPayment;
+GROUP BY bo.BuybackOrderID, bo.ShopID, c.Name, c.Email, e.Name, sh.Name, bo.BuybackDate, bo.Status, bo.TotalPayment;
 
 -- ================================================
 -- 分析报表视图
@@ -1657,20 +1659,23 @@ FROM ManagerRequest
 WHERE RequestType = 'TransferRequest';
 
 -- 87. [架构重构Phase2] 店铺库存查询视图（按专辑和成色分组）
--- 替换 requests.php 中的getOtherShopsInventory函数
+-- 【架构重构】添加 Title, ArtistName 字段，修复 getShopInventoryGrouped() 的 SQL 错误
 CREATE OR REPLACE VIEW vw_shop_inventory_by_release AS
 SELECT
     si.ShopID,
     s.Name as ShopName,
     s.Type as ShopType,
     si.ReleaseID,
+    r.Title,
+    r.ArtistName,
     si.ConditionGrade,
     COUNT(*) as AvailableQuantity,
     MIN(si.UnitPrice) as UnitPrice
 FROM StockItem si
 JOIN Shop s ON si.ShopID = s.ShopID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 WHERE si.Status = 'Available'
-GROUP BY si.ShopID, s.Name, s.Type, si.ReleaseID, si.ConditionGrade
+GROUP BY si.ShopID, s.Name, s.Type, si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade
 HAVING AvailableQuantity > 0;
 
 -- 88. [架构重构] 结账购物车商品视图（含店铺地址）

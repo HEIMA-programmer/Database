@@ -804,11 +804,27 @@ class DBProcedures {
     
     /**
      * 完成订单
+     * 【修复】执行存储过程后验证订单状态是否真正更新为Completed
      */
     public static function completeOrder($pdo, $orderId) {
         try {
             $stmt = $pdo->prepare("CALL sp_complete_order(?)");
-            return $stmt->execute([$orderId]);
+            $stmt->execute([$orderId]);
+
+            // 清除可能的多结果集
+            while ($stmt->nextRowset()) {}
+
+            // 验证订单状态是否真的变成了Completed
+            $checkStmt = $pdo->prepare("SELECT OrderStatus FROM CustomerOrder WHERE OrderID = ?");
+            $checkStmt->execute([$orderId]);
+            $result = $checkStmt->fetch();
+
+            if (!$result || $result['OrderStatus'] !== 'Completed') {
+                error_log("completeOrder Verification Failed: Order $orderId status is " . ($result['OrderStatus'] ?? 'NULL'));
+                return false;
+            }
+
+            return true;
         } catch (PDOException $e) {
             error_log("completeOrder Error: " . $e->getMessage());
             return false;
@@ -2680,6 +2696,7 @@ class DBProcedures {
 
     /**
      * 获取店铺已售商品成本明细
+     * 【修复】从 SupplierOrderLine 或 BuybackOrderLine 查询真正的成本
      */
     public static function getShopSoldInventoryCost($pdo, $shopId) {
         try {
@@ -2689,8 +2706,52 @@ class DBProcedures {
                     r.Title,
                     r.ArtistName,
                     si.ConditionGrade,
-                    si.UnitCost,
-                    si.UnitCost AS TotalCost,
+                    CASE
+                        WHEN si.SourceType = 'Supplier' THEN
+                            COALESCE(
+                                (SELECT sol.UnitCost
+                                 FROM SupplierOrderLine sol
+                                 WHERE sol.SupplierOrderID = si.SourceOrderID
+                                 AND sol.ReleaseID = si.ReleaseID
+                                 AND sol.ConditionGrade = si.ConditionGrade
+                                 LIMIT 1),
+                                r.BaseUnitCost
+                            )
+                        WHEN si.SourceType = 'Buyback' THEN
+                            COALESCE(
+                                (SELECT bol.UnitPrice
+                                 FROM BuybackOrderLine bol
+                                 WHERE bol.BuybackOrderID = si.SourceOrderID
+                                 AND bol.ReleaseID = si.ReleaseID
+                                 AND bol.ConditionGrade = si.ConditionGrade
+                                 LIMIT 1),
+                                r.BaseUnitCost
+                            )
+                        ELSE r.BaseUnitCost
+                    END AS UnitCost,
+                    CASE
+                        WHEN si.SourceType = 'Supplier' THEN
+                            COALESCE(
+                                (SELECT sol.UnitCost
+                                 FROM SupplierOrderLine sol
+                                 WHERE sol.SupplierOrderID = si.SourceOrderID
+                                 AND sol.ReleaseID = si.ReleaseID
+                                 AND sol.ConditionGrade = si.ConditionGrade
+                                 LIMIT 1),
+                                r.BaseUnitCost
+                            )
+                        WHEN si.SourceType = 'Buyback' THEN
+                            COALESCE(
+                                (SELECT bol.UnitPrice
+                                 FROM BuybackOrderLine bol
+                                 WHERE bol.BuybackOrderID = si.SourceOrderID
+                                 AND bol.ReleaseID = si.ReleaseID
+                                 AND bol.ConditionGrade = si.ConditionGrade
+                                 LIMIT 1),
+                                r.BaseUnitCost
+                            )
+                        ELSE r.BaseUnitCost
+                    END AS TotalCost,
                     1 AS Quantity,
                     si.DateSold,
                     si.SourceType
@@ -2709,6 +2770,7 @@ class DBProcedures {
 
     /**
      * 获取店铺当前库存成本明细
+     * 【修复】从 SupplierOrderLine 或 BuybackOrderLine 查询真正的成本
      */
     public static function getShopCurrentInventoryCost($pdo, $shopId) {
         try {
@@ -2718,8 +2780,52 @@ class DBProcedures {
                     r.Title,
                     r.ArtistName,
                     si.ConditionGrade,
-                    si.UnitCost,
-                    si.UnitCost AS TotalCost,
+                    CASE
+                        WHEN si.SourceType = 'Supplier' THEN
+                            COALESCE(
+                                (SELECT sol.UnitCost
+                                 FROM SupplierOrderLine sol
+                                 WHERE sol.SupplierOrderID = si.SourceOrderID
+                                 AND sol.ReleaseID = si.ReleaseID
+                                 AND sol.ConditionGrade = si.ConditionGrade
+                                 LIMIT 1),
+                                r.BaseUnitCost
+                            )
+                        WHEN si.SourceType = 'Buyback' THEN
+                            COALESCE(
+                                (SELECT bol.UnitPrice
+                                 FROM BuybackOrderLine bol
+                                 WHERE bol.BuybackOrderID = si.SourceOrderID
+                                 AND bol.ReleaseID = si.ReleaseID
+                                 AND bol.ConditionGrade = si.ConditionGrade
+                                 LIMIT 1),
+                                r.BaseUnitCost
+                            )
+                        ELSE r.BaseUnitCost
+                    END AS UnitCost,
+                    CASE
+                        WHEN si.SourceType = 'Supplier' THEN
+                            COALESCE(
+                                (SELECT sol.UnitCost
+                                 FROM SupplierOrderLine sol
+                                 WHERE sol.SupplierOrderID = si.SourceOrderID
+                                 AND sol.ReleaseID = si.ReleaseID
+                                 AND sol.ConditionGrade = si.ConditionGrade
+                                 LIMIT 1),
+                                r.BaseUnitCost
+                            )
+                        WHEN si.SourceType = 'Buyback' THEN
+                            COALESCE(
+                                (SELECT bol.UnitPrice
+                                 FROM BuybackOrderLine bol
+                                 WHERE bol.BuybackOrderID = si.SourceOrderID
+                                 AND bol.ReleaseID = si.ReleaseID
+                                 AND bol.ConditionGrade = si.ConditionGrade
+                                 LIMIT 1),
+                                r.BaseUnitCost
+                            )
+                        ELSE r.BaseUnitCost
+                    END AS TotalCost,
                     1 AS Quantity,
                     si.AcquiredDate,
                     si.SourceType

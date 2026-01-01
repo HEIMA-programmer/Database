@@ -277,7 +277,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             const formData = new FormData();
                             formData.append('release_id', releaseId);
 
-                            const response = await fetch('api_get_inventory_price.php', {
+                            const response = await fetch('../api/manager/inventory_price.php', {
                                 method: 'POST',
                                 body: formData
                             });
@@ -321,7 +321,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             formData.append('release_id', releaseId);
                             formData.append('condition', condition);
 
-                            const response = await fetch('api_get_inventory_price.php', {
+                            const response = await fetch('../api/manager/inventory_price.php', {
                                 method: 'POST',
                                 body: formData
                             });

@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/../config/db_connect.php';
-session_start();
+// 【修复】防止重复启动session
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // 清除所有 Session 变量
 $_SESSION = [];

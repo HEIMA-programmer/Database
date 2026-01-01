@@ -5,7 +5,10 @@
  * - 通过 DBProcedures 进行所有数据库操作
  * - 通过 functions.php 进行业务逻辑处理
  */
-session_start();
+// 【修复】防止重复启动session
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';

@@ -11,24 +11,6 @@ class DBProcedures {
     // ----------------
 
 
-    // 【函数冗余修复】getStockItemStatus() 已删除
-    // 该函数功能已被 getStockItemInfo() 替代，后者返回更完整的信息
-
-    /**
-     * 获取库存商品完整信息（包含ShopID和Status）
-     * 用于购物车店铺一致性验证
-     */
-    public static function getStockItemInfo($pdo, $stockId) {
-        try {
-            $stmt = $pdo->prepare("SELECT StockItemID, ShopID, Status FROM vw_stock_item_status WHERE StockItemID = ?");
-            $stmt->execute([$stockId]);
-            return $stmt->fetch(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            error_log("getStockItemInfo Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
     /**
      * 【并发安全修复】使用行锁获取并验证库存状态
      * 调用存储过程 sp_get_stock_item_with_lock，在事务中锁定行防止并发超卖

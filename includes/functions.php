@@ -65,6 +65,30 @@ function hasRole($role) {
 }
 
 /**
+ * 【Session安全修复】安全获取session中的用户属性
+ * 避免直接访问 $_SESSION['user'] 可能导致的空指针异常
+ *
+ * @param string $key 要获取的属性名（如 'ShopID', 'ShopType', 'Role'）
+ * @param mixed $default 默认值
+ * @return mixed
+ */
+function getSessionUserAttr($key, $default = null) {
+    // 优先从 $_SESSION['user'] 数组获取
+    if (isset($_SESSION['user']) && isset($_SESSION['user'][$key])) {
+        return $_SESSION['user'][$key];
+    }
+    // 回退到直接的 session 变量（兼容旧代码）
+    $fallbackKey = strtolower($key);
+    if ($fallbackKey === 'shopid' && isset($_SESSION['shop_id'])) {
+        return $_SESSION['shop_id'];
+    }
+    if ($fallbackKey === 'shopname' && isset($_SESSION['shop_name'])) {
+        return $_SESSION['shop_name'];
+    }
+    return $default;
+}
+
+/**
  * 【重构】根据Unit Cost计算建议售价
  * 低价产品：低比率上浮（薄利多销）
  * 高价产品：高比率上浮（单品利润大）
@@ -205,6 +229,7 @@ function checkMembershipUpgrade($pdo, $customerId, $amountSpent, $oldTierId = nu
  * 包含库存验证、重复检查和店铺一致性验证
  *
  * 【修复】验证店铺一致性：购物车只能包含同一店铺的商品
+ * 【并发安全修复】使用事务和行锁防止并发超卖
  *
  * @param PDO $pdo
  * @param int $stockId
@@ -222,37 +247,56 @@ function addToCart($pdo, $stockId) {
         return ['success' => false, 'message' => 'Item already in cart.'];
     }
 
-    // 【修复】获取商品完整信息（包含ShopID）
-    $itemInfo = DBProcedures::getStockItemInfo($pdo, $stockId);
+    try {
+        // 【并发安全修复】开启事务，使用行锁确保原子性
+        $pdo->beginTransaction();
 
-    if (!$itemInfo) {
-        return ['success' => false, 'message' => 'Item not found.'];
-    }
+        // 使用 FOR UPDATE 锁定行，防止并发修改
+        $itemInfo = DBProcedures::getStockItemInfoWithLock($pdo, $stockId);
 
-    if ($itemInfo['Status'] !== 'Available') {
-        return ['success' => false, 'message' => 'Item is no longer available.'];
-    }
-
-    // 【修复】验证店铺一致性
-    $itemShopId = $itemInfo['ShopID'];
-
-    if (!empty($_SESSION['cart'])) {
-        // 如果购物车不为空，检查是否与已选店铺一致
-        if (isset($_SESSION['selected_shop_id']) && $_SESSION['selected_shop_id'] != $itemShopId) {
-            return [
-                'success' => false,
-                'message' => 'Cannot add items from different stores. Please complete or clear your current cart first.'
-            ];
+        if (!$itemInfo) {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Item not found.'];
         }
-    }
 
-    // 设置或确认选中的店铺ID
-    if (!isset($_SESSION['selected_shop_id'])) {
-        $_SESSION['selected_shop_id'] = $itemShopId;
-    }
+        if ($itemInfo['Status'] !== 'Available') {
+            $pdo->rollBack();
+            return ['success' => false, 'message' => 'Item is no longer available.'];
+        }
 
-    $_SESSION['cart'][] = $stockId;
-    return ['success' => true, 'message' => 'Item added to cart.'];
+        // 【修复】验证店铺一致性
+        $itemShopId = $itemInfo['ShopID'];
+
+        if (!empty($_SESSION['cart'])) {
+            // 如果购物车不为空，检查是否与已选店铺一致
+            if (isset($_SESSION['selected_shop_id']) && $_SESSION['selected_shop_id'] != $itemShopId) {
+                $pdo->rollBack();
+                return [
+                    'success' => false,
+                    'message' => 'Cannot add items from different stores. Please complete or clear your current cart first.'
+                ];
+            }
+        }
+
+        // 设置或确认选中的店铺ID
+        if (!isset($_SESSION['selected_shop_id'])) {
+            $_SESSION['selected_shop_id'] = $itemShopId;
+        }
+
+        $_SESSION['cart'][] = $stockId;
+
+        // 提交事务（释放行锁）
+        $pdo->commit();
+
+        return ['success' => true, 'message' => 'Item added to cart.'];
+
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log("addToCart Error: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Failed to add item to cart.'];
+    }
 }
 
 /**

@@ -95,6 +95,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
+            // 【事务安全修复】使用事务确保订单创建的原子性
+            $pdo->beginTransaction();
+
             // 【架构重构】使用存储过程创建订单
             $stockItemIds = array_column($cartItems, 'StockItemID');
             $result = DBProcedures::createOnlineOrderComplete(
@@ -110,18 +113,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($result && isset($result['order_id']) && $result['order_id'] > 0) {
                 $orderId = $result['order_id'];
 
+                // 提交事务
+                $pdo->commit();
+
                 // 清空购物车
                 $_SESSION['cart'] = [];
+                unset($_SESSION['selected_shop_id']);
 
                 flash('Order #' . $orderId . ' created! Please complete your payment.', 'info');
                 header('Location: pay.php?order_id=' . $orderId);
                 exit;
             } elseif (isset($result['error']) && $result['error'] == 'no_available_items') {
+                $pdo->rollBack();
                 $errors[] = 'Some items are no longer available. Please review your cart.';
             } else {
+                $pdo->rollBack();
                 $errors[] = 'Order creation failed. Please try again.';
             }
         } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log("Checkout order creation error: " . $e->getMessage());
             $errors[] = 'Order failed: ' . $e->getMessage();
         }
     }

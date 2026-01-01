@@ -9,9 +9,13 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Manager');
 
-// 【修复】兼容多种session结构
-$shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;
-$shopType = $_SESSION['user']['ShopType'] ?? 'Retail';
+// 【Session安全修复】检查 $_SESSION['user'] 存在性，兼容多种session结构
+$shopId = (isset($_SESSION['user']) && isset($_SESSION['user']['ShopID']))
+    ? $_SESSION['user']['ShopID']
+    : ($_SESSION['shop_id'] ?? null);
+$shopType = (isset($_SESSION['user']) && isset($_SESSION['user']['ShopType']))
+    ? $_SESSION['user']['ShopType']
+    : 'Retail';
 
 if (!$shopId) {
     flash('Shop ID not found in session. Please re-login.', 'warning');

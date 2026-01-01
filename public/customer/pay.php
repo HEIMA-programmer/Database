@@ -39,9 +39,10 @@ $remainingSeconds = $expiryTime - time();
 $isExpired = $remainingSeconds <= 0;
 
 // 如果已超时，自动取消订单
+// 【语言一致性修复】使用英文提示，与界面保持一致
 if ($isExpired) {
     DBProcedures::cancelOrder($pdo, $orderId);
-    flash("支付已超时，订单已自动取消。", 'warning');
+    flash("Payment timeout. Order has been automatically cancelled.", 'warning');
     header("Location: orders.php");
     exit();
 }
@@ -75,9 +76,10 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
             <div class="card-body">
                 <!-- 倒计时显示 -->
+                <!-- 【语言一致性修复】使用英文 -->
                 <div class="alert alert-danger text-center mb-4" id="countdown-alert">
                     <i class="fa-solid fa-clock me-2"></i>
-                    <span>剩余支付时间: </span>
+                    <span>Time remaining: </span>
                     <span id="countdown-display" class="fw-bold" data-remaining="<?= $remainingSeconds ?>"></span>
                 </div>
 
@@ -146,20 +148,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateCountdown() {
         if (remaining <= 0) {
-            countdownEl.textContent = '已超时';
+            // 【语言一致性修复】使用英文
+            countdownEl.textContent = 'Expired';
             alertEl.classList.remove('alert-danger');
             alertEl.classList.add('alert-dark');
-            // 自动取消并跳转
+            // Auto cancel and redirect
             fetch('cancel_order.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                credentials: 'same-origin', // 确保发送session cookies
+                credentials: 'same-origin',
                 body: 'order_id=<?= $order['OrderID'] ?>&auto_cancel=1'
             }).then(response => response.json())
             .then(data => {
-                alert('支付已超时，订单已自动取消');
+                alert('Payment timeout. Order has been automatically cancelled.');
                 window.location.href = 'orders.php';
             }).catch(error => {
                 window.location.href = 'orders.php';

@@ -1492,4 +1492,24 @@ BEGIN
     SET p_initiated_count = v_counter;
 END$$
 
+-- ================================================
+-- 12. 库存并发安全查询
+-- ================================================
+
+-- 【并发安全】使用行锁获取库存信息
+-- 用于防止并发超卖，必须在事务中调用
+-- 注意：FOR UPDATE 只能用于基表，不能用于视图
+DROP PROCEDURE IF EXISTS sp_get_stock_item_with_lock$$
+CREATE PROCEDURE sp_get_stock_item_with_lock(
+    IN p_stock_id INT
+)
+BEGIN
+    -- 使用 FOR UPDATE 锁定行，防止并发修改
+    -- 调用方必须在事务中调用此过程
+    SELECT StockItemID, ShopID, Status
+    FROM StockItem
+    WHERE StockItemID = p_stock_id
+    FOR UPDATE;
+END$$
+
 DELIMITER ;

@@ -1468,6 +1468,7 @@ SELECT
 FROM CustomerOrder;
 
 -- 93. [架构重构Phase3] 目录按店铺分组视图
+-- 【修复】使用 CROSS JOIN 确保每个店铺都显示所有专辑（包括无库存的）
 -- 替换 functions.php:prepareCatalogPageDataByShop 中的直接表访问
 CREATE OR REPLACE VIEW vw_catalog_by_shop_grouped AS
 SELECT
@@ -1476,7 +1477,7 @@ SELECT
     r.Genre,
     r.ReleaseYear AS Year,
     r.ArtistName,
-    si.ShopID,
+    s.ShopID,
     COUNT(CASE WHEN si.Status = 'Available' THEN 1 END) AS TotalAvailable,
     MIN(CASE WHEN si.Status = 'Available' THEN si.UnitPrice END) AS MinPrice,
     MAX(CASE WHEN si.Status = 'Available' THEN si.UnitPrice END) AS MaxPrice,
@@ -1484,8 +1485,9 @@ SELECT
         ORDER BY FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P')
     ) AS AvailableConditions
 FROM ReleaseAlbum r
-LEFT JOIN StockItem si ON si.ReleaseID = r.ReleaseID
-GROUP BY r.ReleaseID, r.Title, r.Genre, r.ReleaseYear, r.ArtistName, si.ShopID;
+CROSS JOIN Shop s
+LEFT JOIN StockItem si ON si.ReleaseID = r.ReleaseID AND si.ShopID = s.ShopID
+GROUP BY r.ReleaseID, r.Title, r.Genre, r.ReleaseYear, r.ArtistName, s.ShopID;
 
 -- 94. [架构重构Phase3] 专辑基本信息视图
 -- 替换 functions.php:getReleaseDetailsByShop 中的直接 ReleaseAlbum 访问
@@ -1510,6 +1512,17 @@ FROM ReleaseAlbum
 WHERE Genre IS NOT NULL AND Genre != ''
 ORDER BY Genre;
 
+-- 96. [新增] 专辑曲目列表视图
+-- 用于专辑详情页显示曲目信息
+CREATE OR REPLACE VIEW vw_release_tracks AS
+SELECT
+    TrackID,
+    ReleaseID,
+    Title,
+    TrackNumber,
+    Duration
+FROM Track
+ORDER BY ReleaseID, TrackNumber;
 
 -- 97. [架构重构Phase3] 店铺库存数量统计视图
 -- 替换 db_procedures.php:getShopStockCount 中的直接表访问

@@ -468,28 +468,30 @@ class DBProcedures {
 
     /**
      * 接收供应商订单并生成库存
-     * 【修复】添加事务包装确保原子性 - 接收订单涉及更新订单状态和生成多个库存项
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function receiveSupplierOrder($pdo, $orderId, $batchNo, $conditionGrade = 'New', $markupRate = 0.50) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             $stmt = $pdo->prepare("CALL sp_receive_supplier_order(?, ?, ?, ?)");
             $result = $stmt->execute([$orderId, $batchNo, $conditionGrade, $markupRate]);
 
-            if ($result) {
+            if ($result && $ownTransaction) {
                 $pdo->commit();
-                return true;
             }
-            $pdo->rollBack();
-            return false;
+            return $result;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("receiveSupplierOrder Error: " . $e->getMessage());
-            return false;
+            throw $e; // 重新抛出让外层处理
         }
     }
 
@@ -499,29 +501,37 @@ class DBProcedures {
 
     /**
      * 处理客户回购
-     * 【修复】添加事务包装确保原子性 - 回购涉及创建订单、订单行和生成库存多个步骤
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function processBuyback($pdo, $customerId, $employeeId, $shopId, $releaseId, $quantity, $unitPrice, $conditionGrade, $resalePrice) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             $stmt = $pdo->prepare("CALL sp_process_buyback(?, ?, ?, ?, ?, ?, ?, ?, @buyback_id)");
             $stmt->execute([$customerId, $employeeId, $shopId, $releaseId, $quantity, $unitPrice, $conditionGrade, $resalePrice]);
             $result = $pdo->query("SELECT @buyback_id AS buyback_id")->fetch();
 
             if ($result['buyback_id'] > 0) {
-                $pdo->commit();
+                if ($ownTransaction) {
+                    $pdo->commit();
+                }
                 return $result['buyback_id'];
             }
-            $pdo->rollBack();
+            if ($ownTransaction) {
+                $pdo->rollBack();
+            }
             return false;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("processBuyback Error: " . $e->getMessage());
-            return false;
+            throw $e; // 重新抛出让外层处理
         }
     }
 
@@ -532,28 +542,30 @@ class DBProcedures {
 
     /**
      * 完成库存调拨
-     * 【修复】添加事务包装确保原子性 - 调拨涉及更新调拨状态和库存位置多个步骤
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function completeTransfer($pdo, $transferId, $receivedByEmployeeId) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             $stmt = $pdo->prepare("CALL sp_complete_transfer(?, ?)");
             $result = $stmt->execute([$transferId, $receivedByEmployeeId]);
 
-            if ($result) {
+            if ($result && $ownTransaction) {
                 $pdo->commit();
-                return true;
             }
-            $pdo->rollBack();
-            return false;
+            return $result;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("completeTransfer Error: " . $e->getMessage());
-            return false;
+            throw $e; // 重新抛出让外层处理
         }
     }
 
@@ -1194,28 +1206,30 @@ class DBProcedures {
 
     /**
      * Admin审批申请
-     * 【修复】添加事务包装确保原子性
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function respondToRequest($pdo, $requestId, $adminId, $approved, $responseNote) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性（调货申请涉及库存状态变更）
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             $stmt = $pdo->prepare("CALL sp_respond_to_request(?, ?, ?, ?)");
             $result = $stmt->execute([$requestId, $adminId, $approved, $responseNote]);
 
-            if ($result) {
+            if ($result && $ownTransaction) {
                 $pdo->commit();
-                return true;
             }
-            $pdo->rollBack();
-            return false;
+            return $result;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("respondToRequest Error: " . $e->getMessage());
-            return false;
+            throw $e; // 重新抛出让外层处理
         }
     }
 
@@ -1594,28 +1608,30 @@ class DBProcedures {
     /**
      * 确认调拨发货
      * 替换 fulfillment.php 中的调拨发货操作
-     * 【修复】添加事务包装确保原子性 - 发货涉及更新调拨状态和库存状态
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务，避免嵌套事务问题
      */
     public static function confirmTransferDispatch($pdo, $transferId, $employeeId) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             $stmt = $pdo->prepare("CALL sp_confirm_transfer_dispatch(?, ?)");
             $result = $stmt->execute([$transferId, $employeeId]);
 
-            if ($result) {
+            if ($result && $ownTransaction) {
                 $pdo->commit();
-                return true;
             }
-            $pdo->rollBack();
-            return false;
+            return $result;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("confirmTransferDispatch Error: " . $e->getMessage());
-            return false;
+            throw $e; // 重新抛出让外层处理
         }
     }
 
@@ -1623,24 +1639,26 @@ class DBProcedures {
     /**
      * 【架构重构】取消调拨
      * 替换 fulfillment.php 中的 DELETE FROM InventoryTransfer
-     * 【修复】添加事务包装确保原子性 - 取消涉及恢复库存状态和删除调拨记录
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function cancelTransfer($pdo, $transferId, $shopId) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             $stmt = $pdo->prepare("CALL sp_cancel_transfer(?, ?)");
             $result = $stmt->execute([$transferId, $shopId]);
 
-            if ($result) {
+            if ($result && $ownTransaction) {
                 $pdo->commit();
-                return true;
             }
-            $pdo->rollBack();
-            return false;
+            return $result;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("cancelTransfer Error: " . $e->getMessage());
@@ -1821,12 +1839,16 @@ class DBProcedures {
     /**
      * 发起仓库库存调配（带确认流程）
      * 创建调拨记录，需要仓库员工确认发货后才能完成
-     * 【修复】添加事务包装确保原子性 - 调配涉及创建多个调拨记录和更新库存状态
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function initiateWarehouseDispatch($pdo, $warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity, $employeeId) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             $stmt = $pdo->prepare("CALL sp_initiate_warehouse_dispatch(?, ?, ?, ?, ?, ?, @initiated_count)");
             $stmt->execute([$warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity, $employeeId]);
@@ -1834,17 +1856,21 @@ class DBProcedures {
             $count = (int)$result['initiated_count'];
 
             if ($count > 0) {
-                $pdo->commit();
+                if ($ownTransaction) {
+                    $pdo->commit();
+                }
                 return $count;
             }
-            $pdo->rollBack();
+            if ($ownTransaction) {
+                $pdo->rollBack();
+            }
             return 0;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("initiateWarehouseDispatch Error: " . $e->getMessage());
-            return 0;
+            throw $e; // 重新抛出让外层处理
         }
     }
 
@@ -2017,12 +2043,16 @@ class DBProcedures {
     /**
      * 创建完整的在线订单
      * 替换 checkout.php 中的订单创建流程
-     * 【修复】添加事务包装确保原子性 - 在线订单涉及创建订单、添加商品、预留库存多个步骤
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function createOnlineOrderComplete($pdo, $customerId, $shopId, $stockItemIds, $fulfillmentType, $shippingAddress, $shippingCost) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             // 将数组转换为逗号分隔的字符串
             $stockIdsStr = implode(',', $stockItemIds);
@@ -2032,23 +2062,29 @@ class DBProcedures {
             $result = $pdo->query("SELECT @order_id AS order_id, @total_amount AS total_amount")->fetch();
 
             if ($result['order_id'] > 0) {
-                $pdo->commit();
+                if ($ownTransaction) {
+                    $pdo->commit();
+                }
                 return [
                     'order_id' => $result['order_id'],
                     'total_amount' => $result['total_amount']
                 ];
             } elseif ($result['order_id'] == -2) {
-                $pdo->rollBack();
+                if ($ownTransaction) {
+                    $pdo->rollBack();
+                }
                 return ['error' => 'no_available_items'];
             }
-            $pdo->rollBack();
+            if ($ownTransaction) {
+                $pdo->rollBack();
+            }
             return false;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("createOnlineOrderComplete Error: " . $e->getMessage());
-            return false;
+            throw $e; // 重新抛出让外层处理
         }
     }
 
@@ -2059,12 +2095,16 @@ class DBProcedures {
     /**
      * 创建POS门店订单
      * 替换 pos.php 中的订单创建流程
-     * 【修复】添加事务包装确保原子性
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function createPosOrder($pdo, $customerId, $employeeId, $shopId, $stockItemIds) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             // 将数组转换为逗号分隔的字符串
             $stockIdsStr = implode(',', $stockItemIds);
@@ -2074,23 +2114,29 @@ class DBProcedures {
             $result = $pdo->query("SELECT @order_id AS order_id, @total_amount AS total_amount")->fetch();
 
             if ($result['order_id'] > 0) {
-                $pdo->commit();
+                if ($ownTransaction) {
+                    $pdo->commit();
+                }
                 return [
                     'order_id' => $result['order_id'],
                     'total_amount' => $result['total_amount']
                 ];
             } elseif ($result['order_id'] == -2) {
-                $pdo->rollBack();
+                if ($ownTransaction) {
+                    $pdo->rollBack();
+                }
                 return ['error' => 'no_available_items'];
             }
-            $pdo->rollBack();
+            if ($ownTransaction) {
+                $pdo->rollBack();
+            }
             return false;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("createPosOrder Error: " . $e->getMessage());
-            return false;
+            throw $e; // 重新抛出让外层处理
         }
     }
 
@@ -2243,6 +2289,7 @@ class DBProcedures {
 
     /**
      * 【架构重构Phase3】按店铺获取目录数据
+     * 【修复】配合修改后的视图，直接按ShopID查询，每个店铺显示所有15张专辑
      * 替换 functions.php:prepareCatalogPageDataByShop 中的直接表访问
      */
     public static function getCatalogByShop($pdo, $shopId, $search = '', $genre = '') {
@@ -2250,7 +2297,7 @@ class DBProcedures {
             $sql = "
                 SELECT ReleaseID, Title, Genre, Year, ArtistName, TotalAvailable, MinPrice, MaxPrice, AvailableConditions
                 FROM vw_catalog_by_shop_grouped
-                WHERE (ShopID = ? OR ShopID IS NULL)
+                WHERE ShopID = ?
             ";
             $params = [$shopId];
 
@@ -2266,7 +2313,7 @@ class DBProcedures {
                 $params[] = $genre;
             }
 
-            $sql .= " GROUP BY ReleaseID ORDER BY TotalAvailable DESC, Title ASC";
+            $sql .= " ORDER BY TotalAvailable DESC, Title ASC";
 
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
@@ -2303,6 +2350,21 @@ class DBProcedures {
         } catch (PDOException $e) {
             error_log("getReleaseInfo Error: " . $e->getMessage());
             return null;
+        }
+    }
+
+    /**
+     * 【新增】获取专辑曲目列表
+     * 用于专辑详情页显示曲目信息
+     */
+    public static function getReleaseTracks($pdo, $releaseId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_release_tracks WHERE ReleaseID = ? ORDER BY TrackNumber");
+            $stmt->execute([$releaseId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getReleaseTracks Error: " . $e->getMessage());
+            return [];
         }
     }
 

@@ -823,10 +823,14 @@ function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
         $stockItems = DBProcedures::getReleaseStockByCondition($pdo, $releaseId);
     }
 
+    // 3. 【新增】获取专辑曲目列表
+    $tracks = DBProcedures::getReleaseTracks($pdo, $releaseId);
+
     return [
         'found'      => true,
         'release'    => $release,
-        'stockItems' => $stockItems
+        'stockItems' => $stockItems,
+        'tracks'     => $tracks
     ];
 }
 

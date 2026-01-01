@@ -11,6 +11,9 @@ require_once __DIR__ . '/../../../includes/ApiResponse.php';
 
 requireRole('Admin');
 
+// 【修复】添加HTTP方法验证
+ApiResponse::requireMethod('GET');
+
 $action = $_GET['action'] ?? '';
 
 switch ($action) {

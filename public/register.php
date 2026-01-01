@@ -25,29 +25,34 @@ $error = '';
 // 【业务逻辑层调用】通过 functions.php 处理注册
 // =============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = trim($_POST['name'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $birthday = $_POST['birthday'] ?? null;
-    $password = $_POST['password'] ?? '';
-    $confirmPass = $_POST['confirm_password'] ?? '';
-
-    // 基础验证
-    if (empty($name) || empty($email) || empty($password)) {
-        $error = 'Please fill in all required fields.';
-    } elseif ($password !== $confirmPass) {
-        $error = 'Passwords do not match.';
-    } elseif (strlen($password) < 6) {
-        $error = 'Password must be at least 6 characters long.';
+    // 【安全】验证CSRF令牌
+    if (!validateCsrfToken($_POST['csrf_token'] ?? null)) {
+        $error = 'Invalid security token. Please refresh the page and try again.';
     } else {
-        // 调用注册函数（通过存储过程）
-        $result = registerNewCustomer($pdo, $name, $email, $password, $birthday ?: null);
+        $name = trim($_POST['name'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $birthday = $_POST['birthday'] ?? null;
+        $password = $_POST['password'] ?? '';
+        $confirmPass = $_POST['confirm_password'] ?? '';
 
-        if ($result['success']) {
-            flash("Welcome to Retro Echo, $name! Start your collection today.", 'success');
-            header("Location: " . BASE_URL . "/customer/catalog.php");
-            exit();
+        // 基础验证
+        if (empty($name) || empty($email) || empty($password)) {
+            $error = 'Please fill in all required fields.';
+        } elseif ($password !== $confirmPass) {
+            $error = 'Passwords do not match.';
+        } elseif (strlen($password) < 6) {
+            $error = 'Password must be at least 6 characters long.';
         } else {
-            $error = $result['message'];
+            // 调用注册函数（通过存储过程）
+            $result = registerNewCustomer($pdo, $name, $email, $password, $birthday ?: null);
+
+            if ($result['success']) {
+                flash("Welcome to Retro Echo, $name! Start your collection today.", 'success');
+                header("Location: " . BASE_URL . "/customer/catalog.php");
+                exit();
+            } else {
+                $error = $result['message'];
+            }
         }
     }
 }
@@ -76,6 +81,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
 
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
                     <div class="mb-3">
                         <label class="form-label text-muted small text-uppercase">Full Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" name="name" value="<?= h($_POST['name'] ?? '') ?>" required>

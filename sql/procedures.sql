@@ -442,32 +442,6 @@ BEGIN
 END$$
 
 -- ================================================
--- 5. 库存检查辅助函数
--- ================================================
-
--- 检查特定商品的可用库存数量
--- @deprecated 未被PHP代码使用，可考虑移除。视图 vw_shop_stock_count 提供了类似功能
-DROP FUNCTION IF EXISTS fn_get_available_stock$$
-CREATE FUNCTION fn_get_available_stock(
-    p_release_id INT,
-    p_shop_id INT,
-    p_condition_grade VARCHAR(10)
-) RETURNS INT
-READS SQL DATA
-BEGIN
-    DECLARE v_count INT;
-
-    SELECT COUNT(*) INTO v_count
-    FROM StockItem
-    WHERE ReleaseID = p_release_id
-      AND ShopID = p_shop_id
-      AND ConditionGrade = p_condition_grade
-      AND Status = 'Available';
-
-    RETURN v_count;
-END$$
-
--- ================================================
 -- 6. 库存超时释放机制
 -- ================================================
 
@@ -517,7 +491,7 @@ DELIMITER ;
 DROP EVENT IF EXISTS evt_release_expired_reservations;
 
 CREATE EVENT evt_release_expired_reservations
-ON SCHEDULE EVERY 15 MINUTE
+ON SCHEDULE EVERY 5 MINUTE
 STARTS CURRENT_TIMESTAMP
 DO
     CALL sp_release_expired_reservations();
@@ -994,6 +968,11 @@ BEGIN
                 IF done THEN
                     LEAVE transfer_loop;
                 END IF;
+
+                -- 【修复】先锁定库存，防止被其他订单抢占
+                UPDATE StockItem
+                SET Status = 'Reserved'
+                WHERE StockItemID = v_stock_item_id;
 
                 -- 创建调拨记录（状态为Pending，等待源店铺员工确认）
                 INSERT INTO InventoryTransfer (

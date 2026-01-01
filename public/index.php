@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/../config/db_connect.php';
-session_start();
+// 【Session管理修复】使用条件检查，避免重复调用session_start()
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 // 路由逻辑
 if (isset($_SESSION['role'])) {
     switch ($_SESSION['role']) {

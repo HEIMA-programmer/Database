@@ -8,7 +8,10 @@
 require_once __DIR__ . '/../config/db_connect.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-session_start();
+// 【Session管理修复】使用条件检查，避免重复调用session_start()
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // 已登录用户直接跳转
 if (isset($_SESSION['user_id'])) {

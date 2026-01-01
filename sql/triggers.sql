@@ -195,13 +195,21 @@ END$$
 -- ================================================
 -- 5. 客户订单总额触发器
 -- ================================================
+--
+-- 【设计说明 - 分层计算策略】
+-- 这些触发器计算的是 OrderLine 商品的基础小计 (SUM of PriceAtSale)
+-- 存储过程会在此基础上应用：折扣(Discount) + 运费(ShippingCost)
+-- 最终金额 = 触发器计算的基础金额 - 折扣 + 运费
+-- 这是"分层设计"而非冗余：触发器负责基础计算，存储过程负责最终调整
+--
 
--- 订单行插入时更新订单总额
+-- 订单行插入时更新订单基础总额
 DROP TRIGGER IF EXISTS trg_after_order_line_insert$$
 CREATE TRIGGER trg_after_order_line_insert
 AFTER INSERT ON OrderLine
 FOR EACH ROW
 BEGIN
+    -- 计算商品小计（不含折扣和运费）
     UPDATE CustomerOrder
     SET TotalAmount = (
         SELECT SUM(PriceAtSale)
@@ -243,7 +251,8 @@ END$$
 -- 6. 数据验证触发器
 -- ================================================
 
--- 防止修改已完成订单的订单行
+-- 防止修改已完成/已发货/已取消订单的订单行
+-- 【修复】添加 'Cancelled' 状态检查，防止误操作已取消的订单
 DROP TRIGGER IF EXISTS trg_before_order_line_update$$
 CREATE TRIGGER trg_before_order_line_update
 BEFORE UPDATE ON OrderLine
@@ -255,13 +264,15 @@ BEGIN
     FROM CustomerOrder
     WHERE OrderID = OLD.OrderID;
 
-    IF v_order_status IN ('Completed', 'Shipped') THEN
+    -- 【修复】添加 Cancelled 到不可修改状态列表
+    IF v_order_status IN ('Completed', 'Shipped', 'Cancelled') THEN
         SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Cannot modify completed or shipped orders';
+        SET MESSAGE_TEXT = 'Cannot modify completed, shipped or cancelled orders';
     END IF;
 END$$
 
--- 防止删除已完成订单的订单行
+-- 防止删除已完成/已发货/已取消订单的订单行
+-- 【修复】添加 'Cancelled' 状态检查
 DROP TRIGGER IF EXISTS trg_before_order_line_delete$$
 CREATE TRIGGER trg_before_order_line_delete
 BEFORE DELETE ON OrderLine
@@ -273,9 +284,10 @@ BEGIN
     FROM CustomerOrder
     WHERE OrderID = OLD.OrderID;
 
-    IF v_order_status IN ('Completed', 'Shipped') THEN
+    -- 【修复】添加 Cancelled 到不可删除状态列表
+    IF v_order_status IN ('Completed', 'Shipped', 'Cancelled') THEN
         SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Cannot delete items from completed or shipped orders';
+        SET MESSAGE_TEXT = 'Cannot delete items from completed, shipped or cancelled orders';
     END IF;
 END$$
 

@@ -47,7 +47,10 @@ $current_page = basename($_SERVER['PHP_SELF']);
         <?php if (hasRole('Staff')):
             // 【修复】根据店铺类型动态显示菜单
             // 仓库员工只显示 Fulfillment 和 Inventory
-            $isWarehouseStaff = ($_SESSION['user']['ShopType'] ?? '') === 'Warehouse';
+            // 【Session安全修复】检查 $_SESSION['user'] 存在性
+            $isWarehouseStaff = (isset($_SESSION['user']) && isset($_SESSION['user']['ShopType']))
+                ? ($_SESSION['user']['ShopType'] === 'Warehouse')
+                : false;
         ?>
             <?php if (!$isWarehouseStaff): // 门店员工专有菜单 ?>
             <li class="nav-item">

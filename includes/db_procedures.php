@@ -11,22 +11,11 @@ class DBProcedures {
     // ----------------
 
 
-    /**
-     * 检查库存状态
-     */
-    public static function getStockItemStatus($pdo, $stockId) {
-        try {
-            $stmt = $pdo->prepare("SELECT Status FROM vw_stock_item_status WHERE StockItemID = ?");
-            $stmt->execute([$stockId]);
-            return $stmt->fetchColumn();
-        } catch (PDOException $e) {
-            error_log("getStockItemStatus Error: " . $e->getMessage());
-            return false;
-        }
-    }
+    // 【函数冗余修复】getStockItemStatus() 已删除
+    // 该函数功能已被 getStockItemInfo() 替代，后者返回更完整的信息
 
     /**
-     * 【新增】获取库存商品完整信息（包含ShopID）
+     * 获取库存商品完整信息（包含ShopID和Status）
      * 用于购物车店铺一致性验证
      */
     public static function getStockItemInfo($pdo, $stockId) {
@@ -36,6 +25,26 @@ class DBProcedures {
             return $stmt->fetch(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             error_log("getStockItemInfo Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 【并发安全修复】使用行锁获取并验证库存状态
+     * 在事务中使用 FOR UPDATE 锁定行，防止并发超卖
+     *
+     * @param PDO $pdo
+     * @param int $stockId
+     * @return array|false 库存信息或false
+     */
+    public static function getStockItemInfoWithLock($pdo, $stockId) {
+        try {
+            // 使用 FOR UPDATE 锁定行，确保并发安全
+            $stmt = $pdo->prepare("SELECT StockItemID, ShopID, Status FROM StockItem WHERE StockItemID = ? FOR UPDATE");
+            $stmt->execute([$stockId]);
+            return $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("getStockItemInfoWithLock Error: " . $e->getMessage());
             return false;
         }
     }

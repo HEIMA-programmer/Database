@@ -7,16 +7,14 @@
  */
 session_start();
 require_once __DIR__ . '/../../config/db_connect.php';
+require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 
 // =============================================
 // 【权限验证】
 // =============================================
-if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['Staff', 'Manager'])) {
-    header("Location: /login.php");
-    exit();
-}
+requireRole(['Staff', 'Manager']);
 
 // =============================================
 // 【购物车验证】

@@ -49,6 +49,13 @@ if ($isExpired) {
 
 // ========== POST 请求处理 ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // 【安全】验证CSRF令牌
+    if (!validateCsrfToken($_POST['csrf_token'] ?? null)) {
+        flash('Invalid security token. Please refresh the page and try again.', 'danger');
+        header("Location: pay.php?order_id=$orderId");
+        exit();
+    }
+
     $paymentMethod = $_POST['payment_method'] ?? '';
 
     $result = handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod);
@@ -89,6 +96,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 </div>
 
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
                     <div class="mb-4">
                         <label class="form-label text-light">Select Payment Method</label>
 

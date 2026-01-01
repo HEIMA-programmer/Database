@@ -25,45 +25,50 @@ $error = '';
 // 【业务逻辑层调用】通过 functions.php 处理认证
 // =============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $loginType = $_POST['login_type'] ?? 'customer';
-    $credential = trim($_POST['username'] ?? ''); // 员工用username，客户用email
-    $password  = $_POST['password'] ?? '';
-
-    if (empty($credential) || empty($password)) {
-        $error = 'Please enter both username/email and password.';
+    // 【安全】验证CSRF令牌
+    if (!validateCsrfToken($_POST['csrf_token'] ?? null)) {
+        $error = 'Invalid security token. Please refresh the page and try again.';
     } else {
-        try {
-            if ($loginType === 'employee') {
-                // 员工登录（使用 username）
-                $result = authenticateEmployee($pdo, $credential, $password);
+        $loginType = $_POST['login_type'] ?? 'customer';
+        $credential = trim($_POST['username'] ?? ''); // 员工用username，客户用email
+        $password  = $_POST['password'] ?? '';
 
-                if ($result['success']) {
-                    flash("Welcome back, {$_SESSION['username']}!", 'success');
-                    $redirect = $_SESSION['redirect_url'] ?? getLoginRedirectUrl($result['role']);
-                    unset($_SESSION['redirect_url']);
-                    header("Location: " . $redirect);
-                    exit();
-                } else {
-                    $error = $result['message'];
-                }
-            } else {
-                // 客户登录（使用 email）
-                $email = $credential;
-                $result = authenticateCustomer($pdo, $email, $password);
+        if (empty($credential) || empty($password)) {
+            $error = 'Please enter both username/email and password.';
+        } else {
+            try {
+                if ($loginType === 'employee') {
+                    // 员工登录（使用 username）
+                    $result = authenticateEmployee($pdo, $credential, $password);
 
-                if ($result['success']) {
-                    flash('Welcome to Retro Echo Records!', 'success');
-                    $redirect = $_SESSION['redirect_url'] ?? (BASE_URL . '/customer/catalog.php');
-                    unset($_SESSION['redirect_url']);
-                    header("Location: " . $redirect);
-                    exit();
+                    if ($result['success']) {
+                        flash("Welcome back, {$_SESSION['username']}!", 'success');
+                        $redirect = $_SESSION['redirect_url'] ?? getLoginRedirectUrl($result['role']);
+                        unset($_SESSION['redirect_url']);
+                        header("Location: " . $redirect);
+                        exit();
+                    } else {
+                        $error = $result['message'];
+                    }
                 } else {
-                    $error = $result['message'];
+                    // 客户登录（使用 email）
+                    $email = $credential;
+                    $result = authenticateCustomer($pdo, $email, $password);
+
+                    if ($result['success']) {
+                        flash('Welcome to Retro Echo Records!', 'success');
+                        $redirect = $_SESSION['redirect_url'] ?? (BASE_URL . '/customer/catalog.php');
+                        unset($_SESSION['redirect_url']);
+                        header("Location: " . $redirect);
+                        exit();
+                    } else {
+                        $error = $result['message'];
+                    }
                 }
+            } catch (Exception $e) {
+                error_log("Login Error: " . $e->getMessage());
+                $error = 'System error.';
             }
-        } catch (Exception $e) {
-            error_log("Login Error: " . $e->getMessage());
-            $error = 'System error.';
         }
     }
 }
@@ -92,6 +97,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
 
                 <form method="POST" id="loginForm">
+                    <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
                     <div class="mb-4">
                         <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check" name="login_type" id="type_cust" value="customer" checked>

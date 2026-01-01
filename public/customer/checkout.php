@@ -74,6 +74,11 @@ $finalTotal = $total - $discount;
 // ========== 处理订单提交 ==========
 $errors = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // 【安全】验证CSRF令牌
+    if (!validateCsrfToken($_POST['csrf_token'] ?? null)) {
+        $errors[] = 'Invalid security token. Please refresh the page and try again.';
+    }
+
     $fulfillmentType = $_POST['fulfillment_type'] ?? '';
     $shippingAddress = trim($_POST['shipping_address'] ?? '');
 
@@ -163,6 +168,7 @@ require_once __DIR__ . '/../../includes/header.php';
 <?php endif; ?>
 
 <form method="POST">
+    <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
     <div class="row">
         <div class="col-lg-8">
             <!-- 店铺信息 -->

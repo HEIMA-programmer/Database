@@ -143,14 +143,9 @@ BEGIN
     END LOOP;
     CLOSE cur;
 
-    -- 计算总成本
-    UPDATE SupplierOrder so
-    SET TotalCost = (
-        SELECT SUM(Quantity * UnitCost)
-        FROM SupplierOrderLine
-        WHERE SupplierOrderID = p_order_id
-    )
-    WHERE SupplierOrderID = p_order_id;
+    -- 【修复】移除TotalCost手动更新
+    -- 触发器 trg_after_supplier_order_line_insert 已在订单行插入时自动计算TotalCost
+    -- 避免重复计算
 END$$
 
 -- ================================================
@@ -495,16 +490,19 @@ BEGIN
     WHERE OrderID = p_order_id;
 
     -- 更新库存状态为已售出
+    -- 【修复】移除 DateSold = NOW()，触发器 trg_before_stock_status_update 会在状态变为Sold时自动设置
     UPDATE StockItem s
     JOIN OrderLine ol ON s.StockItemID = ol.StockItemID
-    SET s.Status = 'Sold', s.DateSold = NOW()
+    SET s.Status = 'Sold'
     WHERE ol.OrderID = p_order_id;
 
     -- 注意: 积分更新和会员升级由触发器 trg_after_order_complete 自动处理
+    -- 注意: DateSold 由触发器 trg_before_stock_status_update 自动设置
 END$$
 
 -- 取消订单
 -- 【修复】移除内部事务控制，由调用方管理事务
+-- 【修复】移除库存释放代码，由触发器 trg_after_order_cancel 自动处理
 DROP PROCEDURE IF EXISTS sp_cancel_order$$
 CREATE PROCEDURE sp_cancel_order(
     IN p_order_id INT
@@ -515,13 +513,10 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 释放预留库存
-    UPDATE StockItem s
-    JOIN OrderLine ol ON s.StockItemID = ol.StockItemID
-    SET s.Status = 'Available'
-    WHERE ol.OrderID = p_order_id AND s.Status = 'Reserved';
+    -- 【修复】移除手动库存释放代码
+    -- 触发器 trg_after_order_cancel 会在订单状态变为Cancelled时自动释放Reserved库存
 
-    -- 更新订单状态
+    -- 更新订单状态（触发器会自动释放库存）
     UPDATE CustomerOrder
     SET OrderStatus = 'Cancelled'
     WHERE OrderID = p_order_id;
@@ -558,11 +553,11 @@ END$$
 
 -- 释放过期的预留库存（超过30分钟未支付）
 -- 【修复】移除内部事务控制，由调用方（PHP或定时事件）管理事务
+-- 【修复】移除手动库存释放代码，由触发器 trg_after_order_cancel 自动处理
 DROP PROCEDURE IF EXISTS sp_release_expired_reservations$$
 CREATE PROCEDURE sp_release_expired_reservations()
 BEGIN
     DECLARE v_affected_orders INT DEFAULT 0;
-    DECLARE v_released_items INT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -575,18 +570,10 @@ BEGIN
     WHERE co.OrderStatus = 'Pending'
       AND co.OrderDate < DATE_SUB(NOW(), INTERVAL 30 MINUTE);
 
-    -- 释放预留库存
-    UPDATE StockItem s
-    JOIN OrderLine ol ON s.StockItemID = ol.StockItemID
-    JOIN CustomerOrder co ON ol.OrderID = co.OrderID
-    SET s.Status = 'Available'
-    WHERE co.OrderStatus = 'Pending'
-      AND s.Status = 'Reserved'
-      AND co.OrderDate < DATE_SUB(NOW(), INTERVAL 30 MINUTE);
+    -- 【修复】移除手动库存释放代码
+    -- 触发器 trg_after_order_cancel 会在订单状态变为Cancelled时自动释放Reserved库存
 
-    SET v_released_items = ROW_COUNT();
-
-    -- 自动取消过期订单
+    -- 自动取消过期订单（触发器会自动释放库存）
     UPDATE CustomerOrder
     SET OrderStatus = 'Cancelled'
     WHERE OrderStatus = 'Pending'
@@ -595,7 +582,7 @@ BEGIN
     -- 返回统计信息
     SELECT
         v_affected_orders AS ExpiredOrders,
-        v_released_items AS ReleasedItems,
+        ROW_COUNT() AS CancelledOrders,
         NOW() AS ProcessedAt;
 END$$
 
@@ -1443,13 +1430,9 @@ BEGIN
         ProcessedByEmployeeID = COALESCE(ProcessedByEmployeeID, p_employee_id)
     WHERE OrderID = p_order_id;
 
-    -- 如果取消订单，释放库存
-    IF p_new_status = 'Cancelled' THEN
-        UPDATE StockItem s
-        JOIN OrderLine ol ON s.StockItemID = ol.StockItemID
-        SET s.Status = 'Available'
-        WHERE ol.OrderID = p_order_id AND s.Status = 'Reserved';
-    END IF;
+    -- 【修复】移除手动库存释放代码
+    -- 如果取消订单，触发器 trg_after_order_cancel 会自动释放Reserved库存
+    -- 避免重复执行库存释放逻辑
 END$$
 
 -- ------------------------------------------------

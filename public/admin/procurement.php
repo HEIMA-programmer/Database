@@ -59,30 +59,13 @@ $suppliers = $pageData['suppliers'];
 $releases = $pageData['releases'];
 $pendingPOs = $pageData['pending_orders'];
 
-// 【架构重构】使用DBProcedures获取专辑基础成本
+// 【安全修复】移除前端暴露的价格配置数据
+// 价格计算已移至后端API (api_get_price_config.php)
+// 仅保留后端验证所需的成本数据
 $releaseBaseUnitCosts = [];
 $releasesWithCost = DBProcedures::getReleaseListWithCost($pdo);
 foreach ($releasesWithCost as $row) {
     $releaseBaseUnitCosts[$row['ReleaseID']] = (float)($row['BaseUnitCost'] ?? 25.00);
-}
-
-// 为每个专辑和每种condition构建价格配置
-$releasePriceConfig = [];
-foreach ($releases as $r) {
-    $baseCost = $releaseBaseUnitCosts[$r['ReleaseID']] ?? 25.00;
-    $conditionPrices = [];
-    foreach ($CONDITION_COST_MULTIPLIERS as $condition => $multiplier) {
-        $unitCost = round($baseCost * $multiplier, 2);
-        $suggestedPrice = getSuggestedSalePrice($unitCost);
-        $conditionPrices[$condition] = [
-            'unit_cost' => $unitCost,
-            'suggested_price' => round($suggestedPrice, 2)
-        ];
-    }
-    $releasePriceConfig[$r['ReleaseID']] = [
-        'base_cost' => $baseCost,
-        'conditions' => $conditionPrices
-    ];
 }
 
 // 可用成色选项
@@ -360,8 +343,8 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 【重构】专辑价格配置数据（包含每种condition的价格）
-    const releasePriceConfig = <?= json_encode($releasePriceConfig) ?>;
+    // 【安全修复】移除前端暴露的价格配置数据
+    // 价格信息通过AJAX从后端API获取 (api_get_price_config.php)
 
     // DOM元素
     const releaseSelect = document.querySelector('select[name="release_id"]');
@@ -376,29 +359,61 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let currentUnitCost = 25.00;
 
-    // 【重构】根据专辑和condition更新价格信息
-    function updatePriceByCondition() {
+    // 【安全修复】通过AJAX从后端获取价格信息
+    async function updatePriceByCondition() {
         const releaseId = releaseSelect.value;
         const condition = conditionSelect.value;
 
-        if (releaseId && releasePriceConfig[releaseId] && releasePriceConfig[releaseId].conditions[condition]) {
-            const priceInfo = releasePriceConfig[releaseId].conditions[condition];
-            currentUnitCost = priceInfo.unit_cost;
-            const suggestedPrice = priceInfo.suggested_price;
+        if (!releaseId || !condition) {
+            currentUnitCost = 25.00;
+            unitCostDisplay.value = '¥25.00';
+            suggestedPriceDisplay.value = '¥40.00';
+            salePriceInput.value = '40.00';
+            updateCosts();
+            return;
+        }
 
-            unitCostDisplay.value = '¥' + currentUnitCost.toFixed(2);
-            suggestedPriceDisplay.value = '¥' + suggestedPrice.toFixed(2);
-            salePriceInput.value = suggestedPrice.toFixed(2);
-        } else {
+        // 显示加载状态
+        unitCostDisplay.value = 'Loading...';
+        suggestedPriceDisplay.value = 'Loading...';
+
+        try {
+            const formData = new FormData();
+            formData.append('release_id', releaseId);
+            formData.append('condition', condition);
+
+            const response = await fetch('api_get_price_config.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                currentUnitCost = data.unit_cost;
+                const suggestedPrice = data.suggested_price;
+
+                unitCostDisplay.value = '¥' + currentUnitCost.toFixed(2);
+                suggestedPriceDisplay.value = '¥' + suggestedPrice.toFixed(2);
+                salePriceInput.value = suggestedPrice.toFixed(2);
+            } else {
+                currentUnitCost = 25.00;
+                unitCostDisplay.value = '¥25.00';
+                suggestedPriceDisplay.value = '¥40.00';
+                salePriceInput.value = '40.00';
+            }
+        } catch (error) {
+            console.error('Error fetching price config:', error);
             currentUnitCost = 25.00;
             unitCostDisplay.value = '¥25.00';
             suggestedPriceDisplay.value = '¥40.00';
             salePriceInput.value = '40.00';
         }
+
         updateCosts();
     }
 
-    // 更新成本和利润计算
+    // 更新成本和利润计算（仅用于显示，不暴露计算逻辑）
     function updateCosts() {
         const salePrice = parseFloat(salePriceInput.value) || 0;
         const quantity = parseInt(quantityInput.value) || 0;
@@ -422,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【重构】监听专辑和condition的变化
+    // 监听专辑和condition的变化，通过AJAX获取价格
     releaseSelect.addEventListener('change', updatePriceByCondition);
     conditionSelect.addEventListener('change', updatePriceByCondition);
     salePriceInput.addEventListener('input', updateCosts);

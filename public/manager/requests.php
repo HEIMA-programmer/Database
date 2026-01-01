@@ -96,18 +96,12 @@ $otherShops = array_filter($shops, fn($s) => $s['ShopID'] != $shopId);
 // 获取专辑列表（用于新建申请）
 $releases = DBProcedures::getReleaseList($pdo);
 
-// 【架构重构】使用DBProcedures获取当前店铺的库存信息
+// 【安全修复】移除前端暴露的库存数据
+// 库存价格信息通过AJAX从后端API获取 (api_get_inventory_price.php)
 $shopInventory = DBProcedures::getShopInventoryGrouped($pdo, $shopId);
 
-// 构建库存价格映射（用于JS自动填充）
-$inventoryPriceMap = [];
-foreach ($shopInventory as $inv) {
-    $key = $inv['ReleaseID'] . '_' . $inv['ConditionGrade'];
-    $inventoryPriceMap[$key] = [
-        'price' => $inv['UnitPrice'],
-        'quantity' => $inv['Quantity']
-    ];
-}
+// 仅保留专辑ID列表用于下拉选择（不包含价格）
+$inventoryReleaseIds = array_unique(array_column($shopInventory, 'ReleaseID'));
 
 // 从URL参数预填表单
 $prefillReleaseId = isset($_GET['release_id']) ? (int)$_GET['release_id'] : 0;
@@ -256,9 +250,8 @@ require_once __DIR__ . '/../../includes/header.php';
                 </form>
 
                 <script>
-                // 库存价格映射数据
-                const inventoryPriceMap = <?= json_encode($inventoryPriceMap) ?>;
-                const shopInventory = <?= json_encode($shopInventory) ?>;
+                // 【安全修复】移除前端暴露的库存数据
+                // 库存价格信息通过AJAX从后端API获取 (api_get_inventory_price.php)
                 const prefillReleaseId = <?= $prefillReleaseId ?>;
                 const prefillCondition = "<?= $prefillCondition ?>";
 
@@ -268,35 +261,54 @@ require_once __DIR__ . '/../../includes/header.php';
                     const quantityInput = document.getElementById('priceQuantity');
                     const currentPriceInput = document.getElementById('priceCurrentPrice');
 
-                    function updateConditionOptions() {
+                    // 【安全修复】通过AJAX获取条件选项
+                    async function updateConditionOptions() {
                         const releaseId = releaseSelect.value;
-                        conditionSelect.innerHTML = '<option value="">-- Select Condition --</option>';
+                        conditionSelect.innerHTML = '<option value="">-- Loading... --</option>';
 
                         if (!releaseId) {
+                            conditionSelect.innerHTML = '<option value="">-- Select Album First --</option>';
                             quantityInput.value = '';
                             currentPriceInput.value = '';
                             return;
                         }
 
-                        // 获取该专辑在当前店铺可用的condition
-                        const conditions = shopInventory.filter(inv => inv.ReleaseID == releaseId);
-                        conditions.forEach(inv => {
-                            const option = document.createElement('option');
-                            option.value = inv.ConditionGrade;
-                            option.textContent = inv.ConditionGrade + ' (x' + inv.Quantity + ')';
-                            if (inv.ConditionGrade === prefillCondition) {
-                                option.selected = true;
-                            }
-                            conditionSelect.appendChild(option);
-                        });
+                        try {
+                            const formData = new FormData();
+                            formData.append('release_id', releaseId);
 
-                        // 如果有预填的condition，触发更新
-                        if (prefillCondition) {
-                            updatePriceAndQuantity();
+                            const response = await fetch('api_get_inventory_price.php', {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                            const data = await response.json();
+                            conditionSelect.innerHTML = '<option value="">-- Select Condition --</option>';
+
+                            if (data.success && data.conditions) {
+                                data.conditions.forEach(inv => {
+                                    const option = document.createElement('option');
+                                    option.value = inv.condition;
+                                    option.textContent = inv.condition + ' (x' + inv.quantity + ')';
+                                    if (inv.condition === prefillCondition) {
+                                        option.selected = true;
+                                    }
+                                    conditionSelect.appendChild(option);
+                                });
+
+                                // 如果有预填的condition，触发更新
+                                if (prefillCondition) {
+                                    updatePriceAndQuantity();
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Error fetching conditions:', error);
+                            conditionSelect.innerHTML = '<option value="">-- Error loading --</option>';
                         }
                     }
 
-                    function updatePriceAndQuantity() {
+                    // 【安全修复】通过AJAX获取价格和数量
+                    async function updatePriceAndQuantity() {
                         const releaseId = releaseSelect.value;
                         const condition = conditionSelect.value;
 
@@ -304,10 +316,24 @@ require_once __DIR__ . '/../../includes/header.php';
                             return;
                         }
 
-                        const key = releaseId + '_' + condition;
-                        if (inventoryPriceMap[key]) {
-                            currentPriceInput.value = inventoryPriceMap[key].price;
-                            quantityInput.value = inventoryPriceMap[key].quantity;
+                        try {
+                            const formData = new FormData();
+                            formData.append('release_id', releaseId);
+                            formData.append('condition', condition);
+
+                            const response = await fetch('api_get_inventory_price.php', {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                            const data = await response.json();
+
+                            if (data.success) {
+                                currentPriceInput.value = data.price;
+                                quantityInput.value = data.quantity;
+                            }
+                        } catch (error) {
+                            console.error('Error fetching price:', error);
                         }
                     }
 

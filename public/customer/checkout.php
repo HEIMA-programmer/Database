@@ -312,28 +312,37 @@ document.addEventListener('DOMContentLoaded', function() {
     const shippingCostDisplay = document.getElementById('shipping-cost-display');
     const totalDisplay = document.getElementById('total-display');
 
-    // 【新增】价格常量
-    const SHIPPING_FEE = <?= SHIPPING_FEE ?>;
-    const subtotalAfterDiscount = <?= $finalTotal ?>;
+    // 【安全修复】使用预渲染的格式化价格，不暴露原始数值和计算逻辑
+    // 后端已经计算好所有可能的显示值，前端只做UI切换
+    const priceDisplays = {
+        shipping: {
+            shippingCost: '<?= formatPrice(SHIPPING_FEE) ?>',
+            total: '<?= formatPrice($finalTotal + SHIPPING_FEE) ?>'
+        },
+        pickup: {
+            shippingCost: '<span class="text-success">Free</span>',
+            total: '<?= formatPrice($finalTotal) ?>'
+        }
+    };
 
     function updateUI() {
         // 更新地址显示
         // 修复：Warehouse 时没有 radio 按钮，地址栏应始终显示
         const isWarehouse = !pickupRadio && !shippingRadio;
-        
+
         if (isWarehouse || (shippingRadio && shippingRadio.checked)) {
             addressSection.style.display = 'block';
         } else if (addressSection) {
             addressSection.style.display = 'none';
         }
 
-        // 【新增】更新运费和总额显示
+        // 【安全修复】使用预渲染的价格显示
         if (shippingRadio && shippingRadio.checked) {
-            shippingCostDisplay.textContent = '¥' + SHIPPING_FEE.toFixed(2);
-            totalDisplay.textContent = '¥' + (subtotalAfterDiscount + SHIPPING_FEE).toFixed(2);
+            shippingCostDisplay.textContent = priceDisplays.shipping.shippingCost;
+            totalDisplay.textContent = priceDisplays.shipping.total;
         } else if (pickupRadio && pickupRadio.checked) {
-            shippingCostDisplay.innerHTML = '<span class="text-success">Free</span>';
-            totalDisplay.textContent = '¥' + subtotalAfterDiscount.toFixed(2);
+            shippingCostDisplay.innerHTML = priceDisplays.pickup.shippingCost;
+            totalDisplay.textContent = priceDisplays.pickup.total;
         }
 
         // 更新选中样式

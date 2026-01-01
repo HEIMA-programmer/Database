@@ -2,6 +2,25 @@
 -- Views for Refactored Schema
 -- 重构后的视图 - 包含库存汇总视图
 -- ========================================
+--
+-- 【清理说明】以下视图已被标记为 @deprecated，可在确认无副作用后删除：
+-- - vw_buyback_orders (被 vw_recent_buybacks_detail 替代)
+-- - vw_buyback_price_reference (被 vw_stock_price_map 替代)
+-- - vw_checkout_stock_validation (被 vw_checkout_cart_items 替代)
+-- - vw_customer_catalog (被 vw_customer_catalog_grouped 替代，但两者均未使用)
+-- - vw_customer_catalog_grouped (功能已整合到其他视图)
+-- - vw_fulfillment_incoming_transfers (被 vw_fulfillment_incoming_transfers_grouped 替代)
+-- - vw_fulfillment_pending_transfers (被 vw_fulfillment_pending_transfers_grouped 替代)
+-- - vw_fulfillment_shipped_orders (被 vw_fulfillment_orders 替代)
+-- - vw_fulfillment_shipping_orders (被 vw_fulfillment_orders 替代)
+-- - vw_manager_pending_transfers (被 vw_fulfillment_pending_transfers_grouped 替代)
+-- - vw_order_cancel_validation (功能已整合到 vw_customer_pending_order)
+-- - vw_recent_buyback_orders (被 vw_recent_buybacks_detail 替代)
+-- - vw_release_available_stock (功能已整合到 vw_release_shop_stock_grouped)
+-- - vw_request_stock_verification (被 vw_shop_inventory_by_release 替代)
+-- - vw_staff_online_orders_pending (被 vw_fulfillment_orders 替代)
+-- - vw_stock_item_status (被 vw_cart_item_validation 替代)
+--
 
 -- ================================================
 -- 核心业务视图
@@ -65,6 +84,7 @@ ORDER BY s.AcquiredDate ASC;
 
 -- 1. [Customer View] Browse Catalog
 -- 【修复】移除 Warehouse 限制，支持所有店铺类型，添加 ShopType 字段
+-- @deprecated 未被PHP代码使用，考虑使用 vw_catalog_by_shop_grouped
 CREATE OR REPLACE VIEW vw_customer_catalog AS
 SELECT
     s.StockItemID,
@@ -181,6 +201,7 @@ LEFT JOIN StockItem s ON sh.ShopID = s.ShopID
 GROUP BY sh.ShopID, sh.Name, sh.Type;
 
 -- 8. [Manager View] Pending Transfers
+-- @deprecated 未被PHP代码使用，已被 vw_fulfillment_pending_transfers_grouped 替代
 CREATE OR REPLACE VIEW vw_manager_pending_transfers AS
 SELECT
     t.TransferID,
@@ -266,6 +287,7 @@ GROUP BY so.SupplierOrderID, s.Name, e.Name, sh.Name, so.OrderDate, so.Status, s
 -- 13. [Admin/Staff View] Buyback Orders
 -- 【修复】使用 LEFT JOIN 支持匿名客户回购（CustomerID 可为 NULL）
 -- 【架构重构】添加 ShopID 字段，消除 PHP 代码中的子查询
+-- @deprecated 未被PHP代码使用，已被 vw_recent_buybacks_detail 替代
 CREATE OR REPLACE VIEW vw_buyback_orders AS
 SELECT
     bo.BuybackOrderID,
@@ -343,6 +365,7 @@ LIMIT 50;
 
 -- 16. [架构重构] 库存状态检查视图 - 用于购物车验证
 -- 替换 cart_action.php 中的直接 StockItem 查询
+-- @deprecated 未被PHP代码使用，已被 vw_cart_item_validation 替代
 CREATE OR REPLACE VIEW vw_stock_item_status AS
 SELECT
     StockItemID,
@@ -545,6 +568,7 @@ ORDER BY MinPoints ASC;
 
 -- 31. [架构重构] 在线订单履约视图
 -- 替换 fulfillment.php 中的直接查询
+-- @deprecated 未被PHP代码使用，已被 vw_fulfillment_orders 替代
 CREATE OR REPLACE VIEW vw_staff_online_orders_pending AS
 SELECT
     co.OrderID,
@@ -617,6 +641,7 @@ ORDER BY co.OrderDate DESC;
 -- ================================================
 -- 33. [新增] 客户目录分组视图 - 按专辑分组显示
 -- 解决问题：同一专辑多库存显示多个卡片的问题
+-- @deprecated 未被PHP代码使用，功能已整合到 vw_catalog_by_shop_grouped
 -- ================================================
 CREATE OR REPLACE VIEW vw_customer_catalog_grouped AS
 SELECT
@@ -1098,6 +1123,7 @@ JOIN Shop s ON si.ShopID = s.ShopID;
 
 -- 55. [架构重构] 订单取消验证视图
 -- 替换 cancel_order.php 中的直接表访问
+-- @deprecated 未被PHP代码使用，功能已整合到 vw_customer_pending_order
 CREATE OR REPLACE VIEW vw_order_cancel_validation AS
 SELECT
     OrderID,
@@ -1156,6 +1182,7 @@ ORDER BY r.Title;
 
 -- 58. [架构重构] 待处理调拨列表（源店铺视角）
 -- 替换 fulfillment.php 中的待发货调拨查询
+-- @deprecated 未被PHP代码使用，已被 vw_fulfillment_pending_transfers_grouped 替代
 CREATE OR REPLACE VIEW vw_fulfillment_pending_transfers AS
 SELECT
     t.TransferID,
@@ -1182,6 +1209,7 @@ ORDER BY t.TransferDate DESC;
 
 -- 59. [架构重构] 进货中调拨列表（目标店铺视角）
 -- 替换 fulfillment.php 中的待收货调拨查询
+-- @deprecated 未被PHP代码使用，已被 vw_fulfillment_incoming_transfers_grouped 替代
 CREATE OR REPLACE VIEW vw_fulfillment_incoming_transfers AS
 SELECT
     t.TransferID,
@@ -1208,6 +1236,7 @@ ORDER BY t.TransferDate DESC;
 
 -- 60. [架构重构] Fulfillment待发货订单视图
 -- 替换 fulfillment.php 中的待发货订单查询
+-- @deprecated 未被PHP代码使用，已被 vw_fulfillment_orders 替代
 CREATE OR REPLACE VIEW vw_fulfillment_shipping_orders AS
 SELECT
     co.OrderID,
@@ -1230,6 +1259,7 @@ ORDER BY co.OrderDate ASC;
 
 -- 61. [架构重构] 已发货待确认订单视图
 -- 替换 fulfillment.php 中的已发货订单查询
+-- @deprecated 未被PHP代码使用，已被 vw_fulfillment_orders 替代
 CREATE OR REPLACE VIEW vw_fulfillment_shipped_orders AS
 SELECT
     co.OrderID,
@@ -1280,6 +1310,7 @@ ORDER BY Name;
 
 -- 64. [架构重构] Buyback专辑价格参考视图
 -- 替换 buyback.php 中的现有库存价格查询
+-- @deprecated 未被PHP代码使用，已被 vw_stock_price_map 替代
 CREATE OR REPLACE VIEW vw_buyback_price_reference AS
 SELECT
     ReleaseID,
@@ -1294,6 +1325,7 @@ GROUP BY ReleaseID, ConditionGrade;
 
 -- 65. [架构重构] 最近回购订单视图
 -- 替换 buyback.php 中的最近回购查询
+-- @deprecated 未被PHP代码使用，已被 vw_recent_buybacks_detail 替代
 CREATE OR REPLACE VIEW vw_recent_buyback_orders AS
 SELECT
     bo.BuybackOrderID,
@@ -1318,6 +1350,7 @@ ORDER BY bo.BuybackDate DESC;
 
 -- 66. [架构重构] Manager申请详情视图（用于库存验证）
 -- 替换 admin/requests.php 中的库存验证查询
+-- @deprecated 未被PHP代码使用，已被 vw_shop_inventory_by_release 替代
 CREATE OR REPLACE VIEW vw_request_stock_verification AS
 SELECT
     mr.RequestID,
@@ -1374,6 +1407,7 @@ JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;
 
 -- 69. [架构重构] Checkout库存验证视图
 -- 替换 checkout.php 中的库存验证查询
+-- @deprecated 未被PHP代码使用，已被 vw_checkout_cart_items 替代
 CREATE OR REPLACE VIEW vw_checkout_stock_validation AS
 SELECT
     si.StockItemID,
@@ -1805,6 +1839,7 @@ ORDER BY Genre;
 
 -- 96. [架构重构Phase3] 专辑可用库存详情视图（按店铺）
 -- 替换 functions.php:getReleaseDetailsByShop 中的库存查询
+-- @deprecated 未被PHP代码使用，功能已整合到 vw_release_shop_stock_grouped
 CREATE OR REPLACE VIEW vw_release_available_stock AS
 SELECT
     si.StockItemID,

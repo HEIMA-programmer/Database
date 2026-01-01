@@ -6,7 +6,10 @@
  * 【API响应格式修复】统一使用 ApiResponse 类返回JSON
  * 同时支持AJAX请求（返回JSON）和表单提交（重定向+flash消息）
  */
-session_start();
+// 【修复】防止重复启动session
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once __DIR__ . '/../../../config/db_connect.php';
 require_once __DIR__ . '/../../../includes/functions.php';
 require_once __DIR__ . '/../../../includes/ApiResponse.php';

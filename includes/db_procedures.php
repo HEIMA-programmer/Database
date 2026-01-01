@@ -468,12 +468,26 @@ class DBProcedures {
 
     /**
      * 接收供应商订单并生成库存
+     * 【修复】添加事务包装确保原子性 - 接收订单涉及更新订单状态和生成多个库存项
      */
     public static function receiveSupplierOrder($pdo, $orderId, $batchNo, $conditionGrade = 'New', $markupRate = 0.50) {
         try {
+            // 【修复】开始事务确保原子性
+            $pdo->beginTransaction();
+
             $stmt = $pdo->prepare("CALL sp_receive_supplier_order(?, ?, ?, ?)");
-            return $stmt->execute([$orderId, $batchNo, $conditionGrade, $markupRate]);
+            $result = $stmt->execute([$orderId, $batchNo, $conditionGrade, $markupRate]);
+
+            if ($result) {
+                $pdo->commit();
+                return true;
+            }
+            $pdo->rollBack();
+            return false;
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("receiveSupplierOrder Error: " . $e->getMessage());
             return false;
         }
@@ -485,14 +499,27 @@ class DBProcedures {
 
     /**
      * 处理客户回购
+     * 【修复】添加事务包装确保原子性 - 回购涉及创建订单、订单行和生成库存多个步骤
      */
     public static function processBuyback($pdo, $customerId, $employeeId, $shopId, $releaseId, $quantity, $unitPrice, $conditionGrade, $resalePrice) {
         try {
+            // 【修复】开始事务确保原子性
+            $pdo->beginTransaction();
+
             $stmt = $pdo->prepare("CALL sp_process_buyback(?, ?, ?, ?, ?, ?, ?, ?, @buyback_id)");
             $stmt->execute([$customerId, $employeeId, $shopId, $releaseId, $quantity, $unitPrice, $conditionGrade, $resalePrice]);
             $result = $pdo->query("SELECT @buyback_id AS buyback_id")->fetch();
-            return $result['buyback_id'] > 0 ? $result['buyback_id'] : false;
+
+            if ($result['buyback_id'] > 0) {
+                $pdo->commit();
+                return $result['buyback_id'];
+            }
+            $pdo->rollBack();
+            return false;
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("processBuyback Error: " . $e->getMessage());
             return false;
         }
@@ -505,12 +532,26 @@ class DBProcedures {
 
     /**
      * 完成库存调拨
+     * 【修复】添加事务包装确保原子性 - 调拨涉及更新调拨状态和库存位置多个步骤
      */
     public static function completeTransfer($pdo, $transferId, $receivedByEmployeeId) {
         try {
+            // 【修复】开始事务确保原子性
+            $pdo->beginTransaction();
+
             $stmt = $pdo->prepare("CALL sp_complete_transfer(?, ?)");
-            return $stmt->execute([$transferId, $receivedByEmployeeId]);
+            $result = $stmt->execute([$transferId, $receivedByEmployeeId]);
+
+            if ($result) {
+                $pdo->commit();
+                return true;
+            }
+            $pdo->rollBack();
+            return false;
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("completeTransfer Error: " . $e->getMessage());
             return false;
         }
@@ -1553,12 +1594,26 @@ class DBProcedures {
     /**
      * 确认调拨发货
      * 替换 fulfillment.php 中的调拨发货操作
+     * 【修复】添加事务包装确保原子性 - 发货涉及更新调拨状态和库存状态
      */
     public static function confirmTransferDispatch($pdo, $transferId, $employeeId) {
         try {
+            // 【修复】开始事务确保原子性
+            $pdo->beginTransaction();
+
             $stmt = $pdo->prepare("CALL sp_confirm_transfer_dispatch(?, ?)");
-            return $stmt->execute([$transferId, $employeeId]);
+            $result = $stmt->execute([$transferId, $employeeId]);
+
+            if ($result) {
+                $pdo->commit();
+                return true;
+            }
+            $pdo->rollBack();
+            return false;
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("confirmTransferDispatch Error: " . $e->getMessage());
             return false;
         }
@@ -1568,12 +1623,26 @@ class DBProcedures {
     /**
      * 【架构重构】取消调拨
      * 替换 fulfillment.php 中的 DELETE FROM InventoryTransfer
+     * 【修复】添加事务包装确保原子性 - 取消涉及恢复库存状态和删除调拨记录
      */
     public static function cancelTransfer($pdo, $transferId, $shopId) {
         try {
+            // 【修复】开始事务确保原子性
+            $pdo->beginTransaction();
+
             $stmt = $pdo->prepare("CALL sp_cancel_transfer(?, ?)");
-            return $stmt->execute([$transferId, $shopId]);
+            $result = $stmt->execute([$transferId, $shopId]);
+
+            if ($result) {
+                $pdo->commit();
+                return true;
+            }
+            $pdo->rollBack();
+            return false;
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("cancelTransfer Error: " . $e->getMessage());
             return false;
         }
@@ -1752,14 +1821,28 @@ class DBProcedures {
     /**
      * 发起仓库库存调配（带确认流程）
      * 创建调拨记录，需要仓库员工确认发货后才能完成
+     * 【修复】添加事务包装确保原子性 - 调配涉及创建多个调拨记录和更新库存状态
      */
     public static function initiateWarehouseDispatch($pdo, $warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity, $employeeId) {
         try {
+            // 【修复】开始事务确保原子性
+            $pdo->beginTransaction();
+
             $stmt = $pdo->prepare("CALL sp_initiate_warehouse_dispatch(?, ?, ?, ?, ?, ?, @initiated_count)");
             $stmt->execute([$warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity, $employeeId]);
             $result = $pdo->query("SELECT @initiated_count AS initiated_count")->fetch();
-            return (int)$result['initiated_count'];
+            $count = (int)$result['initiated_count'];
+
+            if ($count > 0) {
+                $pdo->commit();
+                return $count;
+            }
+            $pdo->rollBack();
+            return 0;
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("initiateWarehouseDispatch Error: " . $e->getMessage());
             return 0;
         }
@@ -1934,9 +2017,13 @@ class DBProcedures {
     /**
      * 创建完整的在线订单
      * 替换 checkout.php 中的订单创建流程
+     * 【修复】添加事务包装确保原子性 - 在线订单涉及创建订单、添加商品、预留库存多个步骤
      */
     public static function createOnlineOrderComplete($pdo, $customerId, $shopId, $stockItemIds, $fulfillmentType, $shippingAddress, $shippingCost) {
         try {
+            // 【修复】开始事务确保原子性
+            $pdo->beginTransaction();
+
             // 将数组转换为逗号分隔的字符串
             $stockIdsStr = implode(',', $stockItemIds);
 
@@ -1945,15 +2032,21 @@ class DBProcedures {
             $result = $pdo->query("SELECT @order_id AS order_id, @total_amount AS total_amount")->fetch();
 
             if ($result['order_id'] > 0) {
+                $pdo->commit();
                 return [
                     'order_id' => $result['order_id'],
                     'total_amount' => $result['total_amount']
                 ];
             } elseif ($result['order_id'] == -2) {
+                $pdo->rollBack();
                 return ['error' => 'no_available_items'];
             }
+            $pdo->rollBack();
             return false;
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("createOnlineOrderComplete Error: " . $e->getMessage());
             return false;
         }

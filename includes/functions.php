@@ -202,7 +202,9 @@ function checkMembershipUpgrade($pdo, $customerId, $amountSpent, $oldTierId = nu
 
 /**
  * 添加商品到购物车
- * 包含库存验证和重复检查
+ * 包含库存验证、重复检查和店铺一致性验证
+ *
+ * 【修复】验证店铺一致性：购物车只能包含同一店铺的商品
  *
  * @param PDO $pdo
  * @param int $stockId
@@ -220,19 +222,42 @@ function addToCart($pdo, $stockId) {
         return ['success' => false, 'message' => 'Item already in cart.'];
     }
 
-    // 验证库存状态
-    $status = DBProcedures::getStockItemStatus($pdo, $stockId);
+    // 【修复】获取商品完整信息（包含ShopID）
+    $itemInfo = DBProcedures::getStockItemInfo($pdo, $stockId);
 
-    if ($status === 'Available') {
-        $_SESSION['cart'][] = $stockId;
-        return ['success' => true, 'message' => 'Item added to cart.'];
-    } else {
+    if (!$itemInfo) {
+        return ['success' => false, 'message' => 'Item not found.'];
+    }
+
+    if ($itemInfo['Status'] !== 'Available') {
         return ['success' => false, 'message' => 'Item is no longer available.'];
     }
+
+    // 【修复】验证店铺一致性
+    $itemShopId = $itemInfo['ShopID'];
+
+    if (!empty($_SESSION['cart'])) {
+        // 如果购物车不为空，检查是否与已选店铺一致
+        if (isset($_SESSION['selected_shop_id']) && $_SESSION['selected_shop_id'] != $itemShopId) {
+            return [
+                'success' => false,
+                'message' => 'Cannot add items from different stores. Please complete or clear your current cart first.'
+            ];
+        }
+    }
+
+    // 设置或确认选中的店铺ID
+    if (!isset($_SESSION['selected_shop_id'])) {
+        $_SESSION['selected_shop_id'] = $itemShopId;
+    }
+
+    $_SESSION['cart'][] = $stockId;
+    return ['success' => true, 'message' => 'Item added to cart.'];
 }
 
 /**
  * 从购物车移除商品
+ * 【修复】当购物车清空时，同步清除selected_shop_id
  *
  * @param int $stockId
  * @return bool 是否成功移除
@@ -244,6 +269,11 @@ function removeFromCart($stockId) {
     if ($key !== false) {
         unset($_SESSION['cart'][$key]);
         $_SESSION['cart'] = array_values($_SESSION['cart']);
+
+        // 【修复】当购物车清空时，清除店铺选择
+        if (empty($_SESSION['cart'])) {
+            unset($_SESSION['selected_shop_id']);
+        }
         return true;
     }
     return false;
@@ -251,9 +281,11 @@ function removeFromCart($stockId) {
 
 /**
  * 清空购物车
+ * 【修复】同时清除selected_shop_id，确保session一致性
  */
 function clearCart() {
     $_SESSION['cart'] = [];
+    unset($_SESSION['selected_shop_id']);
 }
 
 // =============================================

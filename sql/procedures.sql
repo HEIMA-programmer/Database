@@ -446,6 +446,7 @@ END$$
 -- ================================================
 
 -- 检查特定商品的可用库存数量
+-- @deprecated 未被PHP代码使用，可考虑移除。视图 vw_shop_stock_count 提供了类似功能
 DROP FUNCTION IF EXISTS fn_get_available_stock$$
 CREATE FUNCTION fn_get_available_stock(
     p_release_id INT,

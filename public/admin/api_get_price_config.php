@@ -1,0 +1,93 @@
+<?php
+/**
+ * 【安全修复】采购价格配置API
+ * 仅Admin可访问，按需返回特定专辑的价格配置
+ */
+require_once __DIR__ . '/../../config/db_connect.php';
+require_once __DIR__ . '/../../includes/auth_guard.php';
+require_once __DIR__ . '/../../includes/db_procedures.php';
+requireRole('Admin');
+
+header('Content-Type: application/json');
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+    exit;
+}
+
+$releaseId = (int)($_POST['release_id'] ?? 0);
+$condition = $_POST['condition'] ?? '';
+
+if ($releaseId <= 0) {
+    echo json_encode(['success' => false, 'message' => 'Invalid release ID']);
+    exit;
+}
+
+// 【安全】定价逻辑仅在后端执行
+
+// 条件成本系数（保密）
+$CONDITION_COST_MULTIPLIERS = [
+    'New'  => 1.00,
+    'Mint' => 0.95,
+    'NM'   => 0.85,
+    'VG+'  => 0.70,
+    'VG'   => 0.55,
+];
+
+// 利润率计算函数（保密）
+function getSuggestedSalePrice($unitCost) {
+    if ($unitCost <= 20) return $unitCost * 1.50;
+    if ($unitCost <= 50) return $unitCost * 1.60;
+    if ($unitCost <= 100) return $unitCost * 1.70;
+    return $unitCost * 1.80;
+}
+
+try {
+    // 获取专辑基础成本
+    $releasesWithCost = DBProcedures::getReleaseListWithCost($pdo);
+    $baseCost = null;
+
+    foreach ($releasesWithCost as $row) {
+        if ($row['ReleaseID'] == $releaseId) {
+            $baseCost = (float)($row['BaseUnitCost'] ?? 25.00);
+            break;
+        }
+    }
+
+    if ($baseCost === null) {
+        $baseCost = 25.00; // 默认成本
+    }
+
+    // 如果指定了condition，只返回该condition的价格
+    if (!empty($condition) && isset($CONDITION_COST_MULTIPLIERS[$condition])) {
+        $multiplier = $CONDITION_COST_MULTIPLIERS[$condition];
+        $unitCost = round($baseCost * $multiplier, 2);
+        $suggestedPrice = round(getSuggestedSalePrice($unitCost), 2);
+
+        echo json_encode([
+            'success' => true,
+            'unit_cost' => $unitCost,
+            'suggested_price' => $suggestedPrice
+        ]);
+    } else {
+        // 返回所有condition的价格配置
+        $conditions = [];
+        foreach ($CONDITION_COST_MULTIPLIERS as $cond => $multiplier) {
+            $unitCost = round($baseCost * $multiplier, 2);
+            $conditions[$cond] = [
+                'unit_cost' => $unitCost,
+                'suggested_price' => round(getSuggestedSalePrice($unitCost), 2)
+            ];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'base_cost' => $baseCost,
+            'conditions' => $conditions
+        ]);
+    }
+
+} catch (Exception $e) {
+    error_log("api_get_price_config error: " . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => 'Server error']);
+}

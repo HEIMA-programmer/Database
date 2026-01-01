@@ -30,44 +30,7 @@ class DBProcedures {
     // ----------------
 
 
-    /**
-     * 【新增】获取分组后的商品目录（按专辑分组）
-     */
-    public static function getCatalogItemsGrouped($pdo, $search = '', $genre = '') {
-        try {
-            $sql = "SELECT * FROM vw_customer_catalog_grouped WHERE 1=1";
-            $params = [];
-
-            if (!empty($search)) {
-                $sql .= " AND (Title LIKE :search OR ArtistName LIKE :search)";
-                $params[':search'] = "%$search%";
-            }
-            if (!empty($genre)) {
-                $sql .= " AND Genre = :genre";
-                $params[':genre'] = $genre;
-            }
-
-            $sql .= " ORDER BY Title ASC";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute($params);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getCatalogItemsGrouped Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 【新增】获取分组后目录中的流派列表
-     */
-    public static function getCatalogGenresGrouped($pdo) {
-        try {
-            return $pdo->query("SELECT DISTINCT Genre FROM vw_customer_catalog_grouped ORDER BY Genre")->fetchAll(PDO::FETCH_COLUMN);
-        } catch (PDOException $e) {
-            error_log("getCatalogGenresGrouped Error: " . $e->getMessage());
-            return [];
-        }
-    }
+    // 【清理】getCatalogItemsGrouped 和 getCatalogGenresGrouped 已被 getCatalogByShop 和 getReleaseGenres 替代，已删除
 
     /**
      * 【新增】获取专辑按条件分组的库存详情
@@ -404,17 +367,7 @@ class DBProcedures {
         }
     }
 
-    /**
-     * 获取待处理调拨列表
-     */
-    public static function getPendingTransfers($pdo) {
-        try {
-            return $pdo->query("SELECT * FROM vw_manager_pending_transfers ORDER BY TransferDate DESC")->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getPendingTransfers Error: " . $e->getMessage());
-            return [];
-        }
-    }
+    // 【清理】getPendingTransfers 已删除 - 功能由其他方法替代
 
     /**
      * 获取员工列表
@@ -464,32 +417,8 @@ class DBProcedures {
         }
     }
 
-    /**
-     * 获取客户简单列表
-     */
-    public static function getCustomerSimpleList($pdo) {
-        try {
-            return $pdo->query("SELECT * FROM vw_customer_simple_list")->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getCustomerSimpleList Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 获取回购订单列表
-     * 【架构重构】使用 ShopID 直接查询，消除子查询对 Shop 表的直接访问
-     */
-    public static function getBuybackOrders($pdo, $shopId, $limit = 10) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_buyback_orders WHERE ShopID = ? ORDER BY BuybackDate DESC LIMIT ?");
-            $stmt->execute([$shopId, $limit]);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getBuybackOrders Error: " . $e->getMessage());
-            return [];
-        }
-    }
+    // 【清理】getCustomerSimpleList 已删除 - 功能由 getCustomerListSimple 替代
+    // 【清理】getBuybackOrders 已删除 - 功能由其他方法替代
 
     // =============================================
     // 【存储过程调用】写操作
@@ -882,30 +811,7 @@ class DBProcedures {
     // 订单履约相关 (Staff)
     // ----------------
 
-    /**
-     * 获取待发货在线订单
-     */
-    public static function getOnlineOrdersAwaitingShipment($pdo) {
-        try {
-            return $pdo->query("SELECT * FROM vw_staff_online_orders_pending WHERE OrderStatus = 'Paid'")->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getOnlineOrdersAwaitingShipment Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 获取已发货在线订单
-     */
-    public static function getOnlineOrdersShipped($pdo) {
-        try {
-            return $pdo->query("SELECT * FROM vw_staff_online_orders_pending WHERE OrderStatus = 'Shipped'")->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getOnlineOrdersShipped Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
+    // 【清理】getOnlineOrdersAwaitingShipment 和 getOnlineOrdersShipped 已删除 - 功能由 getWarehouseOnlineOrders 替代
 
     /**
      * 获取订单用于取货验证

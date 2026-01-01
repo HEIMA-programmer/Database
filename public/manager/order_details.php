@@ -4,10 +4,10 @@
  * 按订单类型显示所有历史订单的详细明细
  */
 require_once __DIR__ . '/../../config/db_connect.php';
-require_once __DIR__ . '/../../includes/auth_guard.php';
-requireRole('Manager');
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
+require_once __DIR__ . '/../../includes/auth_guard.php';
+requireRole('Manager');
 
 // 【修复】兼容多种session结构
 $shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;

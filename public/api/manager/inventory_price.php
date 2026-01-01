@@ -24,25 +24,16 @@ if (!$shopId) {
 }
 
 ApiResponse::handle(function() use ($pdo, $shopId, $releaseId, $condition) {
+    // 验证参数
+    if ($releaseId <= 0) {
+        ApiResponse::error('Missing release_id parameter', 400);
+    }
+
     // 获取当前店铺的库存信息
     $shopInventory = DBProcedures::getShopInventoryGrouped($pdo, $shopId);
 
-    // 如果指定了专辑ID，返回该专辑的所有condition
-    if ($releaseId > 0) {
-        $conditions = array_filter($shopInventory, fn($inv) => $inv['ReleaseID'] == $releaseId);
-        $result = [];
-        foreach ($conditions as $inv) {
-            $result[] = [
-                'condition' => $inv['ConditionGrade'],
-                'quantity' => $inv['Quantity'],
-                'price' => $inv['UnitPrice']
-            ];
-        }
-        ApiResponse::success(['conditions' => $result]);
-    }
-
     // 如果同时指定了专辑ID和condition，返回具体价格和数量
-    if ($releaseId > 0 && !empty($condition)) {
+    if (!empty($condition)) {
         foreach ($shopInventory as $inv) {
             if ($inv['ReleaseID'] == $releaseId && $inv['ConditionGrade'] == $condition) {
                 ApiResponse::success([
@@ -54,5 +45,15 @@ ApiResponse::handle(function() use ($pdo, $shopId, $releaseId, $condition) {
         ApiResponse::error('Inventory not found', 404);
     }
 
-    ApiResponse::error('Missing parameters');
+    // 只指定了专辑ID，返回该专辑的所有condition
+    $conditions = array_filter($shopInventory, fn($inv) => $inv['ReleaseID'] == $releaseId);
+    $result = [];
+    foreach ($conditions as $inv) {
+        $result[] = [
+            'condition' => $inv['ConditionGrade'],
+            'quantity' => $inv['Quantity'],
+            'price' => $inv['UnitPrice']
+        ];
+    }
+    ApiResponse::success(['conditions' => $result]);
 }, 'api/manager/inventory_price');

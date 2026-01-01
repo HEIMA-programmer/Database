@@ -23,16 +23,16 @@ $error = '';
 // =============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $loginType = $_POST['login_type'] ?? 'customer';
-    $username  = trim($_POST['username'] ?? '');
+    $credential = trim($_POST['username'] ?? ''); // 员工用username，客户用email
     $password  = $_POST['password'] ?? '';
 
-    if (empty($username) || empty($password)) {
+    if (empty($credential) || empty($password)) {
         $error = 'Please enter both username/email and password.';
     } else {
         try {
             if ($loginType === 'employee') {
-                // 员工登录
-                $result = authenticateEmployee($pdo, $username, $password);
+                // 员工登录（使用 username）
+                $result = authenticateEmployee($pdo, $credential, $password);
 
                 if ($result['success']) {
                     flash("Welcome back, {$_SESSION['username']}!", 'success');
@@ -44,8 +44,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $error = $result['message'];
                 }
             } else {
-                // 客户登录
-                $result = authenticateCustomer($pdo, $username, $password);
+                // 客户登录（使用 email）
+                $email = $credential;
+                $result = authenticateCustomer($pdo, $email, $password);
 
                 if ($result['success']) {
                     flash('Welcome to Retro Echo Records!', 'success');

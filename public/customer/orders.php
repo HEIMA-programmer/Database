@@ -15,8 +15,7 @@ $customerId = $_SESSION['user_id'];
 $pageData = prepareOrdersPageData($pdo, $customerId);
 $orders = $pageData['orders'];
 
-// 支付超时时间（15分钟）
-define('PAYMENT_TIMEOUT_MINUTES', 15);
+// PAYMENT_TIMEOUT_MINUTES 常量已在 config/db_connect.php 中定义
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
@@ -144,6 +143,7 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
+            credentials: 'same-origin', // 确保发送session cookies
             body: 'order_id=' + orderId + '&auto_cancel=1'
         }).then(response => response.json())
         .then(data => {

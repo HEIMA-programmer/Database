@@ -182,16 +182,6 @@ function checkMembershipUpgrade($pdo, $customerId, $amountSpent, $oldTierId = nu
 // =============================================
 
 /**
- * 计算 POS 购物车总额
- *
- * @param array $prices 价格数组
- * @return float 总额
- */
-function calculatePOSTotal($prices) {
-    return array_sum(array_map('floatval', $prices));
-}
-
-/**
  * 添加商品到购物车
  * 包含库存验证和重复检查
  *
@@ -259,42 +249,6 @@ function clearCart() {
  */
 function getPOSCart() {
     return $_SESSION['pos_cart'] ?? [];
-}
-
-/**
- * 添加商品到 POS 购物车
- *
- * @param int $stockId
- * @return bool
- */
-function addToPOSCart($stockId) {
-    if (!isset($_SESSION['pos_cart'])) {
-        $_SESSION['pos_cart'] = [];
-    }
-
-    if (!in_array($stockId, $_SESSION['pos_cart'])) {
-        $_SESSION['pos_cart'][] = $stockId;
-        return true;
-    }
-    return false;
-}
-
-/**
- * 从 POS 购物车移除商品
- *
- * @param int $stockId
- * @return bool
- */
-function removeFromPOSCart($stockId) {
-    if (!isset($_SESSION['pos_cart'])) return false;
-
-    $key = array_search($stockId, $_SESSION['pos_cart']);
-    if ($key !== false) {
-        unset($_SESSION['pos_cart'][$key]);
-        $_SESSION['pos_cart'] = array_values($_SESSION['pos_cart']);
-        return true;
-    }
-    return false;
 }
 
 /**
@@ -613,46 +567,9 @@ function preparePickupPageData($pdo, $shopId) {
     ];
 }
 
-/**
- * 准备履约页面数据
- */
-function prepareFulfillmentPageData($pdo) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    return [
-        'paid_orders'    => DBProcedures::getOnlineOrdersAwaitingShipment($pdo),
-        'shipped_orders' => DBProcedures::getOnlineOrdersShipped($pdo)
-    ];
-}
-
-/**
- * 准备回购页面数据
- */
-function prepareBuybackPageData($pdo, $shopId) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    return [
-        'releases'        => DBProcedures::getReleaseList($pdo),
-        'customers'       => DBProcedures::getCustomerSimpleList($pdo),
-        'recent_buybacks' => DBProcedures::getBuybackOrders($pdo, $shopId, 10)
-    ];
-}
-
 // =============================================
 // 【架构重构】Manager 模块 - 数据准备函数
 // =============================================
-
-/**
- * 准备调拨页面数据
- */
-function prepareTransferPageData($pdo) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    return [
-        'shops'   => DBProcedures::getShopList($pdo),
-        'pending' => DBProcedures::getPendingTransfers($pdo)
-    ];
-}
 
 /**
  * 准备报表页面数据
@@ -681,18 +598,6 @@ function prepareReportsPageData($pdo, $shopId = null) {
 // =============================================
 // 【架构重构】Customer 模块 - 数据准备函数
 // =============================================
-
-/**
- * 准备商品目录页面数据（分组显示）
- */
-function prepareCatalogPageData($pdo, $search = '', $genre = '') {
-    require_once __DIR__ . '/db_procedures.php';
-
-    return [
-        'items'  => DBProcedures::getCatalogItemsGrouped($pdo, $search, $genre),
-        'genres' => DBProcedures::getCatalogGenresGrouped($pdo)
-    ];
-}
 
 /**
  * 准备商品详情页面数据（原有方法，保留兼容性）
@@ -1142,43 +1047,6 @@ function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
 }
 
 /**
- * 处理回购提交
- * 【修复】添加事务管理
- */
-function handleBuybackSubmission($pdo, $data) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    try {
-        $pdo->beginTransaction();
-
-        $buybackId = DBProcedures::processBuyback(
-            $pdo,
-            $data['customer_id'] ?: null,
-            $data['employee_id'],
-            $data['shop_id'],
-            $data['release_id'],
-            1, // 数量固定为1
-            $data['buy_price'],
-            $data['condition'],
-            $data['resale_price']
-        );
-
-        if ($buybackId && $buybackId > 0) {
-            $pdo->commit();
-            return ['success' => true, 'message' => "Buyback processed successfully. Buyback Order #$buybackId created.", 'buyback_id' => $buybackId];
-        } else {
-            $pdo->rollBack();
-            return ['success' => false, 'message' => 'Failed to process buyback.'];
-        }
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        return ['success' => false, 'message' => 'Failed to process buyback.'];
-    }
-}
-
-/**
  * 处理采购订单创建
  * 【修复】添加ConditionGrade和SalePrice参数
  */
@@ -1215,38 +1083,6 @@ function handleProcurementCreatePO($pdo, $data, $warehouseId) {
             $pdo->rollBack();
         }
         return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
-    }
-}
-
-/**
- * 处理采购订单接收
- * 【修复】添加事务管理
- */
-function handleProcurementReceivePO($pdo, $orderId, $warehouseId) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    if (!$warehouseId) {
-        return ['success' => false, 'message' => 'Warehouse not configured.'];
-    }
-
-    try {
-        $pdo->beginTransaction();
-
-        $batchNo = "BATCH-" . date('Ymd') . "-" . $orderId;
-        $success = DBProcedures::receiveSupplierOrder($pdo, $orderId, $batchNo, 'New', 0.5);
-
-        if ($success) {
-            $pdo->commit();
-            return ['success' => true, 'message' => "Supplier Order #$orderId received. Items added to Warehouse inventory."];
-        } else {
-            $pdo->rollBack();
-            return ['success' => false, 'message' => 'Failed to receive order.'];
-        }
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        return ['success' => false, 'message' => 'Failed to receive order.'];
     }
 }
 

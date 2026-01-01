@@ -22,6 +22,14 @@ if (empty($_SESSION['cart'])) {
 // 【架构重构】使用DBProcedures获取购物车商品和店铺信息
 $cartItems = DBProcedures::getCheckoutCartItems($pdo, $_SESSION['cart']);
 
+// 【安全检查】验证购物车不为空
+if (empty($cartItems)) {
+    flash('Your cart items are no longer available. Please add items again.', 'warning');
+    $_SESSION['cart'] = []; // 清空无效的购物车
+    header('Location: cart.php');
+    exit;
+}
+
 // 验证商品可用性
 if (count($cartItems) != count($_SESSION['cart'])) {
     flash('Some items are no longer available. Please review your cart.', 'warning');
@@ -44,15 +52,15 @@ $total = array_sum(array_column($cartItems, 'UnitPrice'));
 $customerId = $_SESSION['user_id'];
 $customer = DBProcedures::getCustomerProfile($pdo, $customerId);
 
-// 计算折扣
+// 计算折扣（安全检查：验证客户数据存在）
 $discount = 0;
-if ($customer['DiscountRate'] > 0) {
+if ($customer && isset($customer['DiscountRate']) && $customer['DiscountRate'] > 0) {
     $discount = $total * ($customer['DiscountRate'] / 100);
 }
 
-// 【新增】定义运费（选择Shipping时收取，Pickup免运费）
+// 【新增】运费（选择Shipping时收取，Pickup免运费）
+// SHIPPING_FEE 常量已在 config/db_connect.php 中定义
 $shippingCost = 0;
-define('SHIPPING_FEE', 15.00); // 固定运费¥15
 
 $finalTotal = $total - $discount;
 

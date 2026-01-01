@@ -13,8 +13,7 @@ requireRole('Customer');
 $customerId = $_SESSION['user_id'];
 $orderId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-// 支付超时时间（15分钟）
-define('PAYMENT_TIMEOUT_MINUTES', 15);
+// PAYMENT_TIMEOUT_MINUTES 常量已在 config/db_connect.php 中定义
 
 if (!$orderId) {
     flash("Invalid order ID.", 'danger');
@@ -204,6 +203,7 @@ function cancelOrder(orderId) {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
+        credentials: 'same-origin', // 确保发送session cookies
         body: 'order_id=' + orderId
     }).then(response => response.json())
     .then(data => {

@@ -25,8 +25,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'current_user_id' => $_SESSION['user_id']
     ];
 
-    $result = handleEmployeeAction($pdo, $action, $data);
-    flash($result['message'], $result['success'] ? 'success' : 'danger');
+    // 【安全检查】验证必填参数
+    $validationError = null;
+    if ($action === 'add') {
+        if (empty($data['name'])) {
+            $validationError = 'Employee name is required.';
+        } elseif (empty($data['username'])) {
+            $validationError = 'Username is required.';
+        } elseif (empty($data['password'])) {
+            $validationError = 'Password is required for new employee.';
+        } elseif (empty($data['shop_id'])) {
+            $validationError = 'Please assign a shop.';
+        }
+    } elseif ($action === 'edit') {
+        if (empty($data['employee_id'])) {
+            $validationError = 'Invalid employee ID.';
+        } elseif (empty($data['name'])) {
+            $validationError = 'Employee name is required.';
+        }
+    } elseif ($action === 'delete') {
+        if (empty($data['employee_id'])) {
+            $validationError = 'Invalid employee ID.';
+        }
+    }
+
+    if ($validationError) {
+        flash($validationError, 'danger');
+    } else {
+        $result = handleEmployeeAction($pdo, $action, $data);
+        flash($result['message'], $result['success'] ? 'success' : 'danger');
+    }
 
     header("Location: users.php");
     exit();

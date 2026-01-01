@@ -10,8 +10,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Customer');
 
-// 支付超时时间（15分钟）
-define('PAYMENT_TIMEOUT_MINUTES', 15);
+// PAYMENT_TIMEOUT_MINUTES 常量已在 config/db_connect.php 中定义
 
 $customerId = $_SESSION['user_id'];
 $orderId = isset($_GET['order_id']) ? (int)$_GET['order_id'] : 0;
@@ -156,6 +155,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
+                credentials: 'same-origin', // 确保发送session cookies
                 body: 'order_id=<?= $order['OrderID'] ?>&auto_cancel=1'
             }).then(response => response.json())
             .then(data => {

@@ -20,8 +20,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'email'       => trim($_POST['email'] ?? '')
     ];
 
-    $result = handleSupplierAction($pdo, $action, $data);
-    flash($result['message'], $result['success'] ? ($result['type'] ?? 'success') : 'danger');
+    // 【安全检查】验证必填参数
+    $validationError = null;
+    if ($action === 'add' || $action === 'edit') {
+        if (empty($data['name'])) {
+            $validationError = 'Supplier name is required.';
+        } elseif (empty($data['email'])) {
+            $validationError = 'Contact email is required.';
+        } elseif (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            $validationError = 'Invalid email format.';
+        }
+        if ($action === 'edit' && empty($data['supplier_id'])) {
+            $validationError = 'Invalid supplier ID.';
+        }
+    } elseif ($action === 'delete') {
+        if (empty($data['supplier_id'])) {
+            $validationError = 'Invalid supplier ID.';
+        }
+    }
+
+    if ($validationError) {
+        flash($validationError, 'danger');
+    } else {
+        $result = handleSupplierAction($pdo, $action, $data);
+        flash($result['message'], $result['success'] ? ($result['type'] ?? 'success') : 'danger');
+    }
 
     header("Location: suppliers.php");
     exit();

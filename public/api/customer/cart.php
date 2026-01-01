@@ -52,6 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (removeFromCart($stockId)) {
                     flash('Item removed from cart.', 'info');
                     error_log("Cart action 'remove': Stock #$stockId removed successfully");
+                } else {
+                    flash('Failed to remove item from cart.', 'warning');
+                    error_log("Cart action 'remove': Failed to remove Stock #$stockId");
                 }
             }
             break;
@@ -67,8 +70,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 确保session修改立即持久化
     session_write_close();
 
-    // 重定向回来源页面
-    $referer = $_SERVER['HTTP_REFERER'] ?? '../customer/cart.php';
+    // 重定向回来源页面（安全验证：只允许站内重定向）
+    $referer = $_SERVER['HTTP_REFERER'] ?? '';
+    $defaultRedirect = '../customer/cart.php';
+
+    // 验证 referer 是相对路径或同域名
+    if (!empty($referer)) {
+        $refererHost = parse_url($referer, PHP_URL_HOST);
+        $currentHost = $_SERVER['HTTP_HOST'] ?? '';
+
+        // 只有同域名或空主机（相对路径）才允许重定向
+        if ($refererHost !== null && $refererHost !== $currentHost) {
+            $referer = $defaultRedirect;
+        }
+    } else {
+        $referer = $defaultRedirect;
+    }
+
     header("Location: $referer");
     exit();
 }

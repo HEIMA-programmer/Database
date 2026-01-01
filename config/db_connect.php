@@ -19,6 +19,17 @@ if (!defined('BASE_URL')) {
     define('BASE_URL', $baseUrl);
 }
 
+// ========== 应用常量 ==========
+// 支付超时时间（分钟）
+if (!defined('PAYMENT_TIMEOUT_MINUTES')) {
+    define('PAYMENT_TIMEOUT_MINUTES', 15);
+}
+
+// 运费（元）
+if (!defined('SHIPPING_FEE')) {
+    define('SHIPPING_FEE', 15.00);
+}
+
 // 调试信息（生产环境应注释掉）
 // error_log("BASE_URL: " . BASE_URL);
 

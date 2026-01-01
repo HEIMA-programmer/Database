@@ -21,7 +21,7 @@ switch ($action) {
         $excludeShopId = (int)($_GET['exclude_shop'] ?? 0);
 
         if (!$releaseId || !$condition) {
-            ApiResponse::error('Missing parameters');
+            ApiResponse::error('Missing parameters', 400);
         }
 
         ApiResponse::handle(function() use ($pdo, $releaseId, $condition, $excludeShopId) {
@@ -31,6 +31,6 @@ switch ($action) {
         break;
 
     default:
-        ApiResponse::error('Unknown action');
+        ApiResponse::error('Unknown action', 400);
         break;
 }

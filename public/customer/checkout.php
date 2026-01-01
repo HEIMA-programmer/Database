@@ -304,76 +304,18 @@ require_once __DIR__ . '/../../includes/header.php';
 </form>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const pickupRadio = document.getElementById('pickup');
-    const shippingRadio = document.getElementById('shipping');
-    const addressSection = document.getElementById('shipping-address-section');
-    const fulfillmentOptions = document.querySelectorAll('.fulfillment-option');
-    const shippingCostDisplay = document.getElementById('shipping-cost-display');
-    const totalDisplay = document.getElementById('total-display');
-
-    // 【安全修复】使用预渲染的格式化价格，不暴露原始数值和计算逻辑
-    // 后端已经计算好所有可能的显示值，前端只做UI切换
-    const priceDisplays = {
-        shipping: {
-            shippingCost: '<?= formatPrice(SHIPPING_FEE) ?>',
-            total: '<?= formatPrice($finalTotal + SHIPPING_FEE) ?>'
-        },
-        pickup: {
-            shippingCost: '<span class="text-success">Free</span>',
-            total: '<?= formatPrice($finalTotal) ?>'
-        }
-    };
-
-    function updateUI() {
-        // 更新地址显示
-        // 修复：Warehouse 时没有 radio 按钮，地址栏应始终显示
-        const isWarehouse = !pickupRadio && !shippingRadio;
-
-        if (isWarehouse || (shippingRadio && shippingRadio.checked)) {
-            addressSection.style.display = 'block';
-        } else if (addressSection) {
-            addressSection.style.display = 'none';
-        }
-
-        // 【安全修复】使用预渲染的价格显示
-        if (shippingRadio && shippingRadio.checked) {
-            shippingCostDisplay.textContent = priceDisplays.shipping.shippingCost;
-            totalDisplay.textContent = priceDisplays.shipping.total;
-        } else if (pickupRadio && pickupRadio.checked) {
-            shippingCostDisplay.innerHTML = priceDisplays.pickup.shippingCost;
-            totalDisplay.textContent = priceDisplays.pickup.total;
-        }
-
-        // 更新选中样式
-        fulfillmentOptions.forEach(opt => {
-            const radio = opt.querySelector('input[type="radio"]');
-            if (radio && radio.checked) {
-                opt.classList.remove('border-secondary');
-                opt.classList.add('border-warning');
-            } else {
-                opt.classList.remove('border-warning');
-                opt.classList.add('border-secondary');
-            }
-        });
+// 传递PHP计算的价格数据到JS
+window.checkoutPriceDisplays = {
+    shipping: {
+        shippingCost: '<?= formatPrice(SHIPPING_FEE) ?>',
+        total: '<?= formatPrice($finalTotal + SHIPPING_FEE) ?>'
+    },
+    pickup: {
+        shippingCost: '<span class="text-success">Free</span>',
+        total: '<?= formatPrice($finalTotal) ?>'
     }
-
-    if (pickupRadio) pickupRadio.addEventListener('change', updateUI);
-    if (shippingRadio) shippingRadio.addEventListener('change', updateUI);
-
-    // 点击卡片也能选中
-    fulfillmentOptions.forEach(opt => {
-        opt.addEventListener('click', function() {
-            const radio = this.querySelector('input[type="radio"]');
-            if (radio) {
-                radio.checked = true;
-                updateUI();
-            }
-        });
-    });
-
-    updateUI();
-});
+};
 </script>
+<script src="../assets/js/pages/customer-checkout.js"></script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

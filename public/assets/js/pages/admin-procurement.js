@@ -94,21 +94,38 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // 【修复】添加null检查，防止JavaScript错误阻止后续代码执行
     // 监听专辑和condition的变化，通过AJAX获取价格
-    releaseSelect.addEventListener('change', updatePriceByCondition);
-    conditionSelect.addEventListener('change', updatePriceByCondition);
-    salePriceInput.addEventListener('input', updateCosts);
-    quantityInput.addEventListener('input', updateCosts);
+    if (releaseSelect) {
+        releaseSelect.addEventListener('change', updatePriceByCondition);
+    }
+    if (conditionSelect) {
+        conditionSelect.addEventListener('change', updatePriceByCondition);
+    }
+    if (salePriceInput) {
+        salePriceInput.addEventListener('input', updateCosts);
+    }
+    if (quantityInput) {
+        quantityInput.addEventListener('input', updateCosts);
+    }
 
     // 初始化
-    updateCosts();
+    if (totalCostDisplay) {
+        updateCosts();
+    }
 
-    // Receive modal
+    // Receive modal - 【修复】确保绑定能正确执行
     document.querySelectorAll('.receive-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const poId = this.dataset.poId;
-            document.getElementById('receivePOId').value = poId;
-            document.getElementById('receivePOIdDisplay').textContent = poId;
+            const receivePOId = document.getElementById('receivePOId');
+            const receivePOIdDisplay = document.getElementById('receivePOIdDisplay');
+            if (receivePOId) {
+                receivePOId.value = poId;
+            }
+            if (receivePOIdDisplay) {
+                receivePOIdDisplay.textContent = poId;
+            }
         });
     });
 });

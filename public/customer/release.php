@@ -24,6 +24,7 @@ if (!$pageData['found']) {
 }
 $release = $pageData['release'];
 $stockItems = $pageData['stockItems'];
+$tracks = $pageData['tracks'] ?? [];
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
@@ -57,6 +58,25 @@ require_once __DIR__ . '/../../includes/header.php';
         <?php if ($release['Description']): ?>
         <div class="mb-4">
             <p class="text-muted"><?= nl2br(h($release['Description'])) ?></p>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($tracks)): ?>
+        <div class="mb-4">
+            <h5 class="text-white mb-3"><i class="fa-solid fa-music me-2"></i>Track List</h5>
+            <div class="list-group list-group-flush">
+                <?php foreach ($tracks as $track): ?>
+                <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center py-2 px-3">
+                    <div>
+                        <span class="badge bg-secondary me-2"><?= $track['TrackNumber'] ?></span>
+                        <span class="text-light"><?= h($track['Title']) ?></span>
+                    </div>
+                    <?php if ($track['Duration']): ?>
+                    <span class="text-muted small"><?= h($track['Duration']) ?></span>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
         </div>
         <?php endif; ?>
 

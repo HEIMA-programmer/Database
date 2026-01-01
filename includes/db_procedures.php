@@ -501,29 +501,37 @@ class DBProcedures {
 
     /**
      * 处理客户回购
-     * 【修复】添加事务包装确保原子性 - 回购涉及创建订单、订单行和生成库存多个步骤
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function processBuyback($pdo, $customerId, $employeeId, $shopId, $releaseId, $quantity, $unitPrice, $conditionGrade, $resalePrice) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             $stmt = $pdo->prepare("CALL sp_process_buyback(?, ?, ?, ?, ?, ?, ?, ?, @buyback_id)");
             $stmt->execute([$customerId, $employeeId, $shopId, $releaseId, $quantity, $unitPrice, $conditionGrade, $resalePrice]);
             $result = $pdo->query("SELECT @buyback_id AS buyback_id")->fetch();
 
             if ($result['buyback_id'] > 0) {
-                $pdo->commit();
+                if ($ownTransaction) {
+                    $pdo->commit();
+                }
                 return $result['buyback_id'];
             }
-            $pdo->rollBack();
+            if ($ownTransaction) {
+                $pdo->rollBack();
+            }
             return false;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("processBuyback Error: " . $e->getMessage());
-            return false;
+            throw $e; // 重新抛出让外层处理
         }
     }
 
@@ -1198,28 +1206,30 @@ class DBProcedures {
 
     /**
      * Admin审批申请
-     * 【修复】添加事务包装确保原子性
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function respondToRequest($pdo, $requestId, $adminId, $approved, $responseNote) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性（调货申请涉及库存状态变更）
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             $stmt = $pdo->prepare("CALL sp_respond_to_request(?, ?, ?, ?)");
             $result = $stmt->execute([$requestId, $adminId, $approved, $responseNote]);
 
-            if ($result) {
+            if ($result && $ownTransaction) {
                 $pdo->commit();
-                return true;
             }
-            $pdo->rollBack();
-            return false;
+            return $result;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("respondToRequest Error: " . $e->getMessage());
-            return false;
+            throw $e; // 重新抛出让外层处理
         }
     }
 
@@ -1829,12 +1839,16 @@ class DBProcedures {
     /**
      * 发起仓库库存调配（带确认流程）
      * 创建调拨记录，需要仓库员工确认发货后才能完成
-     * 【修复】添加事务包装确保原子性 - 调配涉及创建多个调拨记录和更新库存状态
+     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function initiateWarehouseDispatch($pdo, $warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity, $employeeId) {
+        $ownTransaction = false;
         try {
-            // 【修复】开始事务确保原子性
-            $pdo->beginTransaction();
+            // 【修复】检查是否已在事务中，避免嵌套事务
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $ownTransaction = true;
+            }
 
             $stmt = $pdo->prepare("CALL sp_initiate_warehouse_dispatch(?, ?, ?, ?, ?, ?, @initiated_count)");
             $stmt->execute([$warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity, $employeeId]);
@@ -1842,17 +1856,21 @@ class DBProcedures {
             $count = (int)$result['initiated_count'];
 
             if ($count > 0) {
-                $pdo->commit();
+                if ($ownTransaction) {
+                    $pdo->commit();
+                }
                 return $count;
             }
-            $pdo->rollBack();
+            if ($ownTransaction) {
+                $pdo->rollBack();
+            }
             return 0;
         } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             error_log("initiateWarehouseDispatch Error: " . $e->getMessage());
-            return 0;
+            throw $e; // 重新抛出让外层处理
         }
     }
 

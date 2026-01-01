@@ -25,6 +25,21 @@ class DBProcedures {
         }
     }
 
+    /**
+     * 【新增】获取库存商品完整信息（包含ShopID）
+     * 用于购物车店铺一致性验证
+     */
+    public static function getStockItemInfo($pdo, $stockId) {
+        try {
+            $stmt = $pdo->prepare("SELECT StockItemID, ShopID, Status FROM vw_stock_item_status WHERE StockItemID = ?");
+            $stmt->execute([$stockId]);
+            return $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("getStockItemInfo Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
     // ----------------
     // 目录和商品相关
     // ----------------
@@ -1144,12 +1159,26 @@ class DBProcedures {
 
     /**
      * Admin审批申请
+     * 【修复】添加事务包装确保原子性
      */
     public static function respondToRequest($pdo, $requestId, $adminId, $approved, $responseNote) {
         try {
+            // 【修复】开始事务确保原子性（调货申请涉及库存状态变更）
+            $pdo->beginTransaction();
+
             $stmt = $pdo->prepare("CALL sp_respond_to_request(?, ?, ?, ?)");
-            return $stmt->execute([$requestId, $adminId, $approved, $responseNote]);
+            $result = $stmt->execute([$requestId, $adminId, $approved, $responseNote]);
+
+            if ($result) {
+                $pdo->commit();
+                return true;
+            }
+            $pdo->rollBack();
+            return false;
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("respondToRequest Error: " . $e->getMessage());
             return false;
         }
@@ -1943,9 +1972,13 @@ class DBProcedures {
     /**
      * 创建POS门店订单
      * 替换 pos.php 中的订单创建流程
+     * 【修复】添加事务包装确保原子性
      */
     public static function createPosOrder($pdo, $customerId, $employeeId, $shopId, $stockItemIds) {
         try {
+            // 【修复】开始事务确保原子性
+            $pdo->beginTransaction();
+
             // 将数组转换为逗号分隔的字符串
             $stockIdsStr = implode(',', $stockItemIds);
 
@@ -1954,15 +1987,21 @@ class DBProcedures {
             $result = $pdo->query("SELECT @order_id AS order_id, @total_amount AS total_amount")->fetch();
 
             if ($result['order_id'] > 0) {
+                $pdo->commit();
                 return [
                     'order_id' => $result['order_id'],
                     'total_amount' => $result['total_amount']
                 ];
             } elseif ($result['order_id'] == -2) {
+                $pdo->rollBack();
                 return ['error' => 'no_available_items'];
             }
+            $pdo->rollBack();
             return false;
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("createPosOrder Error: " . $e->getMessage());
             return false;
         }

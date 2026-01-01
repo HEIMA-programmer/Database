@@ -12,16 +12,30 @@ require_once __DIR__ . '/../../includes/db_procedures.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Manager');
 
-// 【修复】兼容多种session结构
-$shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;
-$shopType = $_SESSION['user']['ShopType'] ?? 'Retail';
-$isWarehouse = ($shopType === 'Warehouse');
-
-if (!$shopId) {
-    flash('Shop ID not found in session. Please re-login.', 'warning');
+// 【修复】从数据库验证员工店铺归属，而非直接信任session
+$employeeId = $_SESSION['user_id'] ?? null;
+if (!$employeeId) {
+    flash('Session expired. Please re-login.', 'warning');
     header('Location: ' . BASE_URL . '/login.php');
     exit;
 }
+
+// 【安全修复】从数据库获取并验证员工的店铺信息
+$employeeInfo = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
+if (!$employeeInfo) {
+    flash('Employee shop information not found. Please contact administrator.', 'danger');
+    header('Location: ' . BASE_URL . '/login.php');
+    exit;
+}
+
+// 使用数据库验证后的店铺信息
+$shopId = $employeeInfo['ShopID'];
+$shopType = $employeeInfo['ShopType'] ?? 'Retail';
+$isWarehouse = ($shopType === 'Warehouse');
+
+// 同步session中的店铺信息（可选，确保一致性）
+$_SESSION['shop_id'] = $shopId;
+$_SESSION['shop_name'] = $employeeInfo['ShopName'] ?? '';
 
 // 获取店铺级别的Dashboard数据
 $dashboardData = prepareDashboardData($pdo, $shopId);

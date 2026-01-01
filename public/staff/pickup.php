@@ -9,7 +9,24 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole(['Staff', 'Manager']);
 
-$shopId = $_SESSION['shop_id'];
+// 【安全修复】从数据库验证员工店铺归属
+$employeeId = $_SESSION['user_id'] ?? null;
+if (!$employeeId) {
+    flash('Session expired. Please re-login.', 'warning');
+    header('Location: /login.php');
+    exit;
+}
+
+$employee = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
+if (!$employee) {
+    flash('Employee information not found. Please contact administrator.', 'danger');
+    header('Location: /login.php');
+    exit;
+}
+
+// 【安全修复】使用数据库验证后的店铺ID
+$shopId = $employee['ShopID'];
+$_SESSION['shop_id'] = $shopId; // 同步session
 
 // ========== POST 请求处理 ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'])) {

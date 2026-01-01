@@ -11,11 +11,25 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Staff');
 
-// 【修复】使用正确的Session结构
-$employeeId = $_SESSION['user_id'];
-$shopId = $_SESSION['shop_id'];
-// 【架构重构Phase2】使用DBProcedures替换直接SQL
+// 【安全修复】从数据库验证员工店铺归属
+$employeeId = $_SESSION['user_id'] ?? null;
+if (!$employeeId) {
+    flash('Session expired. Please re-login.', 'warning');
+    header('Location: /login.php');
+    exit;
+}
+
+// 【架构重构Phase2】使用DBProcedures获取并验证员工信息
 $employee = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
+if (!$employee) {
+    flash('Employee information not found. Please contact administrator.', 'danger');
+    header('Location: /login.php');
+    exit;
+}
+
+// 【安全修复】使用数据库验证后的店铺ID，而非直接信任session
+$shopId = $employee['ShopID'];
+$_SESSION['shop_id'] = $shopId; // 同步session
 
 // 仓库员工不能使用POS
 if ($employee['ShopType'] == 'Warehouse') {

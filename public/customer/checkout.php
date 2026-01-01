@@ -30,9 +30,15 @@ if (empty($cartItems)) {
     exit;
 }
 
-// 验证商品可用性
+// 【修复】验证商品可用性并提供详细信息
 if (count($cartItems) != count($_SESSION['cart'])) {
-    flash('Some items are no longer available. Please review your cart.', 'warning');
+    // 计算不可用商品数量
+    $unavailableCount = count($_SESSION['cart']) - count($cartItems);
+    // 自动同步购物车（移除不可用商品）
+    $availableIds = array_column($cartItems, 'StockItemID');
+    $_SESSION['cart'] = array_values(array_intersect($_SESSION['cart'], $availableIds));
+
+    flash("$unavailableCount item(s) are no longer available and have been removed from your cart. Please review your updated cart.", 'warning');
     header('Location: cart.php');
     exit;
 }

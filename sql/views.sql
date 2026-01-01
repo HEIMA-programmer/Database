@@ -1365,7 +1365,9 @@ SELECT
     si.ReleaseID,
     si.ConditionGrade,
     r.Title,
-    r.ArtistName
+    r.ArtistName,
+    r.Genre,
+    r.ReleaseYear
 FROM OrderLine ol
 JOIN StockItem si ON ol.StockItemID = si.StockItemID
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;
@@ -1830,3 +1832,46 @@ SELECT
 FROM StockItem
 WHERE Status = 'Available'
 GROUP BY ShopID, ReleaseID, ConditionGrade;
+
+-- 98. [架构重构] 库存成本明细视图
+-- 替换 db_procedures.php:getShopSoldInventoryCost 和 getShopCurrentInventoryCost 中的直接表访问
+-- 通过视图封装复杂的成本计算逻辑
+CREATE OR REPLACE VIEW vw_stock_item_with_cost AS
+SELECT
+    si.StockItemID,
+    si.ReleaseID,
+    si.ShopID,
+    si.ConditionGrade,
+    si.Status,
+    si.SourceType,
+    si.SourceOrderID,
+    si.AcquiredDate,
+    si.DateSold,
+    r.Title,
+    r.ArtistName,
+    r.BaseUnitCost,
+    CASE
+        WHEN si.SourceType = 'Supplier' THEN
+            COALESCE(
+                (SELECT sol.UnitCost
+                 FROM SupplierOrderLine sol
+                 WHERE sol.SupplierOrderID = si.SourceOrderID
+                 AND sol.ReleaseID = si.ReleaseID
+                 AND sol.ConditionGrade = si.ConditionGrade
+                 LIMIT 1),
+                r.BaseUnitCost
+            )
+        WHEN si.SourceType = 'Buyback' THEN
+            COALESCE(
+                (SELECT bol.UnitPrice
+                 FROM BuybackOrderLine bol
+                 WHERE bol.BuybackOrderID = si.SourceOrderID
+                 AND bol.ReleaseID = si.ReleaseID
+                 AND bol.ConditionGrade = si.ConditionGrade
+                 LIMIT 1),
+                r.BaseUnitCost
+            )
+        ELSE r.BaseUnitCost
+    END AS UnitCost
+FROM StockItem si
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;

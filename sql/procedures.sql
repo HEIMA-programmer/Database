@@ -168,9 +168,6 @@ BEGIN
     DECLARE v_batch_no VARCHAR(50);
     DECLARE v_counter INT DEFAULT 0;
     DECLARE v_total_payment DECIMAL(10,2);
-    DECLARE v_points_earned INT;
-    DECLARE v_current_points INT;
-    DECLARE v_new_tier_id INT;
     DECLARE v_existing_price DECIMAL(10,2);
     DECLARE v_final_resale_price DECIMAL(10,2);
 
@@ -222,35 +219,8 @@ BEGIN
         SET v_counter = v_counter + 1;
     END WHILE;
 
-    -- 【新增】给回购客户增加积分（每回购1元得0.5积分）
-    IF p_customer_id IS NOT NULL THEN
-        SET v_points_earned = FLOOR(v_total_payment * 0.5);
-        
-        IF v_points_earned > 0 THEN
-            -- 更新客户积分
-            UPDATE Customer
-            SET Points = Points + v_points_earned
-            WHERE CustomerID = p_customer_id;
-
-            -- 获取更新后的积分
-            SELECT Points INTO v_current_points
-            FROM Customer
-            WHERE CustomerID = p_customer_id;
-
-            -- 自动升级会员等级
-            SELECT TierID INTO v_new_tier_id
-            FROM MembershipTier
-            WHERE v_current_points >= MinPoints
-            ORDER BY MinPoints DESC
-            LIMIT 1;
-
-            IF v_new_tier_id IS NOT NULL THEN
-                UPDATE Customer
-                SET TierID = v_new_tier_id
-                WHERE CustomerID = p_customer_id;
-            END IF;
-        END IF;
-    END IF;
+    -- 【架构重构】积分和等级更新已由触发器 trg_after_buyback_complete 自动处理
+    -- 触发器在 INSERT INTO BuybackOrder 时自动执行，无需手动更新
 END$$
 
 -- ================================================
@@ -1385,7 +1355,10 @@ BEGIN
     -- 计算总金额（小计 - 折扣 + 运费）
     SET p_total_amount = v_subtotal - v_discount_amount + COALESCE(p_shipping_cost, 0);
 
-    -- 更新订单金额（TotalAmount 已包含折扣，无需单独记录折扣金额）
+    -- 【设计说明】此处手动更新TotalAmount是故意设计：
+    -- 触发器trg_after_order_line_insert会自动计算SUM(PriceAtSale)作为基础金额
+    -- 存储过程在此基础上添加折扣和运费，得到最终金额
+    -- 这不是冗余，而是分层设计：触发器负责基础计算，存储过程负责业务修正
     UPDATE CustomerOrder
     SET TotalAmount = p_total_amount
     WHERE OrderID = p_order_id;

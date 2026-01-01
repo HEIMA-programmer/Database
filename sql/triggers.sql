@@ -463,4 +463,51 @@ BEGIN
     END IF;
 END$$
 
+-- ================================================
+-- 9. 回购订单积分触发器
+-- 回购订单完成时自动赠送积分并升级会员等级
+-- 与客户订单触发器(trg_after_order_complete)保持一致的积分处理逻辑
+-- ================================================
+
+DROP TRIGGER IF EXISTS trg_after_buyback_complete$$
+CREATE TRIGGER trg_after_buyback_complete
+AFTER INSERT ON BuybackOrder
+FOR EACH ROW
+BEGIN
+    DECLARE v_points_to_add INT;
+    DECLARE v_current_points INT;
+    DECLARE v_new_tier_id INT;
+
+    -- 只有已完成的回购订单且有关联客户时才处理积分
+    IF NEW.Status = 'Completed' AND NEW.CustomerID IS NOT NULL THEN
+        -- 计算积分：每回购1元得0.5积分（与存储过程逻辑一致）
+        SET v_points_to_add = FLOOR(NEW.TotalPayment * 0.5);
+
+        IF v_points_to_add > 0 THEN
+            -- 更新客户积分
+            UPDATE Customer
+            SET Points = Points + v_points_to_add
+            WHERE CustomerID = NEW.CustomerID;
+
+            -- 获取更新后的积分
+            SELECT Points INTO v_current_points
+            FROM Customer
+            WHERE CustomerID = NEW.CustomerID;
+
+            -- 自动升级会员等级
+            SELECT TierID INTO v_new_tier_id
+            FROM MembershipTier
+            WHERE v_current_points >= MinPoints
+            ORDER BY MinPoints DESC
+            LIMIT 1;
+
+            IF v_new_tier_id IS NOT NULL THEN
+                UPDATE Customer
+                SET TierID = v_new_tier_id
+                WHERE CustomerID = NEW.CustomerID;
+            END IF;
+        END IF;
+    END IF;
+END$$
+
 DELIMITER ;

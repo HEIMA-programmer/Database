@@ -100,6 +100,9 @@ $conditions = ['New', 'Mint', 'NM', 'VG+', 'VG'];
 // 【修复】传入当前店铺ID，确保只获取本店铺的价格（解决多店铺价格调整后缓存不一致问题）
 $priceMap = DBProcedures::getStockPriceMap($pdo, $shopId);
 
+// 【架构重构】获取最近回购记录（移至页面顶部，避免在HTML块中执行数据库操作）
+$recentBuybacks = DBProcedures::getRecentBuybacksDetail($pdo, $shopId, 15);
+
 require_once __DIR__ . '/../../includes/header.php';
 // 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单
 ?>
@@ -224,11 +227,6 @@ require_once __DIR__ . '/../../includes/header.php';
                 <h5 class="mb-0 text-warning"><i class="fa-solid fa-history me-2"></i>Recent Buybacks</h5>
             </div>
             <div class="card-body p-0">
-                <?php
-                // 【架构重构Phase2】使用DBProcedures替换直接SQL
-                $recentBuybacks = DBProcedures::getRecentBuybacksDetail($pdo, $shopId, 15);
-                ?>
-
                 <?php if (empty($recentBuybacks)): ?>
                     <p class="text-muted text-center py-4">No recent buybacks</p>
                 <?php else: ?>

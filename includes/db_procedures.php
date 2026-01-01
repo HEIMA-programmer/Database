@@ -31,7 +31,10 @@ class DBProcedures {
 
     /**
      * 【并发安全修复】使用行锁获取并验证库存状态
-     * 在事务中使用 FOR UPDATE 锁定行，防止并发超卖
+     * 调用存储过程 sp_get_stock_item_with_lock，在事务中锁定行防止并发超卖
+     *
+     * 【架构说明】虽然FOR UPDATE必须用于基表而非视图，
+     * 但通过存储过程封装保持了分层架构的一致性
      *
      * @param PDO $pdo
      * @param int $stockId
@@ -39,8 +42,8 @@ class DBProcedures {
      */
     public static function getStockItemInfoWithLock($pdo, $stockId) {
         try {
-            // 使用 FOR UPDATE 锁定行，确保并发安全
-            $stmt = $pdo->prepare("SELECT StockItemID, ShopID, Status FROM StockItem WHERE StockItemID = ? FOR UPDATE");
+            // 调用存储过程获取带锁的库存信息
+            $stmt = $pdo->prepare("CALL sp_get_stock_item_with_lock(?)");
             $stmt->execute([$stockId]);
             return $stmt->fetch(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {

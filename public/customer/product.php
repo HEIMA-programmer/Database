@@ -59,7 +59,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 </div>
 
                 <?php if ($item['Status'] == 'Available'): ?>
-                    <form action="cart_action.php" method="POST">
+                    <form action="../api/customer/cart.php" method="POST">
                         <input type="hidden" name="action" value="add">
                         <input type="hidden" name="stock_id" value="<?= $item['StockItemID'] ?>">
                         <button type="submit" class="btn btn-warning w-100 btn-lg fw-bold">

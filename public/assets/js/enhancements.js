@@ -229,7 +229,7 @@ function initNumberAnimations() {
 function addToCart(itemId, quantity = 1) {
     showLoading('Adding to cart...');
 
-    fetch('cart_action.php', {
+    fetch('/api/customer/cart.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',

@@ -83,7 +83,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         };
                     ?>
                     <div class="list-group-item bg-dark border-secondary">
-                        <form action="cart_action.php" method="POST" class="row align-items-center">
+                        <form action="../api/customer/cart.php" method="POST" class="row align-items-center">
                             <input type="hidden" name="action" value="add_multiple">
                             <input type="hidden" name="release_id" value="<?= $release['ReleaseID'] ?>">
                             <input type="hidden" name="condition" value="<?= h($stock['ConditionGrade']) ?>">

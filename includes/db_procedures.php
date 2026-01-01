@@ -811,8 +811,8 @@ class DBProcedures {
         try {
             error_log("=== completeOrder START: orderId=$orderId ===");
 
-            // 先检查订单当前状态
-            $preCheck = $pdo->prepare("SELECT OrderStatus, OrderType FROM CustomerOrder WHERE OrderID = ?");
+            // 通过视图检查订单当前状态
+            $preCheck = $pdo->prepare("SELECT OrderStatus, OrderType FROM vw_order_shop_validation WHERE OrderID = ?");
             $preCheck->execute([$orderId]);
             $preResult = $preCheck->fetch();
             error_log("PRE-CHECK: OrderID=$orderId, Status=" . ($preResult['OrderStatus'] ?? 'NULL') . ", Type=" . ($preResult['OrderType'] ?? 'NULL'));
@@ -833,8 +833,8 @@ class DBProcedures {
             while ($stmt->nextRowset()) {}
             $stmt->closeCursor();
 
-            // 验证订单状态是否真的变成了Completed
-            $checkStmt = $pdo->prepare("SELECT OrderStatus, OrderType FROM CustomerOrder WHERE OrderID = ?");
+            // 通过视图验证订单状态是否真的变成了Completed
+            $checkStmt = $pdo->prepare("SELECT OrderStatus, OrderType FROM vw_order_shop_validation WHERE OrderID = ?");
             $checkStmt->execute([$orderId]);
             $result = $checkStmt->fetch();
             $checkStmt->closeCursor();
@@ -1805,6 +1805,20 @@ class DBProcedures {
     }
 
     /**
+     * 获取订单基础信息（用于API验证和显示）
+     */
+    public static function getOrderBasicInfo($pdo, $orderId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_staff_pos_history WHERE OrderID = ?");
+            $stmt->execute([$orderId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getOrderBasicInfo Error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * 【架构重构Phase2】验证POS添加商品
      * 替换 pos.php 中的add_item验证查询
      */
@@ -2723,69 +2737,24 @@ class DBProcedures {
 
     /**
      * 获取店铺已售商品成本明细
-     * 【修复】从 SupplierOrderLine 或 BuybackOrderLine 查询真正的成本
+     * 通过视图 vw_stock_item_with_cost 获取成本信息
      */
     public static function getShopSoldInventoryCost($pdo, $shopId) {
         try {
             $stmt = $pdo->prepare("
                 SELECT
-                    si.StockItemID,
-                    r.Title,
-                    r.ArtistName,
-                    si.ConditionGrade,
-                    CASE
-                        WHEN si.SourceType = 'Supplier' THEN
-                            COALESCE(
-                                (SELECT sol.UnitCost
-                                 FROM SupplierOrderLine sol
-                                 WHERE sol.SupplierOrderID = si.SourceOrderID
-                                 AND sol.ReleaseID = si.ReleaseID
-                                 AND sol.ConditionGrade = si.ConditionGrade
-                                 LIMIT 1),
-                                r.BaseUnitCost
-                            )
-                        WHEN si.SourceType = 'Buyback' THEN
-                            COALESCE(
-                                (SELECT bol.UnitPrice
-                                 FROM BuybackOrderLine bol
-                                 WHERE bol.BuybackOrderID = si.SourceOrderID
-                                 AND bol.ReleaseID = si.ReleaseID
-                                 AND bol.ConditionGrade = si.ConditionGrade
-                                 LIMIT 1),
-                                r.BaseUnitCost
-                            )
-                        ELSE r.BaseUnitCost
-                    END AS UnitCost,
-                    CASE
-                        WHEN si.SourceType = 'Supplier' THEN
-                            COALESCE(
-                                (SELECT sol.UnitCost
-                                 FROM SupplierOrderLine sol
-                                 WHERE sol.SupplierOrderID = si.SourceOrderID
-                                 AND sol.ReleaseID = si.ReleaseID
-                                 AND sol.ConditionGrade = si.ConditionGrade
-                                 LIMIT 1),
-                                r.BaseUnitCost
-                            )
-                        WHEN si.SourceType = 'Buyback' THEN
-                            COALESCE(
-                                (SELECT bol.UnitPrice
-                                 FROM BuybackOrderLine bol
-                                 WHERE bol.BuybackOrderID = si.SourceOrderID
-                                 AND bol.ReleaseID = si.ReleaseID
-                                 AND bol.ConditionGrade = si.ConditionGrade
-                                 LIMIT 1),
-                                r.BaseUnitCost
-                            )
-                        ELSE r.BaseUnitCost
-                    END AS TotalCost,
+                    StockItemID,
+                    Title,
+                    ArtistName,
+                    ConditionGrade,
+                    UnitCost,
+                    UnitCost AS TotalCost,
                     1 AS Quantity,
-                    si.DateSold,
-                    si.SourceType
-                FROM StockItem si
-                JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-                WHERE si.ShopID = ? AND si.Status = 'Sold'
-                ORDER BY si.DateSold DESC
+                    DateSold,
+                    SourceType
+                FROM vw_stock_item_with_cost
+                WHERE ShopID = ? AND Status = 'Sold'
+                ORDER BY DateSold DESC
             ");
             $stmt->execute([$shopId]);
             return $stmt->fetchAll();
@@ -2797,69 +2766,24 @@ class DBProcedures {
 
     /**
      * 获取店铺当前库存成本明细
-     * 【修复】从 SupplierOrderLine 或 BuybackOrderLine 查询真正的成本
+     * 通过视图 vw_stock_item_with_cost 获取成本信息
      */
     public static function getShopCurrentInventoryCost($pdo, $shopId) {
         try {
             $stmt = $pdo->prepare("
                 SELECT
-                    si.StockItemID,
-                    r.Title,
-                    r.ArtistName,
-                    si.ConditionGrade,
-                    CASE
-                        WHEN si.SourceType = 'Supplier' THEN
-                            COALESCE(
-                                (SELECT sol.UnitCost
-                                 FROM SupplierOrderLine sol
-                                 WHERE sol.SupplierOrderID = si.SourceOrderID
-                                 AND sol.ReleaseID = si.ReleaseID
-                                 AND sol.ConditionGrade = si.ConditionGrade
-                                 LIMIT 1),
-                                r.BaseUnitCost
-                            )
-                        WHEN si.SourceType = 'Buyback' THEN
-                            COALESCE(
-                                (SELECT bol.UnitPrice
-                                 FROM BuybackOrderLine bol
-                                 WHERE bol.BuybackOrderID = si.SourceOrderID
-                                 AND bol.ReleaseID = si.ReleaseID
-                                 AND bol.ConditionGrade = si.ConditionGrade
-                                 LIMIT 1),
-                                r.BaseUnitCost
-                            )
-                        ELSE r.BaseUnitCost
-                    END AS UnitCost,
-                    CASE
-                        WHEN si.SourceType = 'Supplier' THEN
-                            COALESCE(
-                                (SELECT sol.UnitCost
-                                 FROM SupplierOrderLine sol
-                                 WHERE sol.SupplierOrderID = si.SourceOrderID
-                                 AND sol.ReleaseID = si.ReleaseID
-                                 AND sol.ConditionGrade = si.ConditionGrade
-                                 LIMIT 1),
-                                r.BaseUnitCost
-                            )
-                        WHEN si.SourceType = 'Buyback' THEN
-                            COALESCE(
-                                (SELECT bol.UnitPrice
-                                 FROM BuybackOrderLine bol
-                                 WHERE bol.BuybackOrderID = si.SourceOrderID
-                                 AND bol.ReleaseID = si.ReleaseID
-                                 AND bol.ConditionGrade = si.ConditionGrade
-                                 LIMIT 1),
-                                r.BaseUnitCost
-                            )
-                        ELSE r.BaseUnitCost
-                    END AS TotalCost,
+                    StockItemID,
+                    Title,
+                    ArtistName,
+                    ConditionGrade,
+                    UnitCost,
+                    UnitCost AS TotalCost,
                     1 AS Quantity,
-                    si.AcquiredDate,
-                    si.SourceType
-                FROM StockItem si
-                JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-                WHERE si.ShopID = ? AND si.Status = 'Available'
-                ORDER BY r.Title, si.ConditionGrade
+                    AcquiredDate,
+                    SourceType
+                FROM vw_stock_item_with_cost
+                WHERE ShopID = ? AND Status = 'Available'
+                ORDER BY Title, ConditionGrade
             ");
             $stmt->execute([$shopId]);
             return $stmt->fetchAll();

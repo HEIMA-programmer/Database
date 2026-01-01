@@ -1,8 +1,8 @@
 <?php
 /**
  * Buyback回购页面
- * 
- * 【修复】使用修改后的sp_process_buyback，自动计算并赠送积分
+ *
+ * 【修复】回购完成后自动计算并赠送积分
  * 【限制】只有门店员工可以访问，仓库员工无此功能
  */
 require_once __DIR__ . '/../../config/db_connect.php';

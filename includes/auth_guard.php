@@ -5,6 +5,17 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// 【修复】确保依赖项已加载
+// BASE_URL 来自 db_connect.php，flash() 来自 functions.php
+// 这些文件应该在调用 auth_guard.php 之前已被导入
+// 但为安全起见，在此处也检查并导入
+if (!defined('BASE_URL')) {
+    require_once __DIR__ . '/../config/db_connect.php';
+}
+if (!function_exists('flash')) {
+    require_once __DIR__ . '/functions.php';
+}
+
 /**
  * 强制要求登录
  */

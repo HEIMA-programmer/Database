@@ -4,10 +4,10 @@
  * 显示特定客户在当前店铺的所有订单，区分订单类型
  */
 require_once __DIR__ . '/../../config/db_connect.php';
-require_once __DIR__ . '/../../includes/auth_guard.php';
-requireRole('Manager');
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
+require_once __DIR__ . '/../../includes/auth_guard.php';
+requireRole('Manager');
 
 // 【修复】兼容多种session结构
 $shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;

@@ -7,10 +7,10 @@
  *            Low Stock Alert（带调货申请）、Shop Performance（收入支出明细）
  */
 require_once __DIR__ . '/../../config/db_connect.php';
-require_once __DIR__ . '/../../includes/auth_guard.php';
-requireRole('Manager');
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
+require_once __DIR__ . '/../../includes/auth_guard.php';
+requireRole('Manager');
 
 // 【修复】兼容多种session结构
 $shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;
@@ -19,7 +19,7 @@ $isWarehouse = ($shopType === 'Warehouse');
 
 if (!$shopId) {
     flash('Shop ID not found in session. Please re-login.', 'warning');
-    header('Location: /login.php');
+    header('Location: ' . BASE_URL . '/login.php');
     exit;
 }
 

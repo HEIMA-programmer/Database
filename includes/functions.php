@@ -1,6 +1,9 @@
 <?php
 // includes/functions.php
 
+// 【重构】统一在文件顶部导入依赖，移除函数内的29处重复导入
+require_once __DIR__ . '/db_procedures.php';
+
 /**
  * 安全过滤输出，防止XSS攻击
  */
@@ -62,12 +65,29 @@ function hasRole($role) {
 }
 
 /**
+ * 【重构】根据Unit Cost计算建议售价
+ * 低价产品：低比率上浮（薄利多销）
+ * 高价产品：高比率上浮（单品利润大）
+ * 原先在 procurement.php 和 price_config.php 中重复定义，现统一到此处
+ */
+function getSuggestedSalePrice($unitCost) {
+    if ($unitCost <= 20) {
+        return $unitCost * 1.50;  // 低价产品：上浮50%
+    } elseif ($unitCost <= 50) {
+        return $unitCost * 1.60;  // 中低价产品：上浮60%
+    } elseif ($unitCost <= 100) {
+        return $unitCost * 1.70;  // 中价产品：上浮70%
+    } else {
+        return $unitCost * 1.80;  // 高价产品：上浮80%
+    }
+}
+
+/**
  * 【架构重构Phase3】按店铺获取目录数据
  * 改用 DBProcedures::getCatalogByShop 和 DBProcedures::getReleaseGenres
  * 已更新以匹配 ReleaseAlbum 架构
  */
 function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') {
-    require_once __DIR__ . '/db_procedures.php';
 
     // 【架构重构Phase3】使用 DBProcedures 替换直接SQL查询
     $items = DBProcedures::getCatalogByShop($pdo, $shopId, $search, $genre);
@@ -100,7 +120,6 @@ function getShopIdByType($pdo, $type) {
         return $cache[$type];
     }
 
-    require_once __DIR__ . '/db_procedures.php';
 
     try {
         $id = DBProcedures::getShopIdByType($pdo, $type);
@@ -190,7 +209,6 @@ function checkMembershipUpgrade($pdo, $customerId, $amountSpent, $oldTierId = nu
  * @return array ['success' => bool, 'message' => string]
  */
 function addToCart($pdo, $stockId) {
-    require_once __DIR__ . '/db_procedures.php';
 
     // 初始化购物车
     if (!isset($_SESSION['cart'])) {
@@ -271,7 +289,6 @@ function clearPOSCart() {
  * @return array ['success' => bool, 'message' => string]
  */
 function authenticateEmployee($pdo, $username, $password) {
-    require_once __DIR__ . '/db_procedures.php';
 
     $employee = DBProcedures::getEmployeeForAuth($pdo, $username);
 
@@ -307,7 +324,6 @@ function authenticateEmployee($pdo, $username, $password) {
  * @return array ['success' => bool, 'message' => string]
  */
 function authenticateCustomer($pdo, $email, $password) {
-    require_once __DIR__ . '/db_procedures.php';
 
     $customer = DBProcedures::getCustomerForAuth($pdo, $email);
 
@@ -321,6 +337,16 @@ function authenticateCustomer($pdo, $email, $password) {
         if ($customer['Birthday']) {
             $_SESSION['birth_month'] = (int)date('m', strtotime($customer['Birthday']));
         }
+
+        // 【修复】设置 user 数组，保持与员工登录一致的结构
+        // 客户没有 ShopID 和 ShopType，设置默认值避免空指针
+        $_SESSION['user'] = [
+            'CustomerID' => $customer['CustomerID'],
+            'ShopID'     => null,
+            'ShopName'   => null,
+            'ShopType'   => null,
+            'Role'       => 'Customer'
+        ];
 
         return ['success' => true];
     }
@@ -339,7 +365,6 @@ function authenticateCustomer($pdo, $email, $password) {
  * @return array ['success' => bool, 'message' => string, 'customer_id' => int|null]
  */
 function registerNewCustomer($pdo, $name, $email, $password, $birthday = null) {
-    require_once __DIR__ . '/db_procedures.php';
 
     $hash = password_hash($password, PASSWORD_DEFAULT);
     $result = DBProcedures::registerCustomer($pdo, $name, $email, $hash, $birthday);
@@ -363,6 +388,15 @@ function registerNewCustomer($pdo, $name, $email, $password, $birthday = null) {
         if ($birthday) {
             $_SESSION['birth_month'] = (int)date('m', strtotime($birthday));
         }
+
+        // 【修复】设置 user 数组，保持与员工登录一致的结构
+        $_SESSION['user'] = [
+            'CustomerID' => $result['customer_id'],
+            'ShopID'     => null,
+            'ShopName'   => null,
+            'ShopType'   => null,
+            'Role'       => 'Customer'
+        ];
 
         return ['success' => true, 'customer_id' => $result['customer_id']];
     }
@@ -397,7 +431,6 @@ function getLoginRedirectUrl($role) {
  * @return array
  */
 function prepareDashboardData($pdo, $shopId = null) {
-    require_once __DIR__ . '/db_procedures.php';
 
     // 如果提供了shopId，则获取店铺级别的数据
     if ($shopId !== null) {
@@ -475,7 +508,6 @@ function prepareDashboardData($pdo, $shopId = null) {
  * 【修改】移除Admin角色选项，防止通过UI创建Admin账户
  */
 function prepareUsersPageData($pdo) {
-    require_once __DIR__ . '/db_procedures.php';
 
     return [
         'employees' => DBProcedures::getEmployeeList($pdo),
@@ -489,7 +521,6 @@ function prepareUsersPageData($pdo) {
  * 准备供应商管理页面数据
  */
 function prepareSuppliersPageData($pdo) {
-    require_once __DIR__ . '/db_procedures.php';
 
     return [
         'suppliers' => DBProcedures::getSupplierList($pdo)
@@ -500,7 +531,6 @@ function prepareSuppliersPageData($pdo) {
  * 准备产品管理页面数据
  */
 function prepareProductsPageData($pdo) {
-    require_once __DIR__ . '/db_procedures.php';
 
     // 使用视图获取专辑列表
     try {
@@ -519,7 +549,6 @@ function prepareProductsPageData($pdo) {
  * 准备采购管理页面数据
  */
 function prepareProcurementPageData($pdo) {
-    require_once __DIR__ . '/db_procedures.php';
 
     $warehouseId = getShopIdByType($pdo, 'Warehouse');
 
@@ -539,7 +568,6 @@ function prepareProcurementPageData($pdo) {
  * 准备库存管理页面数据
  */
 function prepareInventoryPageData($pdo, $shopId, $viewMode = 'detail') {
-    require_once __DIR__ . '/db_procedures.php';
 
     if ($viewMode === 'summary') {
         $inventory = DBProcedures::getInventorySummary($pdo, $shopId);
@@ -560,7 +588,6 @@ function prepareInventoryPageData($pdo, $shopId, $viewMode = 'detail') {
  * 准备取货页面数据
  */
 function preparePickupPageData($pdo, $shopId) {
-    require_once __DIR__ . '/db_procedures.php';
 
     return [
         'orders' => DBProcedures::getBopisPendingOrders($pdo, $shopId)
@@ -576,7 +603,6 @@ function preparePickupPageData($pdo, $shopId) {
  * 支持按店铺筛选（Manager使用）或全局数据（Admin使用）
  */
 function prepareReportsPageData($pdo, $shopId = null) {
-    require_once __DIR__ . '/db_procedures.php';
 
     if ($shopId !== null) {
         // 店铺级别数据
@@ -603,7 +629,6 @@ function prepareReportsPageData($pdo, $shopId = null) {
  * 准备商品详情页面数据（原有方法，保留兼容性）
  */
 function prepareProductDetailData($pdo, $stockId) {
-    require_once __DIR__ . '/db_procedures.php';
 
     $item = DBProcedures::getProductDetail($pdo, $stockId);
 
@@ -622,7 +647,6 @@ function prepareProductDetailData($pdo, $stockId) {
  * 【修改】准备专辑详情页面数据（支持按店铺筛选）
  */
 function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
-    require_once __DIR__ . '/db_procedures.php';
 
     // 1. 获取 Release 基本信息 (此时包含的是全局统计数据)
     $release = DBProcedures::getReleaseInfo($pdo, $releaseId);
@@ -694,7 +718,6 @@ function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
  * 【重构】移除10张限制，只受available数量限制
  */
 function addMultipleToCart($pdo, $releaseId, $conditionGrade, $quantity) {
-    require_once __DIR__ . '/db_procedures.php';
 
     if (!isset($_SESSION['cart'])) {
         $_SESSION['cart'] = [];
@@ -733,7 +756,6 @@ function addMultipleToCart($pdo, $releaseId, $conditionGrade, $quantity) {
  * 准备个人资料页面数据
  */
 function prepareProfilePageData($pdo, $customerId) {
-    require_once __DIR__ . '/db_procedures.php';
 
     $user = DBProcedures::getCustomerProfile($pdo, $customerId);
 
@@ -767,7 +789,6 @@ function prepareProfilePageData($pdo, $customerId) {
  * 准备支付页面数据
  */
 function preparePayPageData($pdo, $orderId, $customerId) {
-    require_once __DIR__ . '/db_procedures.php';
 
     $order = DBProcedures::getPendingOrder($pdo, $orderId, $customerId);
 
@@ -785,7 +806,6 @@ function preparePayPageData($pdo, $orderId, $customerId) {
  * 准备订单详情页面数据
  */
 function prepareOrderDetailPageData($pdo, $orderId, $customerId) {
-    require_once __DIR__ . '/db_procedures.php';
 
     $order = DBProcedures::getCustomerOrderDetail($pdo, $orderId, $customerId);
 
@@ -815,7 +835,6 @@ function prepareOrderDetailPageData($pdo, $orderId, $customerId) {
  * 准备订单列表页面数据
  */
 function prepareOrdersPageData($pdo, $customerId) {
-    require_once __DIR__ . '/db_procedures.php';
 
     return [
         'orders' => DBProcedures::getCustomerOrders($pdo, $customerId)
@@ -830,7 +849,6 @@ function prepareOrdersPageData($pdo, $customerId) {
  * 处理员工操作（增删改）
  */
 function handleEmployeeAction($pdo, $action, $data) {
-    require_once __DIR__ . '/db_procedures.php';
 
     switch ($action) {
         case 'add':
@@ -869,7 +887,6 @@ function handleEmployeeAction($pdo, $action, $data) {
  * 处理供应商操作（增删改）
  */
 function handleSupplierAction($pdo, $action, $data) {
-    require_once __DIR__ . '/db_procedures.php';
 
     switch ($action) {
         case 'add':
@@ -908,7 +925,6 @@ function handleSupplierAction($pdo, $action, $data) {
  * 处理专辑操作（增改）
  */
 function handleReleaseAction($pdo, $action, $data) {
-    require_once __DIR__ . '/db_procedures.php';
 
     switch ($action) {
         case 'add':
@@ -939,7 +955,6 @@ function handleReleaseAction($pdo, $action, $data) {
  * 【修复】添加事务管理
  */
 function handlePickupConfirmation($pdo, $orderId, $shopId) {
-    require_once __DIR__ . '/db_procedures.php';
 
     $order = DBProcedures::getOrderForPickupValidation($pdo, $orderId, $shopId);
 
@@ -974,7 +989,6 @@ function handlePickupConfirmation($pdo, $orderId, $shopId) {
  * 处理客户资料更新
  */
 function handleProfileUpdate($pdo, $customerId, $name, $password = null) {
-    require_once __DIR__ . '/db_procedures.php';
 
     $hash = !empty($password) ? password_hash($password, PASSWORD_DEFAULT) : null;
     $success = DBProcedures::updateCustomerProfile($pdo, $customerId, $name, $hash);
@@ -992,7 +1006,6 @@ function handleProfileUpdate($pdo, $customerId, $name, $password = null) {
  * 【修复】添加事务管理，确保支付操作的原子性，增强错误日志
  */
 function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
-    require_once __DIR__ . '/db_procedures.php';
 
     // 【修复4】详细日志：支付开始
     error_log("Payment initiated: Order #$orderId, Customer #$customerId, Method: $paymentMethod");
@@ -1051,7 +1064,6 @@ function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
  * 【修复】添加ConditionGrade和SalePrice参数
  */
 function handleProcurementCreatePO($pdo, $data, $warehouseId) {
-    require_once __DIR__ . '/db_procedures.php';
 
     if (!$warehouseId) {
         return ['success' => false, 'message' => 'Warehouse not configured.'];
@@ -1090,7 +1102,6 @@ function handleProcurementCreatePO($pdo, $data, $warehouseId) {
  * 处理采购订单接收（支持指定成色）
  */
 function handleProcurementReceivePOWithCondition($pdo, $orderId, $warehouseId, $condition = 'New') {
-    require_once __DIR__ . '/db_procedures.php';
 
     if (!$warehouseId) {
         return ['success' => false, 'message' => 'Warehouse not configured.'];

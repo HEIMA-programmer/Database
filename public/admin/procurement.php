@@ -19,26 +19,7 @@ $CONDITION_COST_MULTIPLIERS = [
     'VG'   => 0.55,  // Very Good：55%
 ];
 
-/**
- * 根据Unit Cost计算建议售价
- * 低价产品：低比率上浮（薄利多销）
- * 高价产品：高比率上浮（单品利润大）
- */
-function getSuggestedSalePrice($unitCost) {
-    if ($unitCost <= 20) {
-        // 低价产品：上浮50%（薄利多销）
-        return $unitCost * 1.50;
-    } elseif ($unitCost <= 50) {
-        // 中低价产品：上浮60%
-        return $unitCost * 1.60;
-    } elseif ($unitCost <= 100) {
-        // 中价产品：上浮70%
-        return $unitCost * 1.70;
-    } else {
-        // 高价产品：上浮80%（单品利润大，但回本慢）
-        return $unitCost * 1.80;
-    }
-}
+// 【重构】getSuggestedSalePrice 函数已移至 includes/functions.php，避免重复定义
 
 /**
  * 【重构】根据condition计算实际采购成本

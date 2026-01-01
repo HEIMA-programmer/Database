@@ -4,9 +4,10 @@
  * 仅Admin可访问，按需返回特定专辑的价格配置
  */
 require_once __DIR__ . '/../../../config/db_connect.php';
-require_once __DIR__ . '/../../../includes/auth_guard.php';
+require_once __DIR__ . '/../../../includes/functions.php';
 require_once __DIR__ . '/../../../includes/db_procedures.php';
 require_once __DIR__ . '/../../../includes/ApiResponse.php';
+require_once __DIR__ . '/../../../includes/auth_guard.php';
 
 requireRole('Admin');
 
@@ -31,13 +32,7 @@ $CONDITION_COST_MULTIPLIERS = [
     'VG'   => 0.55,
 ];
 
-// 利润率计算函数（保密）
-function getSuggestedSalePrice($unitCost) {
-    if ($unitCost <= 20) return $unitCost * 1.50;
-    if ($unitCost <= 50) return $unitCost * 1.60;
-    if ($unitCost <= 100) return $unitCost * 1.70;
-    return $unitCost * 1.80;
-}
+// 【重构】getSuggestedSalePrice 函数已移至 includes/functions.php，避免重复定义
 
 ApiResponse::handle(function() use ($pdo, $releaseId, $condition, $CONDITION_COST_MULTIPLIERS) {
     // 获取专辑基础成本

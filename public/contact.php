@@ -44,22 +44,22 @@ require_once __DIR__ . '/../includes/header.php';
     <div class="row justify-content-center mt-5 pt-5 border-top border-secondary">
         <div class="col-md-8">
             <h3 class="text-white mb-4 text-center">Get in Touch</h3>
-            <form action="#" method="POST" class="card bg-dark border-secondary p-4">
+            <form action="" method="POST" class="card bg-dark border-secondary p-4" onsubmit="alert('Thank you for your message! We will get back to you shortly.'); return false;">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label text-secondary">Name</label>
-                        <input type="text" class="form-control bg-secondary text-white border-0">
+                        <input type="text" name="name" class="form-control bg-secondary text-white border-0" required>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label text-secondary">Email</label>
-                        <input type="email" class="form-control bg-secondary text-white border-0">
+                        <input type="email" name="email" class="form-control bg-secondary text-white border-0" required>
                     </div>
                     <div class="col-12">
                         <label class="form-label text-secondary">Message</label>
-                        <textarea class="form-control bg-secondary text-white border-0" rows="4"></textarea>
+                        <textarea name="message" class="form-control bg-secondary text-white border-0" rows="4" required></textarea>
                     </div>
                     <div class="col-12 text-center">
-                        <button type="button" class="btn btn-warning px-5" onclick="alert('Thank you for your message! We will get back to you shortly.')">Send Message</button>
+                        <button type="submit" class="btn btn-warning px-5">Send Message</button>
                     </div>
                 </div>
             </form>

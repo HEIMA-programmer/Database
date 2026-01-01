@@ -9,7 +9,7 @@
  * 使用示例:
  * require_once __DIR__ . '/db_procedures.php';
  * $items = DBProcedures::getCartItems($pdo, [1, 2, 3]);
- * $result = DBProcedures::completeOrder($pdo, $orderId, $pointsEarned);
+ * $result = DBProcedures::completeOrder($pdo, $orderId);
  */
 
 class DBProcedures {
@@ -1197,19 +1197,6 @@ class DBProcedures {
         }
     }
 
-    /**
-     * 更新客户会员等级
-     */
-    public static function updateCustomerTier($pdo, $customerId) {
-        try {
-            $stmt = $pdo->prepare("CALL sp_update_customer_tier(?)");
-            return $stmt->execute([$customerId]);
-        } catch (PDOException $e) {
-            error_log("updateCustomerTier Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
     // =============================================
     // 【Manager/Admin重构】新增数据获取方法
     // =============================================
@@ -1585,18 +1572,6 @@ class DBProcedures {
         }
     }
 
-    /**
-     * 获取全部库存的价格信息用于Admin产品页面
-     */
-    public static function getAllStockPrices($pdo) {
-        try {
-            return $pdo->query("SELECT * FROM vw_stock_price_by_condition ORDER BY Title, ShopName, FIELD(ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG')")->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getAllStockPrices Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
     // =============================================
     // 【架构重构Phase2】新增包装方法
     // =============================================
@@ -1656,28 +1631,6 @@ class DBProcedures {
         } catch (PDOException $e) {
             error_log("getCheckoutCartItems Error: " . $e->getMessage());
             return [];
-        }
-    }
-
-    // ----------------
-    // 订单取消验证
-    // ----------------
-
-    /**
-     * 验证订单可否取消
-     * 替换 cancel_order.php 中的直接表访问
-     */
-    public static function getOrderForCancelValidation($pdo, $orderId, $customerId) {
-        try {
-            $stmt = $pdo->prepare("
-                SELECT * FROM vw_order_cancel_validation
-                WHERE OrderID = ? AND CustomerID = ?
-            ");
-            $stmt->execute([$orderId, $customerId]);
-            return $stmt->fetch();
-        } catch (PDOException $e) {
-            error_log("getOrderForCancelValidation Error: " . $e->getMessage());
-            return false;
         }
     }
 
@@ -1905,44 +1858,6 @@ class DBProcedures {
     }
 
     /**
-     * 获取待发货订单列表
-     * 替换 fulfillment.php 中的待发货订单查询
-     */
-    public static function getFulfillmentShippingOrders($pdo, $shopId = null) {
-        try {
-            if ($shopId !== null) {
-                $stmt = $pdo->prepare("SELECT * FROM vw_fulfillment_shipping_orders WHERE ShopID = ?");
-                $stmt->execute([$shopId]);
-            } else {
-                $stmt = $pdo->query("SELECT * FROM vw_fulfillment_shipping_orders");
-            }
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getFulfillmentShippingOrders Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 获取已发货订单列表
-     * 替换 fulfillment.php 中的已发货订单查询
-     */
-    public static function getFulfillmentShippedOrders($pdo, $shopId = null) {
-        try {
-            if ($shopId !== null) {
-                $stmt = $pdo->prepare("SELECT * FROM vw_fulfillment_shipped_orders WHERE ShopID = ?");
-                $stmt->execute([$shopId]);
-            } else {
-                $stmt = $pdo->query("SELECT * FROM vw_fulfillment_shipped_orders");
-            }
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getFulfillmentShippedOrders Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
      * 确认调拨发货
      * 替换 fulfillment.php 中的调拨发货操作
      */
@@ -2155,22 +2070,6 @@ class DBProcedures {
     }
 
     /**
-     * 调配仓库库存到零售店铺
-     * 替换 warehouse_dispatch.php 中的库存调拨操作
-     */
-    public static function dispatchWarehouseStock($pdo, $warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity) {
-        try {
-            $stmt = $pdo->prepare("CALL sp_dispatch_warehouse_stock(?, ?, ?, ?, ?, @dispatched_count)");
-            $stmt->execute([$warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity]);
-            $result = $pdo->query("SELECT @dispatched_count AS dispatched_count")->fetch();
-            return (int)$result['dispatched_count'];
-        } catch (PDOException $e) {
-            error_log("dispatchWarehouseStock Error: " . $e->getMessage());
-            return 0;
-        }
-    }
-
-    /**
      * 发起仓库库存调配（带确认流程）
      * 创建调拨记录，需要仓库员工确认发货后才能完成
      */
@@ -2189,40 +2088,6 @@ class DBProcedures {
     // ----------------
     // Buyback相关
     // ----------------
-
-    /**
-     * 获取回购价格参考
-     * 替换 buyback.php 中的现有库存价格查询
-     */
-    public static function getBuybackPriceReference($pdo, $releaseId = null) {
-        try {
-            if ($releaseId !== null) {
-                $stmt = $pdo->prepare("SELECT * FROM vw_buyback_price_reference WHERE ReleaseID = ?");
-                $stmt->execute([$releaseId]);
-            } else {
-                $stmt = $pdo->query("SELECT * FROM vw_buyback_price_reference");
-            }
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getBuybackPriceReference Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 获取最近回购订单
-     * 替换 buyback.php 中的最近回购查询
-     */
-    public static function getRecentBuybackOrders($pdo, $shopId, $limit = 10) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_recent_buyback_orders WHERE ShopID = ? LIMIT ?");
-            $stmt->execute([$shopId, $limit]);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getRecentBuybackOrders Error: " . $e->getMessage());
-            return [];
-        }
-    }
 
     /**
      * 【架构重构Phase2】获取专辑列表（含基础成本）
@@ -2290,21 +2155,6 @@ class DBProcedures {
     // ----------------
     // Admin申请处理相关
     // ----------------
-
-    /**
-     * 获取申请库存验证信息
-     * 替换 admin/requests.php 中的库存验证查询
-     */
-    public static function getRequestStockVerification($pdo, $requestId) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_request_stock_verification WHERE RequestID = ?");
-            $stmt->execute([$requestId]);
-            return $stmt->fetch();
-        } catch (PDOException $e) {
-            error_log("getRequestStockVerification Error: " . $e->getMessage());
-            return false;
-        }
-    }
 
     /**
      * 【架构重构Phase2】获取调货申请详情
@@ -2400,24 +2250,6 @@ class DBProcedures {
     // ----------------
     // Checkout相关
     // ----------------
-
-    /**
-     * 验证Checkout库存可用性
-     * 替换 checkout.php 中的库存验证查询
-     */
-    public static function validateCheckoutStock($pdo, $stockIds) {
-        if (empty($stockIds)) return [];
-        try {
-            $placeholders = implode(',', array_fill(0, count($stockIds), '?'));
-            $sql = "SELECT * FROM vw_checkout_stock_validation WHERE StockItemID IN ($placeholders)";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute($stockIds);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("validateCheckoutStock Error: " . $e->getMessage());
-            return [];
-        }
-    }
 
     /**
      * 创建完整的在线订单

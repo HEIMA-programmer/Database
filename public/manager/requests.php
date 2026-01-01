@@ -285,8 +285,8 @@ require_once __DIR__ . '/../../includes/header.php';
                             const data = await response.json();
                             conditionSelect.innerHTML = '<option value="">-- Select Condition --</option>';
 
-                            if (data.success && data.conditions) {
-                                data.conditions.forEach(inv => {
+                            if (data.success && data.data && data.data.conditions) {
+                                data.data.conditions.forEach(inv => {
                                     const option = document.createElement('option');
                                     option.value = inv.condition;
                                     option.textContent = inv.condition + ' (x' + inv.quantity + ')';
@@ -328,9 +328,9 @@ require_once __DIR__ . '/../../includes/header.php';
 
                             const data = await response.json();
 
-                            if (data.success) {
-                                currentPriceInput.value = data.price;
-                                quantityInput.value = data.quantity;
+                            if (data.success && data.data) {
+                                currentPriceInput.value = data.data.price;
+                                quantityInput.value = data.data.quantity;
                             }
                         } catch (error) {
                             console.error('Error fetching price:', error);

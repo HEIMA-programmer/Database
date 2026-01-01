@@ -80,29 +80,6 @@ function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') 
 }
 
 /**
- * 【架构重构Phase3】按店铺获取专辑详情
- * 改用 DBProcedures::getReleaseInfo 和 DBProcedures::getReleaseAvailableStock
- */
-function getReleaseDetailsByShop($pdo, $releaseId, $shopId) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    // 【架构重构Phase3】使用 DBProcedures 替换直接SQL查询
-    $release = DBProcedures::getReleaseInfo($pdo, $releaseId);
-
-    if (!$release) {
-        return null;
-    }
-
-    $stockItems = DBProcedures::getReleaseAvailableStock($pdo, $releaseId, $shopId);
-
-    return [
-        'release' => $release,
-        'stockItems' => $stockItems
-    ];
-}
-
-
-/**
  * 获取购物车商品数量（用于导航栏显示）
  */
 function getCartCount() {
@@ -205,48 +182,6 @@ function checkMembershipUpgrade($pdo, $customerId, $amountSpent, $oldTierId = nu
 // =============================================
 
 /**
- * 计算购物车汇总数据
- * 包含：小计、生日折扣、运费、最终总价
- *
- * @param array $cartItems 购物车商品列表 (从 DBProcedures::getCartItems 获取)
- * @return array 计算结果
- */
-function calculateCartSummary($cartItems) {
-    // 基础小计
-    $subtotal = 0;
-    foreach ($cartItems as $item) {
-        $subtotal += (float)$item['UnitPrice'];
-    }
-
-    // 生日折扣 (15% off during birthday month)
-    $isBirthdayMonth = false;
-    $discountRate = 0;
-    $discountAmount = 0;
-
-    if (isset($_SESSION['birth_month']) && $_SESSION['birth_month'] == date('m')) {
-        $isBirthdayMonth = true;
-        $discountRate = 0.15;
-        $discountAmount = $subtotal * $discountRate;
-    }
-
-    // 运费规则 (Free shipping over 200, otherwise 15)
-    $shippingCost = ($subtotal > 200) ? 0 : 15.00;
-
-    // 最终总价
-    $finalTotal = $subtotal - $discountAmount + $shippingCost;
-
-    return [
-        'subtotal'         => $subtotal,
-        'is_birthday_month' => $isBirthdayMonth,
-        'discount_rate'    => $discountRate,
-        'discount_amount'  => $discountAmount,
-        'shipping_cost'    => $shippingCost,
-        'final_total'      => $finalTotal,
-        'item_count'       => count($cartItems)
-    ];
-}
-
-/**
  * 计算 POS 购物车总额
  *
  * @param array $prices 价格数组
@@ -254,43 +189,6 @@ function calculateCartSummary($cartItems) {
  */
 function calculatePOSTotal($prices) {
     return array_sum(array_map('floatval', $prices));
-}
-
-/**
- * 验证购物车商品库存状态
- * 返回已售出/不可用的商品ID列表
- *
- * @param PDO $pdo
- * @param array $stockIds 要验证的库存ID
- * @return array 不可用的商品ID数组
- */
-function validateCartItemsAvailability($pdo, $stockIds) {
-    if (empty($stockIds)) return [];
-
-    require_once __DIR__ . '/db_procedures.php';
-
-    $unavailable = [];
-    foreach ($stockIds as $stockId) {
-        $status = DBProcedures::getStockItemStatus($pdo, $stockId);
-        if ($status !== 'Available') {
-            $unavailable[] = $stockId;
-        }
-    }
-    return $unavailable;
-}
-
-/**
- * 从购物车移除不可用商品
- *
- * @param array $unavailableIds 不可用的商品ID数组
- * @return int 移除的数量
- */
-function removeUnavailableFromCart($unavailableIds) {
-    if (empty($unavailableIds) || !isset($_SESSION['cart'])) return 0;
-
-    $beforeCount = count($_SESSION['cart']);
-    $_SESSION['cart'] = array_values(array_diff($_SESSION['cart'], $unavailableIds));
-    return $beforeCount - count($_SESSION['cart']);
 }
 
 /**
@@ -349,22 +247,6 @@ function removeFromCart($stockId) {
 function clearCart() {
     $_SESSION['cart'] = [];
 }
-
-/**
- * 存储订单计算结果到 Session（用于结账验证）
- *
- * @param array $summary 计算汇总
- */
-function storeCheckoutSummary($summary) {
-    $_SESSION['checkout_summary'] = [
-        'subtotal'        => $summary['subtotal'],
-        'discount_amount' => $summary['discount_amount'],
-        'shipping_cost'   => $summary['shipping_cost'],
-        'final_total'     => $summary['final_total'],
-        'timestamp'       => time()
-    ];
-}
-
 
 // =============================================
 // 【架构重构】业务逻辑层 - POS 系统
@@ -553,36 +435,6 @@ function getLoginRedirectUrl($role) {
 // =============================================
 // 【架构重构】数据准备函数 - 页面顶部调用
 // =============================================
-
-/**
- * 准备 POS 页面数据
- *
- * @param PDO $pdo
- * @param int $shopId
- * @param string|null $searchTerm
- * @return array
- */
-function preparePOSPageData($pdo, $shopId, $searchTerm = null) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    $searchResults = [];
-    if (!empty($searchTerm)) {
-        $searchResults = DBProcedures::searchPOSItems($pdo, $shopId, $searchTerm);
-    }
-
-    $posCart = getPOSCart();
-    $prices = [];
-    if (!empty($posCart)) {
-        $prices = DBProcedures::getPOSCartPrices($pdo, $posCart);
-    }
-
-    return [
-        'search_results' => $searchResults,
-        'cart'           => $posCart,
-        'total'          => calculatePOSTotal($prices),
-        'search_term'    => $searchTerm
-    ];
-}
 
 /**
  * 准备仪表板页面数据
@@ -1210,137 +1062,6 @@ function handlePickupConfirmation($pdo, $orderId, $shopId) {
             $pdo->rollBack();
         }
         return ['success' => false, 'message' => 'Failed to complete order.'];
-    }
-}
-
-/**
- * 处理订单发货
- * 【修复】添加事务管理
- */
-function handleShipOrder($pdo, $orderId) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    try {
-        $pdo->beginTransaction();
-        $success = DBProcedures::shipOrder($pdo, $orderId);
-
-        if ($success) {
-            $pdo->commit();
-            return ['success' => true, 'message' => "Order #$orderId has been shipped!"];
-        } else {
-            $pdo->rollBack();
-            return ['success' => false, 'message' => 'Failed to ship order. Invalid order status.'];
-        }
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        return ['success' => false, 'message' => 'Failed to ship order. Invalid order status.'];
-    }
-}
-
-/**
- * 处理订单送达确认
- * 【修复】添加事务管理
- * 【架构重构Phase2】使用DBProcedures替换直接SQL验证
- */
-function handleDeliveryConfirmation($pdo, $orderId) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    try {
-        $pdo->beginTransaction();
-
-        // 【架构重构】使用存储过程验证订单状态并完成订单
-        $success = DBProcedures::confirmOrderReceived($pdo, $orderId);
-
-        if ($success) {
-            $pdo->commit();
-            return ['success' => true, 'message' => "Order #$orderId delivery confirmed!"];
-        } else {
-            $pdo->rollBack();
-            return ['success' => false, 'message' => 'Order not found or not shipped.'];
-        }
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        return ['success' => false, 'message' => 'Order not found or not shipped.'];
-    }
-}
-
-/**
- * 处理库存调拨发起
- * 【修复】添加事务管理
- */
-function handleTransferInitiation($pdo, $stockId, $toShopId, $employeeId, $shops) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    // 验证目标店铺
-    $targetValid = false;
-    foreach ($shops as $s) {
-        if ($s['ShopID'] == $toShopId) {
-            $targetValid = true;
-            break;
-        }
-    }
-
-    if (!$targetValid) {
-        return ['success' => false, 'message' => 'Invalid destination shop.'];
-    }
-
-    // 获取当前库存信息
-    $stockInfo = DBProcedures::getStockItemForTransfer($pdo, $stockId);
-
-    if (!$stockInfo) {
-        return ['success' => false, 'message' => 'Invalid Item ID or item not available.'];
-    }
-
-    if ($stockInfo['ShopID'] == $toShopId) {
-        return ['success' => false, 'message' => 'Item already at destination.'];
-    }
-
-    try {
-        $pdo->beginTransaction();
-        $transferId = DBProcedures::initiateTransfer($pdo, $stockId, $stockInfo['ShopID'], $toShopId, $employeeId);
-
-        if ($transferId && $transferId > 0) {
-            $pdo->commit();
-            return ['success' => true, 'message' => "Transfer #$transferId initiated. Item #$stockId is now InTransit."];
-        } else {
-            $pdo->rollBack();
-            return ['success' => false, 'message' => 'Transfer failed. Please check item availability.'];
-        }
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        return ['success' => false, 'message' => 'Transfer failed. Please check item availability.'];
-    }
-}
-
-/**
- * 处理调拨接收确认
- * 【修复】添加事务管理
- */
-function handleTransferReceipt($pdo, $transferId, $employeeId) {
-    require_once __DIR__ . '/db_procedures.php';
-
-    try {
-        $pdo->beginTransaction();
-        $success = DBProcedures::completeTransfer($pdo, $transferId, $employeeId);
-
-        if ($success) {
-            $pdo->commit();
-            return ['success' => true, 'message' => "Transfer #$transferId confirmed. Item received."];
-        } else {
-            $pdo->rollBack();
-            return ['success' => false, 'message' => 'Receipt confirmation failed.'];
-        }
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        return ['success' => false, 'message' => 'Receipt confirmation failed.'];
     }
 }
 

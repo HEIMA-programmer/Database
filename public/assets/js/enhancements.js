@@ -234,7 +234,7 @@ function addToCart(itemId, quantity = 1) {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: `action=add&stock_item_id=${itemId}&quantity=${quantity}`
+        body: `action=add&stock_id=${itemId}&quantity=${quantity}`
     })
     .then(response => response.json())
     .then(data => {

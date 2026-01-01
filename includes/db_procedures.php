@@ -1,16 +1,4 @@
 <?php
-/**
- * Database Procedures & Views Access Layer
- * 数据库访问层 - 封装所有视图查询和存储过程调用
- *
- * 【架构重构】这是 PHP 与数据库之间的唯一桥梁
- * 所有"读"操作通过视图，所有"写"操作通过存储过程
- *
- * 使用示例:
- * require_once __DIR__ . '/db_procedures.php';
- * $items = DBProcedures::getCartItems($pdo, [1, 2, 3]);
- * $result = DBProcedures::completeOrder($pdo, $orderId);
- */
 
 class DBProcedures {
 
@@ -22,22 +10,6 @@ class DBProcedures {
     // 购物车相关
     // ----------------
 
-    /**
-     * 获取购物车商品详情（从目录视图）
-     */
-    public static function getCartItems($pdo, $stockIds) {
-        if (empty($stockIds)) return [];
-        try {
-            $placeholders = implode(',', array_fill(0, count($stockIds), '?'));
-            $sql = "SELECT * FROM vw_customer_catalog WHERE StockItemID IN ($placeholders)";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute($stockIds);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getCartItems Error: " . $e->getMessage());
-            return [];
-        }
-    }
 
     /**
      * 检查库存状态
@@ -57,32 +29,6 @@ class DBProcedures {
     // 目录和商品相关
     // ----------------
 
-    /**
-     * 获取商品目录（支持搜索和筛选）- 原始方法保留兼容性
-     */
-    public static function getCatalogItems($pdo, $search = '', $genre = '') {
-        try {
-            $sql = "SELECT * FROM vw_customer_catalog WHERE 1=1";
-            $params = [];
-
-            if (!empty($search)) {
-                $sql .= " AND (Title LIKE :search OR ArtistName LIKE :search)";
-                $params[':search'] = "%$search%";
-            }
-            if (!empty($genre)) {
-                $sql .= " AND Genre = :genre";
-                $params[':genre'] = $genre;
-            }
-
-            $sql .= " ORDER BY Title ASC, ConditionGrade ASC";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute($params);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getCatalogItems Error: " . $e->getMessage());
-            return [];
-        }
-    }
 
     /**
      * 【新增】获取分组后的商品目录（按专辑分组）
@@ -137,50 +83,6 @@ class DBProcedures {
         }
     }
 
-    /**
-     * 【架构重构Phase3】获取指定条件的可用库存ID列表
-     * 改用 vw_available_stock_ids 视图
-     * @param int|null $shopId 店铺ID，如果为null则查询所有店铺
-     */
-    public static function getAvailableStockIds($pdo, $releaseId, $conditionGrade, $quantity, $shopId = null) {
-        try {
-            $sql = "
-                SELECT StockItemID
-                FROM vw_available_stock_ids
-                WHERE ReleaseID = ?
-                  AND ConditionGrade = ?
-            ";
-            $params = [$releaseId, $conditionGrade];
-
-            // 如果指定了店铺ID，则过滤店铺
-            if ($shopId !== null) {
-                $sql .= " AND ShopID = ?";
-                $params[] = $shopId;
-            }
-
-            $sql .= " ORDER BY StockItemID LIMIT ?";
-            $params[] = $quantity;
-
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute($params);
-            return $stmt->fetchAll(PDO::FETCH_COLUMN);
-        } catch (PDOException $e) {
-            error_log("getAvailableStockIds Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 获取目录中的流派列表
-     */
-    public static function getCatalogGenres($pdo) {
-        try {
-            return $pdo->query("SELECT DISTINCT Genre FROM vw_customer_catalog ORDER BY Genre")->fetchAll(PDO::FETCH_COLUMN);
-        } catch (PDOException $e) {
-            error_log("getCatalogGenres Error: " . $e->getMessage());
-            return [];
-        }
-    }
 
     /**
      * 获取商品详情
@@ -214,48 +116,7 @@ class DBProcedures {
     // POS 系统相关
     // ----------------
 
-    /**
-     * POS 商品搜索（精确ID或模糊标题）
-     */
-    public static function searchPOSItems($pdo, $shopId, $searchTerm) {
-        if (empty($searchTerm)) return [];
-        try {
-            $items = [];
 
-            if (is_numeric($searchTerm)) {
-                $stmt = $pdo->prepare("SELECT * FROM vw_staff_pos_lookup WHERE ShopID = :shop AND Status = 'Available' AND StockItemID = :id LIMIT 20");
-                $stmt->execute([':shop' => $shopId, ':id' => (int)$searchTerm]);
-                $items = $stmt->fetchAll();
-            }
-
-            if (empty($items)) {
-                $stmt = $pdo->prepare("SELECT * FROM vw_staff_pos_lookup WHERE ShopID = :shop AND Status = 'Available' AND Title LIKE :q LIMIT 20");
-                $stmt->execute([':shop' => $shopId, ':q' => "%$searchTerm%"]);
-                $items = $stmt->fetchAll();
-            }
-
-            return $items;
-        } catch (PDOException $e) {
-            error_log("searchPOSItems Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 获取 POS 购物车商品价格
-     */
-    public static function getPOSCartPrices($pdo, $stockIds) {
-        if (empty($stockIds)) return [];
-        try {
-            $placeholders = implode(',', array_fill(0, count($stockIds), '?'));
-            $stmt = $pdo->prepare("SELECT UnitPrice FROM vw_staff_pos_lookup WHERE StockItemID IN ($placeholders)");
-            $stmt->execute($stockIds);
-            return $stmt->fetchAll(PDO::FETCH_COLUMN);
-        } catch (PDOException $e) {
-            error_log("getPOSCartPrices Error: " . $e->getMessage());
-            return [];
-        }
-    }
 
     /**
      * 获取 POS 购物车商品详情（用于结账验证）
@@ -365,19 +226,6 @@ class DBProcedures {
         }
     }
 
-    /**
-     * 获取取货订单信息
-     */
-    public static function getOrderForPickup($pdo, $orderId, $shopId) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_order_for_pickup WHERE OrderID = ? AND ShopID = ?");
-            $stmt->execute([$orderId, $shopId]);
-            return $stmt->fetch();
-        } catch (PDOException $e) {
-            error_log("getOrderForPickup Error: " . $e->getMessage());
-            return false;
-        }
-    }
 
     /**
      * 获取待取货订单列表 (BOPIS)
@@ -453,19 +301,6 @@ class DBProcedures {
         }
     }
 
-    /**
-     * 检查库存物品信息（用于调拨验证）
-     */
-    public static function getStockItemForTransfer($pdo, $stockId) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_stock_item_status WHERE StockItemID = ? AND Status = 'Available'");
-            $stmt->execute([$stockId]);
-            return $stmt->fetch();
-        } catch (PDOException $e) {
-            error_log("getStockItemForTransfer Error: " . $e->getMessage());
-            return false;
-        }
-    }
 
     // ----------------
     // 认证相关
@@ -729,20 +564,6 @@ class DBProcedures {
     // 库存调拨流程
     // ----------------
 
-    /**
-     * 发起库存调拨
-     */
-    public static function initiateTransfer($pdo, $stockItemId, $fromShopId, $toShopId, $employeeId) {
-        try {
-            $stmt = $pdo->prepare("CALL sp_initiate_transfer(?, ?, ?, ?, @transfer_id)");
-            $stmt->execute([$stockItemId, $fromShopId, $toShopId, $employeeId]);
-            $result = $pdo->query("SELECT @transfer_id AS transfer_id")->fetch();
-            return $result['transfer_id'] > 0 ? $result['transfer_id'] : false;
-        } catch (PDOException $e) {
-            error_log("initiateTransfer Error: " . $e->getMessage());
-            return false;
-        }
-    }
 
     /**
      * 完成库存调拨
@@ -1085,20 +906,6 @@ class DBProcedures {
         }
     }
 
-    /**
-     * 发货订单
-     */
-    public static function shipOrder($pdo, $orderId) {
-        try {
-            $stmt = $pdo->prepare("CALL sp_ship_order(?, @result)");
-            $stmt->execute([$orderId]);
-            $result = $pdo->query("SELECT @result AS result")->fetch();
-            return (int)$result['result'] === 1;
-        } catch (PDOException $e) {
-            error_log("shipOrder Error: " . $e->getMessage());
-            return false;
-        }
-    }
 
     /**
      * 获取订单用于取货验证
@@ -1182,20 +989,6 @@ class DBProcedures {
     // 辅助函数
     // ----------------
 
-    /**
-     * 检查库存数量
-     */
-    public static function getAvailableStock($pdo, $releaseId, $shopId, $conditionGrade) {
-        try {
-            $stmt = $pdo->prepare("SELECT fn_get_available_stock(?, ?, ?) AS qty");
-            $stmt->execute([$releaseId, $shopId, $conditionGrade]);
-            $result = $stmt->fetch();
-            return $result['qty'] ?? 0;
-        } catch (PDOException $e) {
-            error_log("getAvailableStock Error: " . $e->getMessage());
-            return 0;
-        }
-    }
 
     // =============================================
     // 【Manager/Admin重构】新增数据获取方法
@@ -1827,35 +1620,6 @@ class DBProcedures {
     // Fulfillment调拨相关
     // ----------------
 
-    /**
-     * 获取待发货调拨列表（源店铺视角）
-     * 替换 fulfillment.php 中的待发货调拨查询
-     */
-    public static function getFulfillmentPendingTransfers($pdo, $fromShopId) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_fulfillment_pending_transfers WHERE FromShopID = ?");
-            $stmt->execute([$fromShopId]);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getFulfillmentPendingTransfers Error: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * 获取进货中调拨列表（目标店铺视角）
-     * 替换 fulfillment.php 中的待收货调拨查询
-     */
-    public static function getFulfillmentIncomingTransfers($pdo, $toShopId) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_fulfillment_incoming_transfers WHERE ToShopID = ?");
-            $stmt->execute([$toShopId]);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getFulfillmentIncomingTransfers Error: " . $e->getMessage());
-            return [];
-        }
-    }
 
     /**
      * 确认调拨发货
@@ -1871,19 +1635,6 @@ class DBProcedures {
         }
     }
 
-    /**
-     * 确认订单收货
-     * 替换 fulfillment.php 中的确认收货操作
-     */
-    public static function confirmOrderReceived($pdo, $orderId) {
-        try {
-            $stmt = $pdo->prepare("CALL sp_confirm_order_received(?)");
-            return $stmt->execute([$orderId]);
-        } catch (PDOException $e) {
-            error_log("confirmOrderReceived Error: " . $e->getMessage());
-            return false;
-        }
-    }
 
     /**
      * 【架构重构】取消调拨
@@ -2520,27 +2271,6 @@ class DBProcedures {
         } catch (PDOException $e) {
             error_log("getReleaseInfo Error: " . $e->getMessage());
             return null;
-        }
-    }
-
-    /**
-     * 【架构重构Phase3】获取专辑的可用库存详情（按店铺）
-     * 替换 functions.php:getReleaseDetailsByShop 中的 StockItem 查询
-     */
-    public static function getReleaseAvailableStock($pdo, $releaseId, $shopId) {
-        try {
-            $stmt = $pdo->prepare("
-                SELECT * FROM vw_release_available_stock
-                WHERE ReleaseID = ? AND ShopID = ?
-                ORDER BY
-                    FIELD(ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'),
-                    UnitPrice
-            ");
-            $stmt->execute([$releaseId, $shopId]);
-            return $stmt->fetchAll();
-        } catch (PDOException $e) {
-            error_log("getReleaseAvailableStock Error: " . $e->getMessage());
-            return [];
         }
     }
 

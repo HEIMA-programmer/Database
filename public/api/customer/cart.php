@@ -30,6 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stockId = $_POST['stock_id'] ?? null;
     $responseData = ['success' => false, 'message' => 'Unknown action'];
 
+    // 【修复】使用try-catch包装所有操作，防止异常泄露敏感信息
+    try {
     switch ($action) {
         case 'add':
             if ($stockId) {
@@ -118,6 +120,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         default:
             $responseData = ['success' => false, 'message' => 'Unknown action: ' . $action];
+    }
+    } catch (Exception $e) {
+        // 【修复】捕获异常，记录日志但不暴露敏感信息
+        error_log("Cart API error: " . $e->getMessage());
+        $responseData = ['success' => false, 'message' => 'An error occurred processing your request.'];
     }
 
     // 确保session修改立即持久化

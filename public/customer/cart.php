@@ -61,6 +61,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($key !== false) {
                 unset($_SESSION['cart'][$key]);
                 $_SESSION['cart'] = array_values($_SESSION['cart']); // 重新索引
+                // 【修复】购物车清空后，同时清理店铺选择
+                if (empty($_SESSION['cart'])) {
+                    unset($_SESSION['selected_shop_id']);
+                }
                 flash('Item removed from cart.', 'info');
             }
             break;
@@ -79,12 +83,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 $_SESSION['cart'] = array_values($_SESSION['cart']); // 重新索引
+                // 【修复】购物车清空后，同时清理店铺选择
+                if (empty($_SESSION['cart'])) {
+                    unset($_SESSION['selected_shop_id']);
+                }
                 flash("$removedCount item(s) removed from cart.", 'info');
             }
             break;
 
         case 'clear':
             $_SESSION['cart'] = [];
+            // 【修复】清空购物车时同时清理店铺选择
+            unset($_SESSION['selected_shop_id']);
             flash('Cart cleared.', 'info');
             break;
     }

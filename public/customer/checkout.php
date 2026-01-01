@@ -59,9 +59,10 @@ $customerId = $_SESSION['user_id'];
 $customer = DBProcedures::getCustomerProfile($pdo, $customerId);
 
 // 计算折扣（安全检查：验证客户数据存在）
+// 【修复】DiscountRate 存储为 DECIMAL(3,2)，如 0.10 表示 10%，无需除以100
 $discount = 0;
 if ($customer && isset($customer['DiscountRate']) && $customer['DiscountRate'] > 0) {
-    $discount = $total * ($customer['DiscountRate'] / 100);
+    $discount = $total * $customer['DiscountRate'];
 }
 
 // 【新增】运费（选择Shipping时收取，Pickup免运费）
@@ -288,7 +289,7 @@ require_once __DIR__ . '/../../includes/header.php';
                     
                     <?php if ($discount > 0): ?>
                     <div class="d-flex justify-content-between mb-2 text-success">
-                        <span><i class="fa-solid fa-tag me-1"></i><?= h($customer['TierName']) ?> Discount (<?= $customer['DiscountRate'] ?>%)</span>
+                        <span><i class="fa-solid fa-tag me-1"></i><?= h($customer['TierName']) ?> Discount (<?= ($customer['DiscountRate'] * 100) ?>%)</span>
                         <span>-<?= formatPrice($discount) ?></span>
                     </div>
                     <?php endif; ?>

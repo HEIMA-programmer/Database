@@ -18,11 +18,14 @@ BEGIN
     DECLARE v_points_to_add INT;
     DECLARE v_current_points INT;
     DECLARE v_new_tier_id INT;
+    DECLARE v_goods_amount DECIMAL(10,2);
 
     -- 只在订单从非Completed状态变为Completed时触发
     IF NEW.OrderStatus = 'Completed' AND OLD.OrderStatus != 'Completed' AND NEW.CustomerID IS NOT NULL THEN
+        -- 【修复】积分只基于商品金额，排除运费
+        SET v_goods_amount = NEW.TotalAmount - COALESCE(NEW.ShippingCost, 0);
         -- 计算积分：每消费1元得1积分
-        SET v_points_to_add = FLOOR(NEW.TotalAmount);
+        SET v_points_to_add = FLOOR(v_goods_amount);
 
         -- 更新客户积分
         UPDATE Customer
@@ -92,9 +95,10 @@ FOR EACH ROW
 BEGIN
     -- 只在调拨从非Cancelled状态变为Cancelled时触发
     IF NEW.Status = 'Cancelled' AND OLD.Status != 'Cancelled' THEN
+        -- 【修复】同时释放 InTransit 和 Reserved 状态的库存
         UPDATE StockItem
         SET Status = 'Available'
-        WHERE StockItemID = NEW.StockItemID AND Status = 'InTransit';
+        WHERE StockItemID = NEW.StockItemID AND Status IN ('InTransit', 'Reserved');
     END IF;
 END$$
 
@@ -304,9 +308,11 @@ BEGIN
     FROM StockItem
     WHERE StockItemID = NEW.StockItemID;
 
-    IF v_stock_status != 'Available' THEN
+    -- 【修复】允许 Available 或 Reserved 状态的库存创建调拨记录
+    -- Reserved 状态用于调拨批准后锁定库存
+    IF v_stock_status NOT IN ('Available', 'Reserved') THEN
         SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Can only transfer available stock items';
+        SET MESSAGE_TEXT = 'Can only transfer available or reserved stock items';
     END IF;
 
     IF v_stock_shop != NEW.FromShopID THEN
@@ -467,7 +473,8 @@ BEGIN
 
         -- 如果是生日月份，额外奖励积分
         IF v_birth_month = v_current_month THEN
-            SET v_bonus_points = FLOOR(NEW.TotalAmount * 0.2); -- 额外20%积分
+            -- 【修复】生日积分也排除运费
+            SET v_bonus_points = FLOOR((NEW.TotalAmount - COALESCE(NEW.ShippingCost, 0)) * 0.2); -- 额外20%积分
             UPDATE Customer
             SET Points = Points + v_bonus_points
             WHERE CustomerID = NEW.CustomerID;

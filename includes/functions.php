@@ -89,6 +89,48 @@ function getSessionUserAttr($key, $default = null) {
 }
 
 /**
+ * 【CSRF保护】生成CSRF令牌
+ * 在表单中使用：<input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+ */
+function generateCsrfToken() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * 【CSRF保护】验证CSRF令牌
+ * @param string|null $token 提交的令牌
+ * @return bool 验证是否通过
+ */
+function validateCsrfToken($token) {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (empty($_SESSION['csrf_token']) || empty($token)) {
+        return false;
+    }
+    return hash_equals($_SESSION['csrf_token'], $token);
+}
+
+/**
+ * 【CSRF保护】要求有效的CSRF令牌，否则返回错误
+ * 用于API端点的保护
+ */
+function requireCsrfToken() {
+    $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
+    if (!validateCsrfToken($token)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Invalid CSRF token']);
+        exit;
+    }
+}
+
+/**
  * 【重构】根据Unit Cost计算建议售价
  * 低价产品：低比率上浮（薄利多销）
  * 高价产品：高比率上浮（单品利润大）

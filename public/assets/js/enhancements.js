@@ -221,38 +221,6 @@ function initNumberAnimations() {
     });
 }
 
-// ==================== 购物车功能 ====================
-
-/**
- * 添加到购物车
- */
-function addToCart(itemId, quantity = 1) {
-    showLoading('Adding to cart...');
-
-    fetch('/api/customer/cart.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `action=add&stock_id=${itemId}&quantity=${quantity}`
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            showToast('Added to cart!', 'success');
-            updateCartCount(data.cart_count);
-        } else {
-            showToast(data.message || 'Failed to add item', 'danger');
-        }
-    })
-    .catch(error => {
-        hideLoading();
-        showToast('Network error', 'danger');
-        console.error('Error:', error);
-    });
-}
-
 /**
  * 更新购物车计数
  */
@@ -343,7 +311,6 @@ window.RetroEcho = {
     confirmAction,
     formatCurrency,
     formatDate,
-    addToCart,
     updateCartCount,
     getStockIndicator,
     animateNumber

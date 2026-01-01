@@ -51,24 +51,10 @@ $customerEmail = trim($_POST['customer_email'] ?? '');
 $customerId = null;
 
 // =============================================
-// 【事务处理】通过 DBProcedures 完成所有数据库操作
+// 【事务处理】使用原子存储过程完成所有操作
 // =============================================
 try {
-    $pdo->beginTransaction();
-
-    // 1. 从视图获取商品详情并验证可用性
-    $items = DBProcedures::getPOSCartItems($pdo, $posCart);
-
-    // 验证所有商品都可用
-    $availableItems = array_filter($items, fn($item) => $item['Status'] === 'Available');
-    if (count($availableItems) != count($posCart)) {
-        throw new Exception("Some items are no longer available. Please clear cart and rescan.");
-    }
-
-    // 计算总额
-    $total = array_sum(array_column($items, 'UnitPrice'));
-
-    // 2. 查找关联会员（通过视图）
+    // 1. 查找关联会员（通过视图）
     if (!empty($customerEmail)) {
         $customer = DBProcedures::getCustomerByEmail($pdo, $customerEmail);
         if ($customer) {
@@ -78,36 +64,27 @@ try {
         }
     }
 
-    // 3. 使用存储过程创建订单
-    $orderId = DBProcedures::createCustomerOrder($pdo, $customerId, $shopId, $employeeId, 'InStore');
-    if (!$orderId) {
-        throw new Exception("Failed to create order.");
-    }
-
-    // 4. 使用存储过程添加订单商品
-    foreach ($items as $item) {
-        $success = DBProcedures::addOrderItem($pdo, $orderId, $item['StockItemID'], $item['UnitPrice']);
-        if (!$success) {
-            throw new Exception("Failed to add item '{$item['Title']}' to order.");
-        }
-    }
-
-    // 5. 计算积分
-    $pointsEarned = floor($total);
-
-    // 6. 保存原始会员等级（用于检测升级）
+    // 2. 保存原始会员等级（用于检测升级）
     $oldTierInfo = null;
     if ($customerId) {
         $oldTierInfo = getCustomerTierInfo($pdo, $customerId);
     }
 
-    // 7. 使用存储过程完成订单
-    $success = DBProcedures::completeOrder($pdo, $orderId);
-    if (!$success) {
-        throw new Exception("Failed to complete order.");
+    // 3. 【修复】使用原子存储过程创建并完成POS订单
+    // sp_create_pos_order 内部会自动调用 sp_complete_order
+    $result = DBProcedures::createPosOrder($pdo, $customerId, $employeeId, $shopId, $posCart);
+
+    if (!$result || !isset($result['order_id']) || $result['order_id'] <= 0) {
+        if (isset($result['order_id']) && $result['order_id'] == -2) {
+            throw new Exception("Some items are no longer available. Please clear cart and rescan.");
+        }
+        throw new Exception("Failed to create order.");
     }
 
-    // 8. 检测会员升级
+    $orderId = $result['order_id'];
+    $total = $result['total_amount'];
+
+    // 4. 检测会员升级
     $upgradeMsg = "";
     if ($customerId) {
         $oldTierId = $oldTierInfo ? $oldTierInfo['TierID'] : null;
@@ -117,8 +94,6 @@ try {
         }
     }
 
-    $pdo->commit();
-
     // 清空购物车
     clearPOSCart();
 
@@ -126,9 +101,6 @@ try {
     header("Location: pos.php");
 
 } catch (Exception $e) {
-    if ($pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
     error_log("POS Checkout Error: " . $e->getMessage());
     flash("Error processing transaction: " . $e->getMessage(), 'danger');
     header("Location: pos.php");

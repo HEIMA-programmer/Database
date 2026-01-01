@@ -2,25 +2,6 @@
 -- Views for Refactored Schema
 -- 重构后的视图 - 包含库存汇总视图
 -- ========================================
---
--- 【清理说明】以下视图已被标记为 @deprecated，可在确认无副作用后删除：
--- - vw_buyback_orders (被 vw_recent_buybacks_detail 替代)
--- - vw_buyback_price_reference (被 vw_stock_price_map 替代)
--- - vw_checkout_stock_validation (被 vw_checkout_cart_items 替代)
--- - vw_customer_catalog (被 vw_customer_catalog_grouped 替代，但两者均未使用)
--- - vw_customer_catalog_grouped (功能已整合到其他视图)
--- - vw_fulfillment_incoming_transfers (被 vw_fulfillment_incoming_transfers_grouped 替代)
--- - vw_fulfillment_pending_transfers (被 vw_fulfillment_pending_transfers_grouped 替代)
--- - vw_fulfillment_shipped_orders (被 vw_fulfillment_orders 替代)
--- - vw_fulfillment_shipping_orders (被 vw_fulfillment_orders 替代)
--- - vw_manager_pending_transfers (被 vw_fulfillment_pending_transfers_grouped 替代)
--- - vw_order_cancel_validation (功能已整合到 vw_customer_pending_order)
--- - vw_recent_buyback_orders (被 vw_recent_buybacks_detail 替代)
--- - vw_release_available_stock (功能已整合到 vw_release_shop_stock_grouped)
--- - vw_request_stock_verification (被 vw_shop_inventory_by_release 替代)
--- - vw_staff_online_orders_pending (被 vw_fulfillment_orders 替代)
--- - vw_stock_item_status (被 vw_cart_item_validation 替代)
---
 
 -- ================================================
 -- 核心业务视图
@@ -82,28 +63,6 @@ ORDER BY s.AcquiredDate ASC;
 -- 用户访问视图 (View-based Access Control)
 -- ================================================
 
--- 1. [Customer View] Browse Catalog
--- 【修复】移除 Warehouse 限制，支持所有店铺类型，添加 ShopType 字段
--- @deprecated 未被PHP代码使用，考虑使用 vw_catalog_by_shop_grouped
-CREATE OR REPLACE VIEW vw_customer_catalog AS
-SELECT
-    s.StockItemID,
-    s.ReleaseID,
-    r.Title,
-    r.ArtistName,
-    r.Genre,
-    r.Format,
-    r.ReleaseYear,
-    r.Description,
-    s.ConditionGrade,
-    s.UnitPrice,
-    sh.Name AS LocationName,
-    sh.ShopID,
-    sh.Type AS ShopType
-FROM StockItem s
-JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
-JOIN Shop sh ON s.ShopID = sh.ShopID
-WHERE s.Status = 'Available';
 
 -- 2. [Customer View] Order History with Details
 CREATE OR REPLACE VIEW vw_customer_order_history AS
@@ -200,27 +159,6 @@ LEFT JOIN StockItem s ON sh.ShopID = s.ShopID
     AND s.Status = 'Available'
 GROUP BY sh.ShopID, sh.Name, sh.Type;
 
--- 8. [Manager View] Pending Transfers
--- @deprecated 未被PHP代码使用，已被 vw_fulfillment_pending_transfers_grouped 替代
-CREATE OR REPLACE VIEW vw_manager_pending_transfers AS
-SELECT
-    t.TransferID,
-    t.StockItemID,
-    r.Title,
-    si.BatchNo,
-    si.ConditionGrade,
-    s1.Name AS FromShopName,
-    s2.Name AS ToShopName,
-    t.TransferDate,
-    t.Status,
-    e.Name AS AuthorizedBy
-FROM InventoryTransfer t
-JOIN StockItem si ON t.StockItemID = si.StockItemID
-JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-JOIN Shop s1 ON t.FromShopID = s1.ShopID
-JOIN Shop s2 ON t.ToShopID = s2.ShopID
-JOIN Employee e ON t.AuthorizedByEmployeeID = e.EmployeeID
-WHERE t.Status IN ('Pending', 'InTransit');
 
 -- 9. [Admin View] Release List
 CREATE OR REPLACE VIEW vw_admin_release_list AS
@@ -284,28 +222,6 @@ LEFT JOIN Shop sh ON so.DestinationShopID = sh.ShopID
 LEFT JOIN SupplierOrderLine sol ON so.SupplierOrderID = sol.SupplierOrderID
 GROUP BY so.SupplierOrderID, s.Name, e.Name, sh.Name, so.OrderDate, so.Status, so.ReceivedDate, so.TotalCost;
 
--- 13. [Admin/Staff View] Buyback Orders
--- 【修复】使用 LEFT JOIN 支持匿名客户回购（CustomerID 可为 NULL）
--- 【架构重构】添加 ShopID 字段，消除 PHP 代码中的子查询
--- @deprecated 未被PHP代码使用，已被 vw_recent_buybacks_detail 替代
-CREATE OR REPLACE VIEW vw_buyback_orders AS
-SELECT
-    bo.BuybackOrderID,
-    bo.ShopID,
-    COALESCE(c.Name, 'Walk-in Customer') AS CustomerName,
-    COALESCE(c.Email, '-') AS CustomerEmail,
-    e.Name AS ProcessedBy,
-    sh.Name AS ShopName,
-    bo.BuybackDate,
-    bo.Status,
-    bo.TotalPayment,
-    COUNT(bol.ReleaseID) AS ItemTypes
-FROM BuybackOrder bo
-LEFT JOIN Customer c ON bo.CustomerID = c.CustomerID
-JOIN Employee e ON bo.ProcessedByEmployeeID = e.EmployeeID
-JOIN Shop sh ON bo.ShopID = sh.ShopID
-LEFT JOIN BuybackOrderLine bol ON bo.BuybackOrderID = bol.BuybackOrderID
-GROUP BY bo.BuybackOrderID, bo.ShopID, c.Name, c.Email, e.Name, sh.Name, bo.BuybackDate, bo.Status, bo.TotalPayment;
 
 -- ================================================
 -- 分析报表视图
@@ -362,19 +278,6 @@ LIMIT 50;
 -- ================================================
 -- 【架构重构】新增视图 - 消除 PHP 直接物理表访问
 -- ================================================
-
--- 16. [架构重构] 库存状态检查视图 - 用于购物车验证
--- 替换 cart_action.php 中的直接 StockItem 查询
--- @deprecated 未被PHP代码使用，已被 vw_cart_item_validation 替代
-CREATE OR REPLACE VIEW vw_stock_item_status AS
-SELECT
-    StockItemID,
-    ReleaseID,
-    ShopID,
-    Status,
-    UnitPrice,
-    ConditionGrade
-FROM StockItem;
 
 -- 17. [架构重构] 客户查找视图 - 通过 Email 查找会员
 -- 替换 pos_checkout.php 中的直接 Customer 查询
@@ -566,24 +469,6 @@ SELECT
 FROM MembershipTier
 ORDER BY MinPoints ASC;
 
--- 31. [架构重构] 在线订单履约视图
--- 替换 fulfillment.php 中的直接查询
--- @deprecated 未被PHP代码使用，已被 vw_fulfillment_orders 替代
-CREATE OR REPLACE VIEW vw_staff_online_orders_pending AS
-SELECT
-    co.OrderID,
-    co.CustomerID,
-    co.OrderDate,
-    co.OrderStatus,
-    co.TotalAmount,
-    co.OrderType,
-    c.Name AS CustomerName,
-    c.Email AS CustomerEmail,
-    (SELECT COUNT(*) FROM OrderLine WHERE OrderID = co.OrderID) AS ItemCount
-FROM CustomerOrder co
-LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-WHERE co.OrderType = 'Online'
-  AND co.OrderStatus IN ('Paid', 'Shipped');
 
 -- 32. [架构重构] 月度销售报表视图
 -- 替换 reports.php 中的直接聚合查询
@@ -637,32 +522,6 @@ LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 WHERE co.FulfillmentType = 'Pickup'
   AND co.OrderStatus = 'Completed'
 ORDER BY co.OrderDate DESC;
-
--- ================================================
--- 33. [新增] 客户目录分组视图 - 按专辑分组显示
--- 解决问题：同一专辑多库存显示多个卡片的问题
--- @deprecated 未被PHP代码使用，功能已整合到 vw_catalog_by_shop_grouped
--- ================================================
-CREATE OR REPLACE VIEW vw_customer_catalog_grouped AS
-SELECT
-    r.ReleaseID,
-    r.Title,
-    r.ArtistName,
-    r.Genre,
-    r.Format,
-    r.ReleaseYear,
-    r.Description,
-    MIN(s.UnitPrice) AS MinPrice,
-    MAX(s.UnitPrice) AS MaxPrice,
-    COUNT(*) AS TotalAvailable,
-    GROUP_CONCAT(DISTINCT s.ConditionGrade ORDER BY
-        FIELD(s.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G', 'Fair', 'Poor')
-        SEPARATOR ', ') AS AvailableConditions
-FROM StockItem s
-JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
-JOIN Shop sh ON s.ShopID = sh.ShopID
-WHERE s.Status = 'Available'
-GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, r.Format, r.ReleaseYear, r.Description;
 
 -- ================================================
 -- 34. [新增] 专辑库存详情视图 - 按条件分组
@@ -1121,16 +980,6 @@ FROM StockItem si
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 JOIN Shop s ON si.ShopID = s.ShopID;
 
--- 55. [架构重构] 订单取消验证视图
--- 替换 cancel_order.php 中的直接表访问
--- @deprecated 未被PHP代码使用，功能已整合到 vw_customer_pending_order
-CREATE OR REPLACE VIEW vw_order_cancel_validation AS
-SELECT
-    OrderID,
-    CustomerID,
-    OrderStatus
-FROM CustomerOrder
-WHERE OrderStatus = 'Pending';
 
 -- 56. [架构重构] 员工店铺信息视图（包含shopId）
 -- 替换 pos.php, fulfillment.php, buyback.php 中的员工信息查询
@@ -1180,103 +1029,7 @@ SELECT
 FROM ReleaseAlbum r
 ORDER BY r.Title;
 
--- 58. [架构重构] 待处理调拨列表（源店铺视角）
--- 替换 fulfillment.php 中的待发货调拨查询
--- @deprecated 未被PHP代码使用，已被 vw_fulfillment_pending_transfers_grouped 替代
-CREATE OR REPLACE VIEW vw_fulfillment_pending_transfers AS
-SELECT
-    t.TransferID,
-    t.StockItemID,
-    t.FromShopID,
-    t.ToShopID,
-    t.Status,
-    t.TransferDate,
-    s1.Name AS FromShopName,
-    s2.Name AS ToShopName,
-    r.Title,
-    r.ArtistName,
-    si.ConditionGrade,
-    si.UnitPrice,
-    e.Name AS AuthorizedByName
-FROM InventoryTransfer t
-JOIN StockItem si ON t.StockItemID = si.StockItemID
-JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-JOIN Shop s1 ON t.FromShopID = s1.ShopID
-JOIN Shop s2 ON t.ToShopID = s2.ShopID
-LEFT JOIN Employee e ON t.AuthorizedByEmployeeID = e.EmployeeID
-WHERE t.Status = 'Pending'
-ORDER BY t.TransferDate DESC;
 
--- 59. [架构重构] 进货中调拨列表（目标店铺视角）
--- 替换 fulfillment.php 中的待收货调拨查询
--- @deprecated 未被PHP代码使用，已被 vw_fulfillment_incoming_transfers_grouped 替代
-CREATE OR REPLACE VIEW vw_fulfillment_incoming_transfers AS
-SELECT
-    t.TransferID,
-    t.StockItemID,
-    t.FromShopID,
-    t.ToShopID,
-    t.Status,
-    t.TransferDate,
-    s1.Name AS FromShopName,
-    s2.Name AS ToShopName,
-    r.Title,
-    r.ArtistName,
-    si.ConditionGrade,
-    si.UnitPrice,
-    e.Name AS AuthorizedByName
-FROM InventoryTransfer t
-JOIN StockItem si ON t.StockItemID = si.StockItemID
-JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-JOIN Shop s1 ON t.FromShopID = s1.ShopID
-JOIN Shop s2 ON t.ToShopID = s2.ShopID
-LEFT JOIN Employee e ON t.AuthorizedByEmployeeID = e.EmployeeID
-WHERE t.Status = 'InTransit'
-ORDER BY t.TransferDate DESC;
-
--- 60. [架构重构] Fulfillment待发货订单视图
--- 替换 fulfillment.php 中的待发货订单查询
--- @deprecated 未被PHP代码使用，已被 vw_fulfillment_orders 替代
-CREATE OR REPLACE VIEW vw_fulfillment_shipping_orders AS
-SELECT
-    co.OrderID,
-    co.CustomerID,
-    co.OrderDate,
-    co.OrderStatus,
-    co.TotalAmount,
-    co.FulfilledByShopID AS ShopID,
-    co.FulfillmentType,
-    co.ShippingAddress,
-    c.Name AS CustomerName,
-    c.Email AS CustomerEmail,
-    (SELECT COUNT(*) FROM OrderLine WHERE OrderID = co.OrderID) AS ItemCount
-FROM CustomerOrder co
-LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-WHERE co.OrderType = 'Online'
-  AND co.OrderStatus = 'Paid'
-  AND co.FulfillmentType = 'Shipping'
-ORDER BY co.OrderDate ASC;
-
--- 61. [架构重构] 已发货待确认订单视图
--- 替换 fulfillment.php 中的已发货订单查询
--- @deprecated 未被PHP代码使用，已被 vw_fulfillment_orders 替代
-CREATE OR REPLACE VIEW vw_fulfillment_shipped_orders AS
-SELECT
-    co.OrderID,
-    co.CustomerID,
-    co.OrderDate,
-    co.OrderStatus,
-    co.TotalAmount,
-    co.FulfilledByShopID AS ShopID,
-    co.FulfillmentType,
-    c.Name AS CustomerName,
-    c.Email AS CustomerEmail,
-    (SELECT COUNT(*) FROM OrderLine WHERE OrderID = co.OrderID) AS ItemCount
-FROM CustomerOrder co
-LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-WHERE co.OrderType = 'Online'
-  AND co.OrderStatus = 'Shipped'
-ORDER BY co.OrderDate ASC;
 
 -- 62. [架构重构] Warehouse库存视图
 -- 替换 warehouse_dispatch.php 中的仓库库存查询
@@ -1308,67 +1061,6 @@ FROM Shop
 WHERE Type = 'Retail'
 ORDER BY Name;
 
--- 64. [架构重构] Buyback专辑价格参考视图
--- 替换 buyback.php 中的现有库存价格查询
--- @deprecated 未被PHP代码使用，已被 vw_stock_price_map 替代
-CREATE OR REPLACE VIEW vw_buyback_price_reference AS
-SELECT
-    ReleaseID,
-    ConditionGrade,
-    MIN(UnitPrice) AS MinPrice,
-    MAX(UnitPrice) AS MaxPrice,
-    AVG(UnitPrice) AS AvgPrice,
-    COUNT(*) AS StockCount
-FROM StockItem
-WHERE Status = 'Available'
-GROUP BY ReleaseID, ConditionGrade;
-
--- 65. [架构重构] 最近回购订单视图
--- 替换 buyback.php 中的最近回购查询
--- @deprecated 未被PHP代码使用，已被 vw_recent_buybacks_detail 替代
-CREATE OR REPLACE VIEW vw_recent_buyback_orders AS
-SELECT
-    bo.BuybackOrderID,
-    bo.CustomerID,
-    COALESCE(c.Name, 'Walk-in') AS CustomerName,
-    bo.ShopID,
-    bo.BuybackDate,
-    bo.TotalPayment,
-    bo.Status,
-    r.Title,
-    r.ArtistName,
-    bol.Quantity,
-    bol.UnitPrice AS BuybackPrice,
-    bol.ConditionGrade,
-    e.Name AS ProcessedByName
-FROM BuybackOrder bo
-LEFT JOIN Customer c ON bo.CustomerID = c.CustomerID
-JOIN BuybackOrderLine bol ON bo.BuybackOrderID = bol.BuybackOrderID
-JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
-JOIN Employee e ON bo.ProcessedByEmployeeID = e.EmployeeID
-ORDER BY bo.BuybackDate DESC;
-
--- 66. [架构重构] Manager申请详情视图（用于库存验证）
--- 替换 admin/requests.php 中的库存验证查询
--- @deprecated 未被PHP代码使用，已被 vw_shop_inventory_by_release 替代
-CREATE OR REPLACE VIEW vw_request_stock_verification AS
-SELECT
-    mr.RequestID,
-    mr.FromShopID,
-    mr.ToShopID,
-    mr.ReleaseID,
-    mr.ConditionGrade,
-    mr.Quantity AS RequestedQuantity,
-    (
-        SELECT COUNT(*)
-        FROM StockItem si
-        WHERE si.ShopID = mr.ToShopID
-          AND si.ReleaseID = mr.ReleaseID
-          AND si.ConditionGrade = mr.ConditionGrade
-          AND si.Status = 'Available'
-    ) AS AvailableQuantity
-FROM ManagerRequest mr
-WHERE mr.RequestType = 'TransferRequest' AND mr.Status = 'Pending';
 
 -- 67. [架构重构] 其他店铺同款库存视图
 -- 替换 admin/requests.php 中的跨店库存查询
@@ -1405,25 +1097,6 @@ FROM OrderLine ol
 JOIN StockItem si ON ol.StockItemID = si.StockItemID
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;
 
--- 69. [架构重构] Checkout库存验证视图
--- 替换 checkout.php 中的库存验证查询
--- @deprecated 未被PHP代码使用，已被 vw_checkout_cart_items 替代
-CREATE OR REPLACE VIEW vw_checkout_stock_validation AS
-SELECT
-    si.StockItemID,
-    si.ReleaseID,
-    si.ShopID,
-    si.Status,
-    si.UnitPrice,
-    si.ConditionGrade,
-    r.Title,
-    r.ArtistName,
-    s.Name AS ShopName,
-    s.Type AS ShopType
-FROM StockItem si
-JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-JOIN Shop s ON si.ShopID = s.ShopID
-WHERE si.Status = 'Available';
 
 -- 70. [架构重构] 店铺Walk-in顾客收入视图
 -- 替换 functions.php:prepareDashboardData 中的walk-in收入查询
@@ -1837,24 +1510,6 @@ FROM ReleaseAlbum
 WHERE Genre IS NOT NULL AND Genre != ''
 ORDER BY Genre;
 
--- 96. [架构重构Phase3] 专辑可用库存详情视图（按店铺）
--- 替换 functions.php:getReleaseDetailsByShop 中的库存查询
--- @deprecated 未被PHP代码使用，功能已整合到 vw_release_shop_stock_grouped
-CREATE OR REPLACE VIEW vw_release_available_stock AS
-SELECT
-    si.StockItemID,
-    si.ReleaseID,
-    si.ShopID,
-    si.BatchNo,
-    si.ConditionGrade,
-    si.UnitPrice,
-    si.Status,
-    si.AcquiredDate,
-    s.Name AS ShopName,
-    s.Type AS ShopType
-FROM StockItem si
-JOIN Shop s ON si.ShopID = s.ShopID
-WHERE si.Status = 'Available';
 
 -- 97. [架构重构Phase3] 店铺库存数量统计视图
 -- 替换 db_procedures.php:getShopStockCount 中的直接表访问

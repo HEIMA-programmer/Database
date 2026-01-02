@@ -255,7 +255,8 @@ require_once __DIR__ . '/../../includes/header.php';
                     <input type="hidden" name="update_prices" value="1">
                     <input type="hidden" name="release_id" id="price_release_id">
 
-                    <div id="priceLoading" class="text-center py-4">
+                    <!-- 【修复】添加d-none初始状态，由JS控制显示 -->
+                    <div id="priceLoading" class="text-center py-4 d-none">
                         <div class="spinner-border text-warning"></div>
                         <p class="mt-2">Loading stock prices...</p>
                     </div>

@@ -159,7 +159,8 @@ require_once __DIR__ . '/../../includes/header.php';
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div id="genreDetailLoading" class="text-center py-4">
+                <!-- 【修复】添加d-none初始状态，由JS控制显示 -->
+                <div id="genreDetailLoading" class="text-center py-4 d-none">
                     <div class="spinner-border text-info"></div>
                     <p class="mt-2">Loading...</p>
                 </div>
@@ -199,7 +200,8 @@ require_once __DIR__ . '/../../includes/header.php';
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div id="monthDetailLoading" class="text-center py-4">
+                <!-- 【修复】添加d-none初始状态，由JS控制显示 -->
+                <div id="monthDetailLoading" class="text-center py-4 d-none">
                     <div class="spinner-border text-info"></div>
                     <p class="mt-2">Loading...</p>
                 </div>

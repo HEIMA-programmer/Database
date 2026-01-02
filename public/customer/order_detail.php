@@ -151,7 +151,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                 <td class="text-center">
                                     <span class="badge bg-warning text-dark"><?= $item['Quantity'] ?></span>
                                 </td>
-                                <td class="text-end text-muted"><?= formatPrice($item['PriceAtSale'] / $item['Quantity']) ?></td>
+                                <td class="text-end text-warning"><?= formatPrice($item['PriceAtSale'] / $item['Quantity']) ?></td>
                                 <td class="text-end">
                                     <span class="text-success fw-bold"><?= formatPrice($item['Subtotal']) ?></span>
                                     <?php if ($hasDiscount): ?>

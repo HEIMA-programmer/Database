@@ -640,10 +640,12 @@ function prepareUsersPageData($pdo) {
 /**
  * 准备Manager用户管理页面数据
  * 只显示自己和本店铺的Staff，只能新增Staff角色
+ * 【修改】添加customers数据，与Admin Users界面保持一致
  */
 function prepareManagerUsersPageData($pdo, $shopId, $employeeId) {
     return [
         'employees' => DBProcedures::getEmployeesByShop($pdo, $shopId, $employeeId),
+        'customers' => DBProcedures::getCustomerList($pdo),
         'shop_id'   => $shopId,
         'roles'     => ['Staff']  // Manager只能新增Staff
     ];
@@ -741,17 +743,23 @@ function prepareProductsPageData($pdo) {
 
 /**
  * 准备采购管理页面数据
+ * 【修改】添加分页支持用于Order History
  */
-function prepareProcurementPageData($pdo) {
+function prepareProcurementPageData($pdo, $historyPage = 1, $historyPerPage = 15) {
 
     $warehouseId = getShopIdByType($pdo, 'Warehouse');
+
+    // Get total count for pagination
+    $historyTotal = DBProcedures::getReceivedSupplierOrdersCount($pdo);
+    $historyOffset = ($historyPage - 1) * $historyPerPage;
 
     return [
         'warehouse_id'    => $warehouseId,
         'suppliers'       => DBProcedures::getSupplierList($pdo),
         'releases'        => DBProcedures::getReleaseList($pdo),
         'pending_orders'  => DBProcedures::getPendingSupplierOrders($pdo),
-        'received_orders' => DBProcedures::getReceivedSupplierOrders($pdo)
+        'received_orders' => DBProcedures::getReceivedSupplierOrdersPaginated($pdo, $historyPerPage, $historyOffset),
+        'history_pagination' => getPaginationData($historyPage, $historyTotal, $historyPerPage)
     ];
 }
 

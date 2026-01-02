@@ -99,7 +99,7 @@ require_once __DIR__ . '/../../includes/header.php';
             <?php endif; ?>
 
             <!-- Search -->
-            <div class="col-md-4">
+            <div class="<?= $viewMode === 'detail' ? 'col-md-4' : 'col-md-5' ?>">
                 <label class="form-label small text-muted">Search</label>
                 <div class="input-group">
                     <span class="input-group-text bg-secondary border-secondary"><i class="fa-solid fa-search text-muted"></i></span>
@@ -108,7 +108,8 @@ require_once __DIR__ . '/../../includes/header.php';
                 </div>
             </div>
 
-            <!-- Batch Filter -->
+            <!-- Batch Filter (only shown in detail mode) -->
+            <?php if ($viewMode === 'detail'): ?>
             <div class="col-md-3">
                 <label class="form-label small text-muted">Batch</label>
                 <select name="batch" class="form-select bg-dark text-white border-secondary">
@@ -118,9 +119,10 @@ require_once __DIR__ . '/../../includes/header.php';
                     <?php endforeach; ?>
                 </select>
             </div>
+            <?php endif; ?>
 
             <!-- Sort -->
-            <div class="col-md-3">
+            <div class="<?= $viewMode === 'detail' ? 'col-md-3' : 'col-md-5' ?>">
                 <label class="form-label small text-muted">Sort By</label>
                 <select name="sort" class="form-select bg-dark text-white border-secondary">
                     <option value="">Default (Title)</option>

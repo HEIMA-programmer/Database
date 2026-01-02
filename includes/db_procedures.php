@@ -951,6 +951,34 @@ class DBProcedures {
     }
 
     /**
+     * 获取已完成的供应商订单历史记录 - 分页版本
+     */
+    public static function getReceivedSupplierOrdersPaginated($pdo, $limit, $offset) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_admin_supplier_orders WHERE Status = 'Received' ORDER BY ReceivedDate DESC LIMIT ? OFFSET ?");
+            $stmt->execute([$limit, $offset]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getReceivedSupplierOrdersPaginated Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取已完成的供应商订单总数
+     */
+    public static function getReceivedSupplierOrdersCount($pdo) {
+        try {
+            $stmt = $pdo->query("SELECT COUNT(*) as total FROM vw_admin_supplier_orders WHERE Status = 'Received'");
+            $result = $stmt->fetch();
+            return (int)$result['total'];
+        } catch (PDOException $e) {
+            error_log("getReceivedSupplierOrdersCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
      * 获取仓库待收货的供应商订单（warehouse staff用）
      * Uses vw_warehouse_pending_receipts view
      */

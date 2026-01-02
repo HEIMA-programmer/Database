@@ -28,12 +28,17 @@ function getUnitCostByCondition($baseCost, $condition) {
 }
 
 // ========== Data Preparation ==========
-$pageData = prepareProcurementPageData($pdo);
+// Get history page number from query params
+$historyPage = max(1, (int)($_GET['history_page'] ?? 1));
+$historyPerPage = 15;
+
+$pageData = prepareProcurementPageData($pdo, $historyPage, $historyPerPage);
 $warehouseId = $pageData['warehouse_id'];
 $suppliers = $pageData['suppliers'];
 $releases = $pageData['releases'];
 $pendingPOs = $pageData['pending_orders'];
 $receivedPOs = $pageData['received_orders'] ?? [];
+$historyPagination = $pageData['history_pagination'] ?? null;
 
 // Get release base unit costs for backend validation
 $releaseBaseUnitCosts = [];
@@ -174,8 +179,11 @@ require_once __DIR__ . '/../../includes/header.php';
 <?php else: ?>
 <!-- Order History Section -->
 <div class="card bg-dark border-secondary">
-    <div class="card-header border-secondary">
+    <div class="card-header border-secondary d-flex justify-content-between align-items-center">
         <h5 class="card-title text-white mb-0"><i class="fa-solid fa-history me-2"></i>Received Orders History</h5>
+        <?php if ($historyPagination && $historyPagination['total_items'] > 0): ?>
+        <span class="badge bg-secondary"><?= $historyPagination['total_items'] ?> orders</span>
+        <?php endif; ?>
     </div>
     <div class="table-responsive">
         <table class="table table-dark table-hover mb-0 align-middle">
@@ -209,6 +217,49 @@ require_once __DIR__ . '/../../includes/header.php';
         </table>
     </div>
 </div>
+
+<!-- Pagination for Order History -->
+<?php if ($historyPagination && $historyPagination['total_pages'] > 1): ?>
+<nav aria-label="Order history pagination" class="mt-4">
+    <ul class="pagination justify-content-center">
+        <!-- Previous button -->
+        <li class="page-item <?= !$historyPagination['has_prev'] ? 'disabled' : '' ?>">
+            <a class="page-link bg-dark border-secondary text-light"
+               href="?tab=history&history_page=<?= $historyPagination['prev_page'] ?>">
+                <i class="fa-solid fa-chevron-left"></i>
+            </a>
+        </li>
+
+        <!-- Page numbers -->
+        <?php foreach ($historyPagination['pages'] as $p): ?>
+            <?php if ($p === '...'): ?>
+                <li class="page-item disabled">
+                    <span class="page-link bg-dark border-secondary text-muted">...</span>
+                </li>
+            <?php else: ?>
+                <li class="page-item <?= $p === $historyPagination['current_page'] ? 'active' : '' ?>">
+                    <a class="page-link <?= $p === $historyPagination['current_page'] ? 'bg-warning text-dark border-warning' : 'bg-dark border-secondary text-light' ?>"
+                       href="?tab=history&history_page=<?= $p ?>">
+                        <?= $p ?>
+                    </a>
+                </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
+
+        <!-- Next button -->
+        <li class="page-item <?= !$historyPagination['has_next'] ? 'disabled' : '' ?>">
+            <a class="page-link bg-dark border-secondary text-light"
+               href="?tab=history&history_page=<?= $historyPagination['next_page'] ?>">
+                <i class="fa-solid fa-chevron-right"></i>
+            </a>
+        </li>
+    </ul>
+    <div class="text-center text-muted small">
+        Showing <?= $historyPagination['offset'] + 1 ?>-<?= min($historyPagination['offset'] + $historyPagination['per_page'], $historyPagination['total_items']) ?>
+        of <?= $historyPagination['total_items'] ?> orders
+    </div>
+</nav>
+<?php endif; ?>
 <?php endif; ?>
 
 <!-- New PO Modal -->

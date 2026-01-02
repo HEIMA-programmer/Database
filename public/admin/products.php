@@ -305,8 +305,9 @@ require_once __DIR__ . '/../../includes/header.php';
 </div>
 
 <!-- 【修复】预加载数据和JS文件放在footer之前，与pos.php保持一致 -->
+<!-- 【修复】添加JSON_HEX_TAG避免数据中的</script>导致脚本提前结束 -->
 <script>
-window.preloadedStockPrices = <?= json_encode($stockPrices, JSON_UNESCAPED_UNICODE) ?>;
+window.preloadedStockPrices = <?= json_encode($stockPrices, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
 </script>
 <script src="../assets/js/pages/admin-products.js"></script>
 

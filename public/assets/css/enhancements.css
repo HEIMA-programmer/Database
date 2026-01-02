@@ -68,18 +68,51 @@
 }
 
 .alert-success {
-    border-left-color: var(--accent-green);
-    background-color: rgba(3, 218, 198, 0.1);
+    border-left-color: var(--accent-green) !important;
+    background-color: rgba(3, 218, 198, 0.2) !important;
+    color: #e0e0e0 !important;
+    border: 1px solid rgba(3, 218, 198, 0.5) !important;
+    border-left-width: 4px !important;
+}
+
+.alert-success .btn-close {
+    filter: invert(1);
 }
 
 .alert-danger {
-    border-left-color: var(--accent-red);
-    background-color: rgba(207, 102, 121, 0.1);
+    border-left-color: var(--accent-red) !important;
+    background-color: rgba(207, 102, 121, 0.2) !important;
+    color: #e0e0e0 !important;
+    border: 1px solid rgba(207, 102, 121, 0.5) !important;
+    border-left-width: 4px !important;
+}
+
+.alert-danger .btn-close {
+    filter: invert(1);
 }
 
 .alert-warning {
-    border-left-color: var(--primary-gold);
-    background-color: rgba(212, 175, 55, 0.1);
+    border-left-color: var(--primary-gold) !important;
+    background-color: rgba(212, 175, 55, 0.2) !important;
+    color: #e0e0e0 !important;
+    border: 1px solid rgba(212, 175, 55, 0.5) !important;
+    border-left-width: 4px !important;
+}
+
+.alert-warning .btn-close {
+    filter: invert(1);
+}
+
+.alert-info {
+    border-left-color: #17a2b8 !important;
+    background-color: rgba(23, 162, 184, 0.2) !important;
+    color: #e0e0e0 !important;
+    border: 1px solid rgba(23, 162, 184, 0.5) !important;
+    border-left-width: 4px !important;
+}
+
+.alert-info .btn-close {
+    filter: invert(1);
 }
 
 @keyframes slideInDown {
@@ -599,6 +632,16 @@
 /* ================== UI Color Fixes ================== */
 /* Fix text visibility on dark backgrounds */
 
+/* Override Bootstrap's text-muted for better contrast on dark backgrounds */
+.text-muted {
+    color: #9e9e9e !important;
+}
+
+/* Slightly lighter muted text for better readability */
+.text-secondary {
+    color: #adb5bd !important;
+}
+
 /* Demo account text on login page */
 .demo-account-text {
     color: #aaa !important;
@@ -830,4 +873,46 @@
 /* Shipping cost in Chinese to English */
 .shipping-cost-label {
     color: #ccc !important;
+}
+
+/* ================== Customer Shipped Order Notification ================== */
+
+/* Highlight shipped delivery orders that need action */
+.table-dark tr.table-info {
+    background-color: rgba(23, 162, 184, 0.15) !important;
+}
+
+.table-dark tr.table-info:hover {
+    background-color: rgba(23, 162, 184, 0.25) !important;
+}
+
+/* Shipped action button animation */
+.shipped-action-btn {
+    animation: pulse-btn 2s ease-in-out infinite;
+}
+
+@keyframes pulse-btn {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(40, 167, 69, 0);
+    }
+}
+
+/* Shipped status indicator */
+.shipped-indicator {
+    display: inline-block;
+    padding: 2px 8px;
+    background-color: rgba(23, 162, 184, 0.2);
+    border: 1px solid #17a2b8;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    color: #17a2b8;
+    animation: blink-badge 1.5s ease-in-out infinite;
+}
+
+@keyframes blink-badge {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
 }

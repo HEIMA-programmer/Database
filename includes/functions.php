@@ -1411,10 +1411,20 @@ function getManagerNotificationCounts($pdo, $employeeId) {
 }
 
 /**
+ * Get notification counts for Customer navigation
+ * Returns count for shipped delivery orders awaiting confirmation
+ */
+function getCustomerNotificationCounts($pdo, $customerId) {
+    return [
+        'shipped_orders' => DBProcedures::getCustomerShippedDeliveryCount($pdo, $customerId)
+    ];
+}
+
+/**
  * Get login alerts for pending tasks based on user role
  * Returns array of alert messages with type and icon
  */
-function getLoginAlerts($pdo, $role, $shopId = null, $employeeId = null) {
+function getLoginAlerts($pdo, $role, $shopId = null, $employeeId = null, $customerId = null) {
     $alerts = [];
 
     if ($role === 'Staff' && $shopId) {
@@ -1460,6 +1470,17 @@ function getLoginAlerts($pdo, $role, $shopId = null, $employeeId = null) {
                 'type' => 'warning',
                 'icon' => 'fa-clipboard-check',
                 'message' => $counts['requests'] . ' pending request(s) from managers'
+            ];
+        }
+    }
+
+    if ($role === 'Customer' && $customerId) {
+        $counts = getCustomerNotificationCounts($pdo, $customerId);
+        if ($counts['shipped_orders'] > 0) {
+            $alerts[] = [
+                'type' => 'info',
+                'icon' => 'fa-truck',
+                'message' => $counts['shipped_orders'] . ' shipped order(s) awaiting your confirmation'
             ];
         }
     }

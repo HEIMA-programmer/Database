@@ -95,6 +95,50 @@ class ApiResponse
     }
 
     /**
+     * 【新增】验证用户登录状态（API专用，返回JSON而不是重定向）
+     *
+     * @return bool 如果已登录返回true，否则发送JSON错误响应并终止
+     */
+    public static function requireLogin(): bool
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        if (!isset($_SESSION['user_id'])) {
+            self::error('Please login to access this resource', 401);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 【新增】验证用户角色（API专用，返回JSON而不是重定向）
+     *
+     * @param string|array $allowedRoles 允许的角色
+     * @return bool 如果角色匹配返回true，否则发送JSON错误响应并终止
+     */
+    public static function requireRole($allowedRoles): bool
+    {
+        if (!self::requireLogin()) {
+            return false;
+        }
+
+        $currentUserRole = $_SESSION['role'] ?? '';
+
+        if (!is_array($allowedRoles)) {
+            $allowedRoles = [$allowedRoles];
+        }
+
+        if (!in_array($currentUserRole, $allowedRoles)) {
+            error_log("API Access Denied: User ID {$_SESSION['user_id']} with role {$currentUserRole} tried to access " . $_SERVER['PHP_SELF']);
+            self::error('Access denied: insufficient permissions', 403);
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * 包装异常处理的API执行
      *
      * @param callable $callback API逻辑回调函数

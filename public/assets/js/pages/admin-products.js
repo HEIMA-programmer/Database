@@ -1,13 +1,33 @@
 /**
  * Admin Products Page JavaScript
  * 处理编辑模态框和价格调整功能
- * 【修复】增强错误处理和null检查
+ * 【修复】增强错误处理、超时和状态管理
  */
 document.addEventListener('DOMContentLoaded', function() {
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text || '';
         return div.innerHTML;
+    }
+
+    /**
+     * 【修复】带超时的fetch函数
+     */
+    async function fetchWithTimeout(url, options, timeout = 10000) {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
+
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+            clearTimeout(id);
+            return response;
+        } catch (error) {
+            clearTimeout(id);
+            throw error;
+        }
     }
 
     // Edit modal - 填充编辑表单
@@ -21,20 +41,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const editGenre = document.getElementById('edit_genre');
             const editDesc = document.getElementById('edit_desc');
 
-            if (editId) editId.value = this.dataset.id;
-            if (editTitle) editTitle.value = this.dataset.title;
-            if (editArtist) editArtist.value = this.dataset.artist;
-            if (editLabel) editLabel.value = this.dataset.label;
-            if (editYear) editYear.value = this.dataset.year;
-            if (editGenre) editGenre.value = this.dataset.genre;
-            if (editDesc) editDesc.value = this.dataset.desc;
+            if (editId) editId.value = this.dataset.id || '';
+            if (editTitle) editTitle.value = this.dataset.title || '';
+            if (editArtist) editArtist.value = this.dataset.artist || '';
+            if (editLabel) editLabel.value = this.dataset.label || '';
+            if (editYear) editYear.value = this.dataset.year || '';
+            if (editGenre) editGenre.value = this.dataset.genre || '';
+            if (editDesc) editDesc.value = this.dataset.desc || '';
         });
     });
 
     // ========== Price Modal ==========
     const priceModalEl = document.getElementById('priceModal');
-    let currentReleaseId = null;
-    let currentReleaseTitle = null;
 
     async function loadAndRenderPriceData(releaseId, releaseTitle) {
         const titleEl = document.getElementById('priceModalTitle');
@@ -44,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const emptyEl = document.getElementById('priceEmpty');
         const containerEl = document.getElementById('priceCardsContainer');
 
-        // 【修复】检查所有必需元素是否存在
+        // 检查所有必需元素是否存在
         if (!titleEl || !releaseIdEl || !loadingEl || !contentEl || !emptyEl || !containerEl) {
             console.error('Price modal elements not found');
             return;
@@ -62,14 +80,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const formData = new FormData();
             formData.append('release_id', releaseId);
 
-            const response = await fetch('../api/admin/stock_prices.php', {
+            const response = await fetchWithTimeout('../api/admin/stock_prices.php', {
                 method: 'POST',
                 body: formData
-            });
+            }, 10000);
 
-            // 【修复】检查响应状态
+            // 检查响应状态
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // 尝试解析错误信息
+                let errorMessage = `HTTP error ${response.status}`;
+                try {
+                    const errorResult = await response.json();
+                    errorMessage = errorResult.message || errorMessage;
+                } catch (e) {
+                    // 忽略JSON解析错误
+                }
+                throw new Error(errorMessage);
             }
 
             const result = await response.json();
@@ -85,25 +111,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const data = result.data || [];
 
-            if (data.length > 0) {
+            if (Array.isArray(data) && data.length > 0) {
                 // Group by condition
                 const byCondition = {};
                 data.forEach(row => {
                     const cond = row.condition;
+                    if (!cond) return; // 跳过无效数据
+
                     if (!byCondition[cond]) {
-                        byCondition[cond] = { price: row.price, totalQty: 0, shops: [] };
+                        byCondition[cond] = { price: row.price || 0, totalQty: 0, shops: [] };
                     }
-                    byCondition[cond].totalQty += parseInt(row.qty);
+                    byCondition[cond].totalQty += parseInt(row.qty) || 0;
                     byCondition[cond].shops.push({
-                        name: row.shop,
-                        qty: row.qty,
-                        price: row.price
+                        name: row.shop || 'Unknown',
+                        qty: row.qty || 0,
+                        price: row.price || 0
                     });
                 });
 
+                // 检查是否有有效数据
+                const conditionKeys = Object.keys(byCondition);
+                if (conditionKeys.length === 0) {
+                    emptyEl.textContent = 'No available stock found for this release.';
+                    emptyEl.classList.remove('d-none');
+                    return;
+                }
+
                 // 按condition顺序排序
                 const condOrder = ['New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'];
-                const sortedConditions = Object.keys(byCondition).sort((a, b) =>
+                const sortedConditions = conditionKeys.sort((a, b) =>
                     condOrder.indexOf(a) - condOrder.indexOf(b)
                 );
 
@@ -159,18 +195,23 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error loading stock prices:', error);
             loadingEl.classList.add('d-none');
-            emptyEl.textContent = 'Error loading data. Please try again.';
+
+            // 显示具体错误信息
+            if (error.name === 'AbortError') {
+                emptyEl.textContent = 'Request timeout. Please try again.';
+            } else {
+                emptyEl.textContent = error.message || 'Error loading data. Please try again.';
+            }
             emptyEl.classList.remove('d-none');
         }
     }
 
-    // 【修复】添加null检查后再绑定事件
     if (priceModalEl) {
         priceModalEl.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
             if (button && button.dataset.releaseId) {
-                currentReleaseId = button.dataset.releaseId;
-                currentReleaseTitle = button.dataset.releaseTitle;
+                const releaseId = button.dataset.releaseId;
+                const releaseTitle = button.dataset.releaseTitle || '';
 
                 // 重置状态
                 const loadingEl = document.getElementById('priceLoading');
@@ -184,7 +225,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (containerEl) containerEl.innerHTML = '';
 
                 // 加载数据
-                loadAndRenderPriceData(currentReleaseId, currentReleaseTitle);
+                loadAndRenderPriceData(releaseId, releaseTitle);
             }
         });
 
@@ -193,12 +234,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const contentEl = document.getElementById('priceContent');
             const emptyEl = document.getElementById('priceEmpty');
             const containerEl = document.getElementById('priceCardsContainer');
+            const loadingEl = document.getElementById('priceLoading');
 
             if (contentEl) contentEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (containerEl) containerEl.innerHTML = '';
-            currentReleaseId = null;
-            currentReleaseTitle = null;
+            if (loadingEl) loadingEl.classList.add('d-none');
         });
     }
 });

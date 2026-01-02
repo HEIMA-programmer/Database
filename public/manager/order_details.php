@@ -91,12 +91,6 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <div class="row mb-4">
     <div class="col-12">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="dashboard.php" class="text-warning">Dashboard</a></li>
-                <li class="breadcrumb-item active text-light">Order Details</li>
-            </ol>
-        </nav>
         <h2 class="text-<?= $color ?> display-6 fw-bold">
             <i class="fa-solid <?= $icon ?> me-2"></i><?= h($title) ?>
         </h2>

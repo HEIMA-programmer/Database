@@ -289,7 +289,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                             <?= ($group['UnitPrice'] ?? 0) > 0 ? formatPrice($group['UnitPrice']) : '--' ?>
                                         </div>
                                         <?php if ($isOutOfStock): ?>
-                                            <small class="text-muted">参考价</small>
+                                            <small class="text-muted">Ref. price</small>
                                         <?php endif; ?>
                                     </div>
                                 </div>

@@ -137,21 +137,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 使用 show.bs.modal 事件在模态框显示时加载数据
-    priceModalEl.addEventListener('show.bs.modal', function() {
-        if (currentReleaseId) {
-            loadAndRenderPriceData(currentReleaseId, currentReleaseTitle);
-        }
-    });
-
-    // 在按钮点击时设置数据并打开模态框
+    // 在按钮点击时直接调用加载函数并打开模态框
+    // 【修复】参考 staff-pos.js 的模式，避免 show.bs.modal 事件不可靠问题
     document.querySelectorAll('.price-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             currentReleaseId = this.dataset.releaseId;
             currentReleaseTitle = this.dataset.releaseTitle;
+
+            // 重置模态框状态
+            document.getElementById('priceLoading').classList.remove('d-none');
+            document.getElementById('priceContent').classList.add('d-none');
+            document.getElementById('priceEmpty').classList.add('d-none');
+            document.getElementById('priceCardsContainer').innerHTML = '';
+
             const modal = bootstrap.Modal.getOrCreateInstance(priceModalEl);
             modal.show();
+
+            // 直接调用加载函数
+            loadAndRenderPriceData(currentReleaseId, currentReleaseTitle);
         });
     });
 

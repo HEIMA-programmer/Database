@@ -63,18 +63,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    genreModalEl.addEventListener('show.bs.modal', function() {
-        if (currentGenre) {
-            loadGenreDetail(currentGenre);
-        }
-    });
-
+    // 在按钮点击时直接调用加载函数并打开模态框
+    // 【修复】参考 staff-pos.js 的模式，避免 show.bs.modal 事件不可靠问题
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             currentGenre = this.dataset.genre;
+
+            // 重置模态框状态
+            document.getElementById('genreDetailLoading').classList.remove('d-none');
+            document.getElementById('genreDetailContent').classList.add('d-none');
+            document.getElementById('genreDetailEmpty').classList.add('d-none');
+            document.getElementById('genreDetailBody').innerHTML = '';
+
             const modal = bootstrap.Modal.getOrCreateInstance(genreModalEl);
             modal.show();
+
+            // 直接调用加载函数
+            loadGenreDetail(currentGenre);
         });
     });
 
@@ -132,18 +138,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    monthModalEl.addEventListener('show.bs.modal', function() {
-        if (currentMonth) {
-            loadMonthDetail(currentMonth);
-        }
-    });
-
+    // 在按钮点击时直接调用加载函数并打开模态框
+    // 【修复】参考 staff-pos.js 的模式，避免 show.bs.modal 事件不可靠问题
     document.querySelectorAll('.btn-month-detail').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             currentMonth = this.dataset.month;
+
+            // 重置模态框状态
+            document.getElementById('monthDetailLoading').classList.remove('d-none');
+            document.getElementById('monthDetailContent').classList.add('d-none');
+            document.getElementById('monthDetailEmpty').classList.add('d-none');
+            document.getElementById('monthDetailBody').innerHTML = '';
+
             const modal = bootstrap.Modal.getOrCreateInstance(monthModalEl);
             modal.show();
+
+            // 直接调用加载函数
+            loadMonthDetail(currentMonth);
         });
     });
 

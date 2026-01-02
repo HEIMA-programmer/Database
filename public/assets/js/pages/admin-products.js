@@ -12,22 +12,30 @@ function escapeHtml(text) {
 }
 
 // ========== Price Modal ==========
-// 【修复】全局函数，供onclick直接调用
-function renderPriceData(releaseId, releaseTitle) {
+// 【修复】从模态框元素内部查找子元素，避免DOM查询问题
+function renderPriceData(releaseId, releaseTitle, modalElement) {
     if (!releaseId) {
         console.error('ReleaseId is empty');
         return;
     }
 
-    const titleEl = document.getElementById('priceModalTitle');
-    const releaseIdEl = document.getElementById('price_release_id');
-    const loadingEl = document.getElementById('priceLoading');
-    const contentEl = document.getElementById('priceContent');
-    const emptyEl = document.getElementById('priceEmpty');
-    const containerEl = document.getElementById('priceCardsContainer');
+    // 如果没有传入modalElement，尝试获取
+    const modal = modalElement || document.getElementById('priceModal');
+    if (!modal) {
+        console.error('Price modal not found');
+        return;
+    }
+
+    // 从模态框内部查找元素，确保找到正确的元素
+    const titleEl = modal.querySelector('#priceModalTitle');
+    const releaseIdEl = modal.querySelector('#price_release_id');
+    const loadingEl = modal.querySelector('#priceLoading');
+    const contentEl = modal.querySelector('#priceContent');
+    const emptyEl = modal.querySelector('#priceEmpty');
+    const containerEl = modal.querySelector('#priceCardsContainer');
 
     if (!titleEl || !releaseIdEl || !contentEl || !emptyEl || !containerEl) {
-        console.error('Price modal elements not found');
+        console.error('Price modal elements not found inside modal');
         return;
     }
 
@@ -163,11 +171,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const releaseId = button.getAttribute('data-release-id');
             const releaseTitle = button.getAttribute('data-release-title');
 
-            console.log('Price modal show event:', releaseId, releaseTitle);
-
-            // 调用渲染函数
+            // 调用渲染函数，传入模态框元素本身
             if (releaseId) {
-                renderPriceData(releaseId, releaseTitle);
+                renderPriceData(releaseId, releaseTitle, this);
             }
         });
     }

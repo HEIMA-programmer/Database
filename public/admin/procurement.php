@@ -130,7 +130,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <i class="fa-solid fa-info-circle me-2"></i>
     <strong>Procurement Cost Policy:</strong> Each album has a fixed unit cost. Sale price is suggested based on cost level:
     <ul class="mb-0 mt-2">
-        <li>Low cost (≤¥20): +50% markup (薄利多销)</li>
+        <li>Low cost (≤¥20): +50% markup</li>
         <li>Medium cost (¥21-50): +60% markup</li>
         <li>Higher cost (¥51-100): +70% markup</li>
         <li>Premium cost (>¥100): +80% markup (single item profit)</li>

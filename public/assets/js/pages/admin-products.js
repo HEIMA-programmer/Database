@@ -1,6 +1,7 @@
 /**
  * Admin Products Page JavaScript
  * 【修复】使用预加载数据替代AJAX，解决loading一直显示的问题
+ * 【修复】增强按钮点击事件绑定，解决relatedTarget为空的问题
  */
 document.addEventListener('DOMContentLoaded', function() {
     function escapeHtml(text) {
@@ -32,8 +33,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ========== Price Modal ==========
     const priceModalEl = document.getElementById('priceModal');
+    // 保存当前选中的release信息
+    let currentReleaseId = null;
+    let currentReleaseTitle = null;
 
     function renderPriceData(releaseId, releaseTitle) {
+        if (!releaseId) {
+            console.error('ReleaseId is empty');
+            return;
+        }
+
         const titleEl = document.getElementById('priceModalTitle');
         const releaseIdEl = document.getElementById('price_release_id');
         const loadingEl = document.getElementById('priceLoading');
@@ -49,13 +58,17 @@ document.addEventListener('DOMContentLoaded', function() {
         titleEl.textContent = releaseTitle || '';
         releaseIdEl.value = releaseId;
 
-        // 隐藏loading（如果有的话）
+        // 先隐藏所有状态
         if (loadingEl) loadingEl.classList.add('d-none');
         contentEl.classList.add('d-none');
         emptyEl.classList.add('d-none');
 
-        // 从预加载数据获取
-        const data = window.preloadedStockPrices && window.preloadedStockPrices[releaseId];
+        // 从预加载数据获取（支持数字和字符串类型的键）
+        let data = window.preloadedStockPrices && window.preloadedStockPrices[releaseId];
+        // 如果用字符串找不到，尝试用数字
+        if (!data && window.preloadedStockPrices) {
+            data = window.preloadedStockPrices[parseInt(releaseId)];
+        }
 
         if (Array.isArray(data) && data.length > 0) {
             // Group by condition
@@ -140,11 +153,34 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // 【修复】在按钮点击时保存数据，确保模态框打开时能获取到
+    document.querySelectorAll('.price-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentReleaseId = this.dataset.releaseId || null;
+            currentReleaseTitle = this.dataset.releaseTitle || '';
+        });
+    });
+
     if (priceModalEl) {
         priceModalEl.addEventListener('show.bs.modal', function(event) {
+            // 优先使用 relatedTarget，如果为空则使用保存的数据
             const button = event.relatedTarget;
-            if (button && button.dataset.releaseId) {
-                renderPriceData(button.dataset.releaseId, button.dataset.releaseTitle || '');
+            const releaseId = (button && button.dataset.releaseId) ? button.dataset.releaseId : currentReleaseId;
+            const releaseTitle = (button && button.dataset.releaseTitle) ? button.dataset.releaseTitle : currentReleaseTitle;
+
+            if (releaseId) {
+                renderPriceData(releaseId, releaseTitle || '');
+            } else {
+                // 如果没有数据，显示空提示
+                const emptyEl = document.getElementById('priceEmpty');
+                const loadingEl = document.getElementById('priceLoading');
+                const contentEl = document.getElementById('priceContent');
+                if (loadingEl) loadingEl.classList.add('d-none');
+                if (contentEl) contentEl.classList.add('d-none');
+                if (emptyEl) {
+                    emptyEl.textContent = 'Unable to load price data.';
+                    emptyEl.classList.remove('d-none');
+                }
             }
         });
 
@@ -157,6 +193,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (contentEl) contentEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (containerEl) containerEl.innerHTML = '';
+            // 清除保存的数据
+            currentReleaseId = null;
+            currentReleaseTitle = null;
         });
     }
 });

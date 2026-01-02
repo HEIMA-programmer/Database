@@ -1,6 +1,7 @@
 /**
  * Manager Reports Page JavaScript
  * 【修复】使用预加载数据替代AJAX，解决loading一直显示的问题
+ * 【修复】增强按钮点击事件绑定，解决relatedTarget为空的问题
  */
 document.addEventListener('DOMContentLoaded', function() {
     // 辅助函数
@@ -12,8 +13,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ========== Genre Detail Modal ==========
     const genreModalEl = document.getElementById('genreDetailModal');
+    // 保存当前选中的genre
+    let currentGenre = null;
 
     function renderGenreDetail(genre) {
+        if (!genre) {
+            console.error('Genre is empty');
+            return;
+        }
+
         const titleEl = document.getElementById('genreTitle');
         const loadingEl = document.getElementById('genreDetailLoading');
         const contentEl = document.getElementById('genreDetailContent');
@@ -27,7 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         titleEl.textContent = genre;
 
-        // 隐藏loading（如果有的话）
+        // 先隐藏所有状态
         if (loadingEl) loadingEl.classList.add('d-none');
         contentEl.classList.add('d-none');
         emptyEl.classList.add('d-none');
@@ -53,11 +61,32 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // 【修复】在按钮点击时保存数据，确保模态框打开时能获取到
+    document.querySelectorAll('.btn-genre-detail').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentGenre = this.dataset.genre || null;
+        });
+    });
+
     if (genreModalEl) {
         genreModalEl.addEventListener('show.bs.modal', function(event) {
+            // 优先使用 relatedTarget，如果为空则使用保存的数据
             const button = event.relatedTarget;
-            if (button && button.dataset.genre) {
-                renderGenreDetail(button.dataset.genre);
+            const genre = (button && button.dataset.genre) ? button.dataset.genre : currentGenre;
+
+            if (genre) {
+                renderGenreDetail(genre);
+            } else {
+                // 如果没有数据，显示空提示
+                const emptyEl = document.getElementById('genreDetailEmpty');
+                const loadingEl = document.getElementById('genreDetailLoading');
+                const contentEl = document.getElementById('genreDetailContent');
+                if (loadingEl) loadingEl.classList.add('d-none');
+                if (contentEl) contentEl.classList.add('d-none');
+                if (emptyEl) {
+                    emptyEl.textContent = 'Unable to load genre details.';
+                    emptyEl.classList.remove('d-none');
+                }
             }
         });
 
@@ -69,11 +98,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (contentEl) contentEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (bodyEl) bodyEl.innerHTML = '';
+            // 清除保存的数据
+            currentGenre = null;
         });
     }
 
     // ========== Month Detail Modal ==========
     const monthModalEl = document.getElementById('monthDetailModal');
+    // 保存当前选中的month
+    let currentMonth = null;
 
     const typeBadges = {
         'POS': '<span class="badge bg-warning text-dark">POS</span>',
@@ -82,6 +115,11 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function renderMonthDetail(month) {
+        if (!month) {
+            console.error('Month is empty');
+            return;
+        }
+
         const titleEl = document.getElementById('monthTitle');
         const loadingEl = document.getElementById('monthDetailLoading');
         const contentEl = document.getElementById('monthDetailContent');
@@ -95,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         titleEl.textContent = month;
 
-        // 隐藏loading（如果有的话）
+        // 先隐藏所有状态
         if (loadingEl) loadingEl.classList.add('d-none');
         contentEl.classList.add('d-none');
         emptyEl.classList.add('d-none');
@@ -124,11 +162,32 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // 【修复】在按钮点击时保存数据，确保模态框打开时能获取到
+    document.querySelectorAll('.btn-month-detail').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentMonth = this.dataset.month || null;
+        });
+    });
+
     if (monthModalEl) {
         monthModalEl.addEventListener('show.bs.modal', function(event) {
+            // 优先使用 relatedTarget，如果为空则使用保存的数据
             const button = event.relatedTarget;
-            if (button && button.dataset.month) {
-                renderMonthDetail(button.dataset.month);
+            const month = (button && button.dataset.month) ? button.dataset.month : currentMonth;
+
+            if (month) {
+                renderMonthDetail(month);
+            } else {
+                // 如果没有数据，显示空提示
+                const emptyEl = document.getElementById('monthDetailEmpty');
+                const loadingEl = document.getElementById('monthDetailLoading');
+                const contentEl = document.getElementById('monthDetailContent');
+                if (loadingEl) loadingEl.classList.add('d-none');
+                if (contentEl) contentEl.classList.add('d-none');
+                if (emptyEl) {
+                    emptyEl.textContent = 'Unable to load month details.';
+                    emptyEl.classList.remove('d-none');
+                }
             }
         });
 
@@ -140,6 +199,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (contentEl) contentEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (bodyEl) bodyEl.innerHTML = '';
+            // 清除保存的数据
+            currentMonth = null;
         });
     }
 });

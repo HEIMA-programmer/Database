@@ -315,7 +315,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             </td>
                             <td class="text-center"><?= $revenue ? $revenue['OrderCount'] : 0 ?></td>
                             <td class="text-end text-success fw-bold">
-                                <?= $revenue ? formatPrice($revenue['Revenue'] + ($revenue['TotalShipping'] ?? 0)) : formatPrice(0) ?>
+                                <?= $revenue ? formatPrice($revenue['Revenue']) : formatPrice(0) ?>
                             </td>
                             <td class="text-center">
                                 <a href="order_details.php?type=<?= $type ?>" class="btn btn-sm btn-outline-info">

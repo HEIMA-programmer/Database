@@ -682,10 +682,11 @@ require_once __DIR__ . '/../../includes/header.php';
                     </div>
 
                     <div class="card-footer bg-dark border-primary">
-                        <form method="POST" class="d-grid" onsubmit="return confirm('Confirm receipt of this order? This will add items to inventory.');">
+                        <form method="POST" class="d-grid" id="receiveForm_<?= $po['SupplierOrderID'] ?>">
                             <input type="hidden" name="order_id" value="<?= $po['SupplierOrderID'] ?>">
                             <input type="hidden" name="action" value="receive_supplier_order">
-                            <button type="submit" class="btn btn-primary">
+                            <button type="button" class="btn btn-primary"
+                                    onclick="showReceiveModal(<?= $po['SupplierOrderID'] ?>, '<?= h($po['ReleaseTitle']) ?>', <?= $po['TotalItems'] ?>)">
                                 <i class="fa-solid fa-check me-1"></i>Confirm Receipt (<?= $po['TotalItems'] ?> items)
                             </button>
                         </form>
@@ -698,7 +699,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <?php endif; ?>
 
-<!-- Custom Confirm Modal -->
+<!-- Custom Confirm Modal for Cancel Order -->
 <div class="modal fade custom-confirm-modal" id="cancelOrderModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -717,23 +718,72 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<!-- Custom Confirm Modal for Supplier Order Receipt -->
+<div class="modal fade custom-confirm-modal" id="receiveOrderModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa-solid fa-box-open me-2"></i>Confirm Receipt</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to confirm receipt of this order?</p>
+                <div class="alert alert-info mb-0">
+                    <i class="fa-solid fa-info-circle me-1"></i>
+                    <strong id="receiveModalTitle"></strong> (<span id="receiveModalCount"></span> items) will be added to inventory.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmReceiveBtn">
+                    <i class="fa-solid fa-check me-1"></i>Confirm Receipt
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-let cancelModal;
+let cancelModal, receiveModal;
 let currentOrderId = null;
+let currentReceiveOrderId = null;
 
 document.addEventListener('DOMContentLoaded', function() {
-    cancelModal = new bootstrap.Modal(document.getElementById('cancelOrderModal'));
+    const cancelModalEl = document.getElementById('cancelOrderModal');
+    const receiveModalEl = document.getElementById('receiveOrderModal');
 
-    document.getElementById('confirmCancelBtn').addEventListener('click', function() {
-        if (currentOrderId) {
-            document.getElementById('cancelOrderForm_' + currentOrderId).submit();
-        }
-    });
+    if (cancelModalEl) cancelModal = new bootstrap.Modal(cancelModalEl);
+    if (receiveModalEl) receiveModal = new bootstrap.Modal(receiveModalEl);
+
+    const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+    if (confirmCancelBtn) {
+        confirmCancelBtn.addEventListener('click', function() {
+            if (currentOrderId) {
+                document.getElementById('cancelOrderForm_' + currentOrderId).submit();
+            }
+        });
+    }
+
+    const confirmReceiveBtn = document.getElementById('confirmReceiveBtn');
+    if (confirmReceiveBtn) {
+        confirmReceiveBtn.addEventListener('click', function() {
+            if (currentReceiveOrderId) {
+                document.getElementById('receiveForm_' + currentReceiveOrderId).submit();
+            }
+        });
+    }
 });
 
 function showCancelModal(orderId) {
     currentOrderId = orderId;
-    cancelModal.show();
+    if (cancelModal) cancelModal.show();
+}
+
+function showReceiveModal(orderId, title, count) {
+    currentReceiveOrderId = orderId;
+    document.getElementById('receiveModalTitle').textContent = title;
+    document.getElementById('receiveModalCount').textContent = count;
+    if (receiveModal) receiveModal.show();
 }
 </script>
 

@@ -12,7 +12,7 @@ function escapeHtml(text) {
 }
 
 // ========== Price Modal ==========
-// 【修复】简化元素依赖，只使用必要的元素
+// Support per-shop price adjustment when same album+condition exists in multiple shops
 function renderPriceData(releaseId, releaseTitle, modalElement) {
     if (!releaseId) {
         console.error('ReleaseId is empty');
@@ -25,7 +25,7 @@ function renderPriceData(releaseId, releaseTitle, modalElement) {
         return;
     }
 
-    // 只获取必要的元素
+    // Get essential elements
     const titleEl = modal.querySelector('#priceModalTitle');
     const releaseIdEl = modal.querySelector('#price_release_id');
     const contentEl = modal.querySelector('#priceContent');
@@ -39,55 +39,107 @@ function renderPriceData(releaseId, releaseTitle, modalElement) {
     titleEl.textContent = releaseTitle || '';
     releaseIdEl.value = releaseId;
 
-    // 从预加载数据获取（支持数字和字符串类型的键）
+    // Get preloaded data
     let data = window.preloadedStockPrices && window.preloadedStockPrices[releaseId];
-    // 如果用字符串找不到，尝试用数字
     if (!data && window.preloadedStockPrices) {
         data = window.preloadedStockPrices[parseInt(releaseId)];
     }
 
     if (Array.isArray(data) && data.length > 0) {
-        // Group by condition
+        // Group by condition, then by shop
         const byCondition = {};
         data.forEach(row => {
             const cond = row.condition;
+            const shop = row.shop || 'Unknown';
+            const shopId = row.shop_id || 0;
             if (!cond) return;
 
             if (!byCondition[cond]) {
-                byCondition[cond] = { price: row.price || 0, totalQty: 0, shops: [] };
+                byCondition[cond] = { totalQty: 0, shops: {} };
             }
             byCondition[cond].totalQty += parseInt(row.qty) || 0;
-            byCondition[cond].shops.push({
-                name: row.shop || 'Unknown',
-                qty: row.qty || 0,
-                price: row.price || 0
-            });
+            // Use shop name as key since shop_id might not be available
+            if (!byCondition[cond].shops[shop]) {
+                byCondition[cond].shops[shop] = {
+                    name: shop,
+                    shopId: shopId,
+                    qty: 0,
+                    price: row.price || 0
+                };
+            }
+            byCondition[cond].shops[shop].qty += parseInt(row.qty) || 0;
         });
 
-        // 检查是否有有效数据
         const conditionKeys = Object.keys(byCondition);
         if (conditionKeys.length === 0) {
-            emptyEl.textContent = 'No available stock found for this release.';
-            emptyEl.classList.remove('d-none');
+            containerEl.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fa-solid fa-exclamation-triangle me-1"></i>
+                    No available stock found for this release.
+                </div>`;
+            contentEl.classList.remove('d-none');
             return;
         }
 
-        // 按condition顺序排序
+        // Sort conditions
         const condOrder = ['New', 'Mint', 'NM', 'VG+', 'VG', 'G+', 'G', 'F', 'P'];
         const sortedConditions = conditionKeys.sort((a, b) =>
             condOrder.indexOf(a) - condOrder.indexOf(b)
         );
 
-        // Render cards
+        // Render cards with per-shop price inputs
         let html = '<div class="row g-3">';
         sortedConditions.forEach(cond => {
             const info = byCondition[cond];
-            const shopList = info.shops.map(s =>
-                `<div class="d-flex justify-content-between small">
-                    <span class="text-muted">${escapeHtml(s.name)}</span>
-                    <span><span class="badge bg-info me-1">x${s.qty}</span>¥${parseFloat(s.price).toFixed(2)}</span>
-                </div>`
-            ).join('');
+            const shopEntries = Object.values(info.shops);
+            const hasMultipleShops = shopEntries.length > 1;
+
+            // Build shop list with individual price inputs if multiple shops
+            let shopContent = '';
+            if (hasMultipleShops) {
+                shopContent = shopEntries.map(s =>
+                    `<div class="d-flex justify-content-between align-items-center small mb-2 p-2 bg-dark rounded">
+                        <div>
+                            <span class="text-light">${escapeHtml(s.name)}</span>
+                            <span class="badge bg-info ms-1">x${s.qty}</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span class="text-warning me-2">¥${parseFloat(s.price).toFixed(2)}</span>
+                            <div class="input-group input-group-sm" style="width: 120px;">
+                                <span class="input-group-text bg-dark border-secondary text-light py-0">¥</span>
+                                <input type="number" step="0.01" min="0"
+                                       name="shop_prices[${escapeHtml(cond)}][${escapeHtml(s.name)}]"
+                                       class="form-control form-control-sm bg-dark text-white border-secondary py-0"
+                                       placeholder="${parseFloat(s.price).toFixed(2)}"
+                                       title="New price for ${escapeHtml(s.name)}">
+                            </div>
+                        </div>
+                    </div>`
+                ).join('');
+            } else {
+                // Single shop - simpler layout
+                const s = shopEntries[0];
+                shopContent = `
+                    <div class="d-flex justify-content-between small mb-2">
+                        <span class="text-muted">${escapeHtml(s.name)}</span>
+                        <span><span class="badge bg-info me-1">x${s.qty}</span>¥${parseFloat(s.price).toFixed(2)}</span>
+                    </div>
+                    <div class="row align-items-center">
+                        <div class="col-5">
+                            <small class="text-muted">Current:</small>
+                            <div class="text-success fw-bold">¥${parseFloat(s.price).toFixed(2)}</div>
+                        </div>
+                        <div class="col-7">
+                            <label class="small text-muted">New Price</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-dark border-secondary text-light">¥</span>
+                                <input type="number" step="0.01" min="0" name="prices[${escapeHtml(cond)}]"
+                                       class="form-control bg-dark text-white border-secondary"
+                                       placeholder="${parseFloat(s.price).toFixed(2)}">
+                            </div>
+                        </div>
+                    </div>`;
+            }
 
             html += `
             <div class="col-md-6">
@@ -97,23 +149,9 @@ function renderPriceData(releaseId, releaseTitle, modalElement) {
                         <span class="badge bg-warning text-dark">Total: ${info.totalQty} units</span>
                     </div>
                     <div class="card-body py-2">
-                        <div class="mb-2" style="max-height: 100px; overflow-y: auto;">
-                            ${shopList}
-                        </div>
-                        <div class="row align-items-center">
-                            <div class="col-5">
-                                <small class="text-muted">Current:</small>
-                                <div class="text-success fw-bold">¥${parseFloat(info.price).toFixed(2)}</div>
-                            </div>
-                            <div class="col-7">
-                                <label class="small text-muted">New Price</label>
-                                <div class="input-group input-group-sm">
-                                    <span class="input-group-text bg-dark border-secondary text-light">¥</span>
-                                    <input type="number" step="0.01" min="0" name="prices[${escapeHtml(cond)}]"
-                                           class="form-control bg-dark text-white border-secondary"
-                                           placeholder="${parseFloat(info.price).toFixed(2)}">
-                                </div>
-                            </div>
+                        ${hasMultipleShops ? '<small class="text-info d-block mb-2"><i class="fa-solid fa-store me-1"></i>Multiple shops - set price per shop:</small>' : ''}
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            ${shopContent}
                         </div>
                     </div>
                 </div>
@@ -124,7 +162,6 @@ function renderPriceData(releaseId, releaseTitle, modalElement) {
         containerEl.innerHTML = html;
         contentEl.classList.remove('d-none');
     } else {
-        // 【修复】直接在容器中显示"无数据"消息，不依赖可能消失的priceEmpty元素
         containerEl.innerHTML = `
             <div class="alert alert-warning">
                 <i class="fa-solid fa-exclamation-triangle me-1"></i>

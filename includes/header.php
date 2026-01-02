@@ -109,7 +109,11 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
                 <a class="nav-link position-relative <?= $current_page == 'fulfillment.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/fulfillment.php">
                     <i class="fa-solid fa-truck-fast me-1"></i>Fulfillment
                     <?php
-                    $fulfillmentTotal = ($navNotifications['staff']['fulfillment'] ?? 0) + ($navNotifications['staff']['transfers'] ?? 0);
+                    // Include all notification types: fulfillment, transfers (outgoing), receiving (incoming), and procurement (warehouse only)
+                    $fulfillmentTotal = ($navNotifications['staff']['fulfillment'] ?? 0)
+                        + ($navNotifications['staff']['transfers'] ?? 0)
+                        + ($navNotifications['staff']['receiving'] ?? 0)
+                        + ($navNotifications['staff']['procurement'] ?? 0);
                     if ($fulfillmentTotal > 0):
                     ?>
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">

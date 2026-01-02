@@ -33,6 +33,10 @@ $shopType = $employeeInfo['ShopType'] ?? 'Retail';
 $_SESSION['shop_id'] = $shopId;
 $_SESSION['shop_name'] = $employeeInfo['ShopName'] ?? '';
 
+// Mark all responded requests as viewed when manager visits this page
+// This will clear the notification badge after viewing
+DBProcedures::markRequestsAsViewed($pdo, $employeeId);
+
 $action = $_GET['action'] ?? 'inbox';
 $message = '';
 $error = '';

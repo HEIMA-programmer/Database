@@ -61,7 +61,7 @@ switch ($type) {
         $color = 'secondary';
 }
 
-// 按订单分组
+// 按订单分组，并合并同release同condition的商品
 $groupedOrders = [];
 foreach ($orders as $item) {
     $orderId = $item['OrderID'];
@@ -78,13 +78,29 @@ foreach ($orders as $item) {
             'items' => []
         ];
     }
-    $groupedOrders[$orderId]['items'][] = [
-        'Title' => $item['Title'],
-        'ArtistName' => $item['ArtistName'],
-        'ConditionGrade' => $item['ConditionGrade'],
-        'PriceAtSale' => $item['PriceAtSale']
-    ];
+
+    // 生成用于合并的key (同release + 同condition + 同price)
+    $releaseId = $item['ReleaseID'] ?? $item['Title'];
+    $itemKey = $releaseId . '_' . $item['ConditionGrade'] . '_' . $item['PriceAtSale'];
+
+    if (!isset($groupedOrders[$orderId]['items'][$itemKey])) {
+        $groupedOrders[$orderId]['items'][$itemKey] = [
+            'Title' => $item['Title'],
+            'ArtistName' => $item['ArtistName'],
+            'ConditionGrade' => $item['ConditionGrade'],
+            'PriceAtSale' => $item['PriceAtSale'],
+            'Quantity' => 1
+        ];
+    } else {
+        $groupedOrders[$orderId]['items'][$itemKey]['Quantity']++;
+    }
 }
+
+// 将items从关联数组转为索引数组
+foreach ($groupedOrders as $orderId => &$order) {
+    $order['items'] = array_values($order['items']);
+}
+unset($order);
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
@@ -322,31 +338,38 @@ require_once __DIR__ . '/../../includes/header.php';
                                 <th>Album</th>
                                 <th>Artist</th>
                                 <th>Condition</th>
-                                <th class="text-end">Price</th>
+                                <th class="text-center">Qty</th>
+                                <th class="text-end">Unit Price</th>
+                                <th class="text-end">Subtotal</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($order['items'] as $item): ?>
+                            <?php foreach ($order['items'] as $item):
+                                $qty = $item['Quantity'] ?? 1;
+                                $subtotal = $item['PriceAtSale'] * $qty;
+                            ?>
                             <tr>
                                 <td class="text-white"><?= h($item['Title']) ?></td>
                                 <td><small class="text-muted"><?= h($item['ArtistName']) ?></small></td>
                                 <td><span class="badge bg-secondary"><?= h($item['ConditionGrade']) ?></span></td>
-                                <td class="text-end text-success"><?= formatPrice($item['PriceAtSale']) ?></td>
+                                <td class="text-center"><span class="badge bg-info"><?= $qty ?></span></td>
+                                <td class="text-end text-warning"><?= formatPrice($item['PriceAtSale']) ?></td>
+                                <td class="text-end text-success"><?= formatPrice($subtotal) ?></td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
                         <tfoot class="border-top border-secondary">
                             <tr>
-                                <td colspan="3" class="text-end"><strong>Subtotal:</strong></td>
+                                <td colspan="5" class="text-end"><strong>Subtotal:</strong></td>
                                 <td class="text-end text-success"><?= formatPrice($order['TotalAmount'] - ($order['ShippingCost'] ?? 0)) ?></td>
                             </tr>
                             <?php if ($order['ShippingCost'] > 0): ?>
                             <tr>
-                                <td colspan="3" class="text-end"><strong>Shipping:</strong></td>
+                                <td colspan="5" class="text-end"><strong>Shipping:</strong></td>
                                 <td class="text-end text-info"><?= formatPrice($order['ShippingCost']) ?></td>
                             </tr>
                             <tr class="table-success bg-opacity-25">
-                                <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                                <td colspan="5" class="text-end"><strong>Total:</strong></td>
                                 <td class="text-end text-success fw-bold"><?= formatPrice($order['TotalAmount']) ?></td>
                             </tr>
                             <?php endif; ?>

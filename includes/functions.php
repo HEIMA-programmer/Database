@@ -1475,13 +1475,15 @@ function prepareInventoryPageDataAllShopsPaginated($pdo, $viewMode, $page = 1, $
 
 /**
  * Get notification counts for Staff navigation
- * Returns counts for Fulfillment, Pickup, and Transfers
+ * Returns counts for Fulfillment, Pickup, Transfers (outgoing), Receiving (incoming), and Procurement (supplier receipts)
  */
 function getStaffNotificationCounts($pdo, $shopId) {
     return [
         'fulfillment' => DBProcedures::getPendingFulfillmentCount($pdo, $shopId),
         'pickup' => DBProcedures::getPendingPickupCount($pdo, $shopId),
-        'transfers' => DBProcedures::getPendingTransferOutCount($pdo, $shopId)
+        'transfers' => DBProcedures::getPendingTransferOutCount($pdo, $shopId),
+        'receiving' => DBProcedures::getIncomingTransferCount($pdo, $shopId),
+        'procurement' => DBProcedures::getPendingSupplierReceiptCount($pdo, $shopId)
     ];
 }
 

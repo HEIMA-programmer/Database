@@ -12,9 +12,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ========== Genre Detail Modal ==========
-    const genreModalEl = document.getElementById('genreDetailModal');
-    let pendingGenre = null;  // 存储待渲染的 genre
-
     function renderGenreDetail(genre) {
         if (!genre) {
             console.error('Genre is empty');
@@ -60,25 +57,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用 shown.bs.modal 事件（模态框完全显示后触发）
-    // 此时 click 事件肯定已执行完毕，pendingGenre 已正确设置
+    // 【修复】直接在 click 事件中调用渲染函数，与 edit-btn 处理方式保持一致
+    // 避免使用中间变量和 shown.bs.modal 事件导致的缓存问题
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
         btn.addEventListener('click', function() {
-            pendingGenre = this.dataset.genre;
+            renderGenreDetail(this.dataset.genre);
         });
     });
 
-    if (genreModalEl) {
-        genreModalEl.addEventListener('shown.bs.modal', function() {
-            if (pendingGenre) {
-                renderGenreDetail(pendingGenre);
-            }
-        });
-    }
-
     // ========== Month Detail Modal ==========
-    const monthModalEl = document.getElementById('monthDetailModal');
-    let pendingMonth = null;  // 存储待渲染的 month
 
     const typeBadges = {
         'POS': '<span class="badge bg-warning text-dark">POS</span>',
@@ -134,18 +121,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用 shown.bs.modal 事件（模态框完全显示后触发）
+    // 【修复】直接在 click 事件中调用渲染函数，与 edit-btn 处理方式保持一致
+    // 避免使用中间变量和 shown.bs.modal 事件导致的缓存问题
     document.querySelectorAll('.btn-month-detail').forEach(btn => {
         btn.addEventListener('click', function() {
-            pendingMonth = this.dataset.month;
+            renderMonthDetail(this.dataset.month);
         });
     });
-
-    if (monthModalEl) {
-        monthModalEl.addEventListener('shown.bs.modal', function() {
-            if (pendingMonth) {
-                renderMonthDetail(pendingMonth);
-            }
-        });
-    }
 });

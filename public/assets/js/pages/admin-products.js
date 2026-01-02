@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ========== Price Modal ==========
+    const priceModalEl = document.getElementById('priceModal');
+    let pendingPrice = { releaseId: null, releaseTitle: '' };
 
     function renderPriceData(releaseId, releaseTitle) {
         if (!releaseId) {
@@ -149,15 +151,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】直接在 click 事件中渲染，避免 show.bs.modal 事件时序问题
-    // Bootstrap 的 show.bs.modal 事件触发早于 click 回调完成，导致数据延迟一次
+    // 【修复】使用 shown.bs.modal 事件（模态框完全显示后触发）
+    // 此时 click 事件肯定已执行完毕，pendingPrice 已正确设置
     document.querySelectorAll('.price-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            const releaseId = this.dataset.releaseId;
-            const releaseTitle = this.dataset.releaseTitle || '';
-            if (releaseId) {
-                renderPriceData(releaseId, releaseTitle);
-            }
+            pendingPrice.releaseId = this.dataset.releaseId;
+            pendingPrice.releaseTitle = this.dataset.releaseTitle || '';
         });
     });
+
+    if (priceModalEl) {
+        priceModalEl.addEventListener('shown.bs.modal', function() {
+            if (pendingPrice.releaseId) {
+                renderPriceData(pendingPrice.releaseId, pendingPrice.releaseTitle);
+            }
+        });
+    }
 });

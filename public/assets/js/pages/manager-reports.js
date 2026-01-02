@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ========== Genre Detail Modal ==========
+    const genreModalEl = document.getElementById('genreDetailModal');
+    let pendingGenre = null;  // 存储待渲染的 genre
 
     function renderGenreDetail(genre) {
         if (!genre) {
@@ -58,18 +60,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】直接在 click 事件中渲染，避免 show.bs.modal 事件时序问题
-    // Bootstrap 的 show.bs.modal 事件触发早于 click 回调完成，导致数据延迟一次
+    // 【修复】使用 shown.bs.modal 事件（模态框完全显示后触发）
+    // 此时 click 事件肯定已执行完毕，pendingGenre 已正确设置
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
         btn.addEventListener('click', function() {
-            const genre = this.dataset.genre;
-            if (genre) {
-                renderGenreDetail(genre);
-            }
+            pendingGenre = this.dataset.genre;
         });
     });
 
+    if (genreModalEl) {
+        genreModalEl.addEventListener('shown.bs.modal', function() {
+            if (pendingGenre) {
+                renderGenreDetail(pendingGenre);
+            }
+        });
+    }
+
     // ========== Month Detail Modal ==========
+    const monthModalEl = document.getElementById('monthDetailModal');
+    let pendingMonth = null;  // 存储待渲染的 month
 
     const typeBadges = {
         'POS': '<span class="badge bg-warning text-dark">POS</span>',
@@ -125,13 +134,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】直接在 click 事件中渲染，避免 show.bs.modal 事件时序问题
+    // 【修复】使用 shown.bs.modal 事件（模态框完全显示后触发）
     document.querySelectorAll('.btn-month-detail').forEach(btn => {
         btn.addEventListener('click', function() {
-            const month = this.dataset.month;
-            if (month) {
-                renderMonthDetail(month);
-            }
+            pendingMonth = this.dataset.month;
         });
     });
+
+    if (monthModalEl) {
+        monthModalEl.addEventListener('shown.bs.modal', function() {
+            if (pendingMonth) {
+                renderMonthDetail(pendingMonth);
+            }
+        });
+    }
 });

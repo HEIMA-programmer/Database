@@ -1,6 +1,7 @@
 /**
  * Admin Products Page JavaScript
  * 处理编辑模态框和价格调整功能
+ * 【修复】增强错误处理和null检查
  */
 document.addEventListener('DOMContentLoaded', function() {
     function escapeHtml(text) {
@@ -12,13 +13,21 @@ document.addEventListener('DOMContentLoaded', function() {
     // Edit modal - 填充编辑表单
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            document.getElementById('edit_id').value = this.dataset.id;
-            document.getElementById('edit_title').value = this.dataset.title;
-            document.getElementById('edit_artist').value = this.dataset.artist;
-            document.getElementById('edit_label').value = this.dataset.label;
-            document.getElementById('edit_year').value = this.dataset.year;
-            document.getElementById('edit_genre').value = this.dataset.genre;
-            document.getElementById('edit_desc').value = this.dataset.desc;
+            const editId = document.getElementById('edit_id');
+            const editTitle = document.getElementById('edit_title');
+            const editArtist = document.getElementById('edit_artist');
+            const editLabel = document.getElementById('edit_label');
+            const editYear = document.getElementById('edit_year');
+            const editGenre = document.getElementById('edit_genre');
+            const editDesc = document.getElementById('edit_desc');
+
+            if (editId) editId.value = this.dataset.id;
+            if (editTitle) editTitle.value = this.dataset.title;
+            if (editArtist) editArtist.value = this.dataset.artist;
+            if (editLabel) editLabel.value = this.dataset.label;
+            if (editYear) editYear.value = this.dataset.year;
+            if (editGenre) editGenre.value = this.dataset.genre;
+            if (editDesc) editDesc.value = this.dataset.desc;
         });
     });
 
@@ -28,13 +37,26 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentReleaseTitle = null;
 
     async function loadAndRenderPriceData(releaseId, releaseTitle) {
-        document.getElementById('priceModalTitle').textContent = releaseTitle || '';
-        document.getElementById('price_release_id').value = releaseId;
+        const titleEl = document.getElementById('priceModalTitle');
+        const releaseIdEl = document.getElementById('price_release_id');
+        const loadingEl = document.getElementById('priceLoading');
+        const contentEl = document.getElementById('priceContent');
+        const emptyEl = document.getElementById('priceEmpty');
+        const containerEl = document.getElementById('priceCardsContainer');
+
+        // 【修复】检查所有必需元素是否存在
+        if (!titleEl || !releaseIdEl || !loadingEl || !contentEl || !emptyEl || !containerEl) {
+            console.error('Price modal elements not found');
+            return;
+        }
+
+        titleEl.textContent = releaseTitle || '';
+        releaseIdEl.value = releaseId;
 
         // 显示loading
-        document.getElementById('priceLoading').classList.remove('d-none');
-        document.getElementById('priceContent').classList.add('d-none');
-        document.getElementById('priceEmpty').classList.add('d-none');
+        loadingEl.classList.remove('d-none');
+        contentEl.classList.add('d-none');
+        emptyEl.classList.add('d-none');
 
         try {
             const formData = new FormData();
@@ -45,14 +67,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: formData
             });
 
+            // 【修复】检查响应状态
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const result = await response.json();
 
             // 隐藏loading
-            document.getElementById('priceLoading').classList.add('d-none');
+            loadingEl.classList.add('d-none');
 
             if (!result.success) {
-                document.getElementById('priceEmpty').textContent = result.message || 'Failed to load data';
-                document.getElementById('priceEmpty').classList.remove('d-none');
+                emptyEl.textContent = result.message || 'Failed to load data';
+                emptyEl.classList.remove('d-none');
                 return;
             }
 
@@ -123,43 +150,55 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 html += '</div>';
 
-                document.getElementById('priceCardsContainer').innerHTML = html;
-                document.getElementById('priceContent').classList.remove('d-none');
+                containerEl.innerHTML = html;
+                contentEl.classList.remove('d-none');
             } else {
-                document.getElementById('priceEmpty').textContent = 'No available stock found for this release.';
-                document.getElementById('priceEmpty').classList.remove('d-none');
+                emptyEl.textContent = 'No available stock found for this release.';
+                emptyEl.classList.remove('d-none');
             }
         } catch (error) {
             console.error('Error loading stock prices:', error);
-            document.getElementById('priceLoading').classList.add('d-none');
-            document.getElementById('priceEmpty').textContent = 'Network error. Please try again.';
-            document.getElementById('priceEmpty').classList.remove('d-none');
+            loadingEl.classList.add('d-none');
+            emptyEl.textContent = 'Error loading data. Please try again.';
+            emptyEl.classList.remove('d-none');
         }
     }
 
-    // 【修复】使用 show.bs.modal 事件，配合 data-bs-toggle 属性
-    // 这种方式比手动调用 modal.show() 更可靠
-    priceModalEl.addEventListener('show.bs.modal', function(event) {
-        const button = event.relatedTarget;
-        if (button && button.dataset.releaseId) {
-            currentReleaseId = button.dataset.releaseId;
-            currentReleaseTitle = button.dataset.releaseTitle;
-            // 重置状态
-            document.getElementById('priceLoading').classList.remove('d-none');
-            document.getElementById('priceContent').classList.add('d-none');
-            document.getElementById('priceEmpty').classList.add('d-none');
-            document.getElementById('priceCardsContainer').innerHTML = '';
-            // 加载数据
-            loadAndRenderPriceData(currentReleaseId, currentReleaseTitle);
-        }
-    });
+    // 【修复】添加null检查后再绑定事件
+    if (priceModalEl) {
+        priceModalEl.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            if (button && button.dataset.releaseId) {
+                currentReleaseId = button.dataset.releaseId;
+                currentReleaseTitle = button.dataset.releaseTitle;
 
-    // 模态框关闭时重置状态
-    priceModalEl.addEventListener('hidden.bs.modal', function() {
-        document.getElementById('priceContent').classList.add('d-none');
-        document.getElementById('priceEmpty').classList.add('d-none');
-        document.getElementById('priceCardsContainer').innerHTML = '';
-        currentReleaseId = null;
-        currentReleaseTitle = null;
-    });
+                // 重置状态
+                const loadingEl = document.getElementById('priceLoading');
+                const contentEl = document.getElementById('priceContent');
+                const emptyEl = document.getElementById('priceEmpty');
+                const containerEl = document.getElementById('priceCardsContainer');
+
+                if (loadingEl) loadingEl.classList.remove('d-none');
+                if (contentEl) contentEl.classList.add('d-none');
+                if (emptyEl) emptyEl.classList.add('d-none');
+                if (containerEl) containerEl.innerHTML = '';
+
+                // 加载数据
+                loadAndRenderPriceData(currentReleaseId, currentReleaseTitle);
+            }
+        });
+
+        // 模态框关闭时重置状态
+        priceModalEl.addEventListener('hidden.bs.modal', function() {
+            const contentEl = document.getElementById('priceContent');
+            const emptyEl = document.getElementById('priceEmpty');
+            const containerEl = document.getElementById('priceCardsContainer');
+
+            if (contentEl) contentEl.classList.add('d-none');
+            if (emptyEl) emptyEl.classList.add('d-none');
+            if (containerEl) containerEl.innerHTML = '';
+            currentReleaseId = null;
+            currentReleaseTitle = null;
+        });
+    }
 });

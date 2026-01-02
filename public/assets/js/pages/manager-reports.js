@@ -130,6 +130,21 @@ document.addEventListener('DOMContentLoaded', function() {
         genreModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
             if (!button) return;
+
+            // 【修复】立即清空旧内容，显示loading状态，避免旧内容闪现
+            const bodyEl = this.querySelector('#genreDetailBody');
+            const contentEl = this.querySelector('#genreDetailContent');
+            if (bodyEl) {
+                bodyEl.innerHTML = `<tr><td colspan="7" class="text-center py-4">
+                    <div class="spinner-border text-warning" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </td></tr>`;
+            }
+            if (contentEl) {
+                contentEl.classList.remove('d-none');
+            }
+
             pendingGenre = button.getAttribute('data-genre');
         });
 
@@ -149,6 +164,21 @@ document.addEventListener('DOMContentLoaded', function() {
         monthModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
             if (!button) return;
+
+            // 【修复】立即清空旧内容，显示loading状态，避免旧内容闪现
+            const bodyEl = this.querySelector('#monthDetailBody');
+            const contentEl = this.querySelector('#monthDetailContent');
+            if (bodyEl) {
+                bodyEl.innerHTML = `<tr><td colspan="7" class="text-center py-4">
+                    <div class="spinner-border text-warning" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </td></tr>`;
+            }
+            if (contentEl) {
+                contentEl.classList.remove('d-none');
+            }
+
             pendingMonth = button.getAttribute('data-month');
         });
 

@@ -514,10 +514,6 @@ INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, OrderDate, TotalAmount
 (2, 3, DATE_SUB(NOW(), INTERVAL 15 DAY), 72.76, 'Completed', 'Online', 'Shipping', 15.00, '456 Oak Avenue, Shanghai'),   -- 订单7: Bob 线上购买 Led Zeppelin IV Mint
 (4, 3, DATE_SUB(NOW(), INTERVAL 10 DAY), 62.04, 'Completed', 'Online', 'Shipping', 15.00, '789 Elm Road, Beijing');       -- 订单8: Diana 线上购买 The Wall VG+
 
--- 已发货待确认收货的订单 (测试 shipped 通知)
-INSERT INTO CustomerOrder (CustomerID, FulfilledByShopID, OrderDate, TotalAmount, OrderStatus, OrderType, FulfillmentType, ShippingCost, ShippingAddress) VALUES
-(1, 3, DATE_SUB(NOW(), INTERVAL 3 DAY), 72.60, 'Shipped', 'Online', 'Shipping', 15.00, '123 Main Street, Changsha'),  -- 订单9: Alice Opera New + 运费
-(2, 3, DATE_SUB(NOW(), INTERVAL 2 DAY), 63.64, 'Shipped', 'Online', 'Shipping', 15.00, '456 Oak Avenue, Shanghai');   -- 订单10: Bob Rumours Mint + 运费
 
 -- ==========================================
 -- 10. 订单明细 - 【修复】关联正确的库存ID和算法价格
@@ -532,10 +528,7 @@ INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale) VALUES
 -- 线上已完成订单
 (6, 28, 51.20),  -- 订单6: Rumours New (已售)
 (7, 31, 57.76),  -- 订单7: Led Zeppelin IV Mint (已售)
-(8, 34, 47.04),  -- 订单8: The Wall VG+ (已售)
--- 已发货待确认订单
-(9, 41, 57.60),  -- 订单9: Opera New (已发货)
-(10, 38, 48.64); -- 订单10: Rumours Mint (已发货)
+(8, 34, 47.04);  -- 订单8: The Wall VG+ (已售)
 
 -- 更新已售库存的售出日期
 UPDATE StockItem SET DateSold = DATE_SUB(NOW(), INTERVAL 60 DAY) WHERE StockItemID = 8;
@@ -546,10 +539,6 @@ UPDATE StockItem SET DateSold = DATE_SUB(NOW(), INTERVAL 35 DAY) WHERE StockItem
 UPDATE StockItem SET DateSold = DATE_SUB(NOW(), INTERVAL 20 DAY) WHERE StockItemID = 28;
 UPDATE StockItem SET DateSold = DATE_SUB(NOW(), INTERVAL 15 DAY) WHERE StockItemID = 31;
 UPDATE StockItem SET DateSold = DATE_SUB(NOW(), INTERVAL 10 DAY) WHERE StockItemID = 34;
-
--- 更新已发货订单的库存状态
-UPDATE StockItem SET Status = 'Sold', DateSold = DATE_SUB(NOW(), INTERVAL 3 DAY) WHERE StockItemID = 41;
-UPDATE StockItem SET Status = 'Sold', DateSold = DATE_SUB(NOW(), INTERVAL 2 DAY) WHERE StockItemID = 38;
 
 -- ==========================================
 -- 11. 库存调拨记录

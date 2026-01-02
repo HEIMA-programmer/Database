@@ -58,14 +58,12 @@ $statusClass = $pageData['status_class'];
 
 // 【新增】按Release+Condition+Price分组商品
 $itemsGrouped = [];
-$totalDiscount = 0; // 计算总折扣
-$subtotalBeforeDiscount = 0; // 计算折扣前小计
+$subtotalBeforeDiscount = 0; // 计算折扣前小计（商品原价总和）
 
 foreach ($items as $item) {
     $key = ($item['ReleaseID'] ?? $item['AlbumTitle']) . '_' . ($item['ConditionGrade'] ?? 'N/A') . '_' . $item['PriceAtSale'];
-    $originalPrice = $item['OriginalPrice'] ?? $item['PriceAtSale'];
-    $itemDiscount = $originalPrice - $item['PriceAtSale'];
-    $totalDiscount += $itemDiscount;
+    // 使用PriceAtSale作为原价（未折扣的单价）
+    $originalPrice = $item['PriceAtSale'];
     $subtotalBeforeDiscount += $originalPrice;
 
     if (!isset($itemsGrouped[$key])) {
@@ -87,6 +85,13 @@ foreach ($items as $item) {
 // 计算运费和积分
 $shippingCost = $order['ShippingCost'] ?? 0;
 $goodsAmount = $order['TotalAmount'] - $shippingCost;
+
+// 【修复】从订单总价反推折扣金额
+// TotalAmount = 商品实付金额 + 运费，已包含折扣
+// totalDiscount = 商品原价总和 - 商品实付金额
+$totalDiscount = $subtotalBeforeDiscount - $goodsAmount;
+if ($totalDiscount < 0.01) $totalDiscount = 0; // 避免浮点误差
+
 // 积分计算：每消费1元商品获得1积分（不含运费）
 $pointsEarned = floor($goodsAmount);
 

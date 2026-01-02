@@ -1579,27 +1579,27 @@ SELECT
 FROM StockItem si
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;
 
--- 99. All-shops inventory summary view with shop name
--- Used for admin inventory overview
+-- 99. All-shops inventory summary view with shop type
+-- Used for admin inventory overview (extends vw_inventory_summary with ShopType)
 CREATE OR REPLACE VIEW vw_all_shops_inventory_summary AS
 SELECT
-    ss.ShopID,
-    s.Name AS ShopName,
+    inv.ShopID,
+    inv.ShopName,
     s.Type AS ShopType,
-    ss.ReleaseID,
-    ss.Title,
-    ss.ArtistName,
-    ss.Genre,
-    ss.ConditionGrade,
-    ss.AvailableQuantity,
-    ss.MinPrice,
-    ss.MaxPrice,
-    ss.AvgPrice
-FROM vw_stock_summary ss
-JOIN Shop s ON ss.ShopID = s.ShopID;
+    inv.ReleaseID,
+    inv.Title,
+    inv.ArtistName,
+    inv.Genre,
+    inv.ConditionGrade,
+    inv.AvailableQuantity,
+    inv.MinPrice,
+    inv.MaxPrice,
+    inv.AvgPrice
+FROM vw_inventory_summary inv
+JOIN Shop s ON inv.ShopID = s.ShopID;
 
--- 100. All-shops inventory detail view with shop name
--- Used for admin inventory detail view
+-- 100. All-shops inventory detail view with shop name and type
+-- Used for admin inventory detail view (extends vw_staff_inventory_detail with shop info)
 CREATE OR REPLACE VIEW vw_all_shops_inventory_detail AS
 SELECT
     sd.StockItemID,
@@ -1609,12 +1609,13 @@ SELECT
     sd.ReleaseID,
     sd.Title,
     sd.ArtistName,
-    sd.Genre,
+    r.Genre,
     sd.ConditionGrade,
     sd.UnitPrice,
     sd.BatchNo,
     sd.Status,
     sd.AcquiredDate,
     sd.DaysInStock
-FROM vw_stock_detail sd
-JOIN Shop s ON sd.ShopID = s.ShopID;
+FROM vw_staff_inventory_detail sd
+JOIN Shop s ON sd.ShopID = s.ShopID
+JOIN ReleaseAlbum r ON sd.ReleaseID = r.ReleaseID;

@@ -425,6 +425,39 @@ class DBProcedures {
     }
 
     /**
+     * 获取店铺员工列表（Manager用）
+     * 只返回指定店铺的Staff和当前Manager自己
+     */
+    public static function getEmployeesByShop($pdo, $shopId, $currentEmployeeId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_admin_employee_list
+                WHERE (ShopID = ? AND Role = 'Staff') OR EmployeeID = ?
+                ORDER BY Role ASC, Name ASC
+            ");
+            $stmt->execute([$shopId, $currentEmployeeId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getEmployeesByShop Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 通过ID获取员工信息
+     */
+    public static function getEmployeeById($pdo, $employeeId) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_admin_employee_list WHERE EmployeeID = ?");
+            $stmt->execute([$employeeId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("getEmployeeById Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * 获取客户列表
      */
     public static function getCustomerList($pdo) {
@@ -899,6 +932,38 @@ class DBProcedures {
             return $pdo->query("SELECT * FROM vw_admin_supplier_orders WHERE Status = 'Pending' ORDER BY OrderDate DESC")->fetchAll();
         } catch (PDOException $e) {
             error_log("getPendingSupplierOrders Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取已完成的供应商订单历史记录
+     */
+    public static function getReceivedSupplierOrders($pdo, $limit = 50) {
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM vw_admin_supplier_orders WHERE Status = 'Received' ORDER BY ReceivedDate DESC LIMIT ?");
+            $stmt->execute([$limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getReceivedSupplierOrders Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取仓库待收货的供应商订单（warehouse staff用）
+     * Uses vw_warehouse_pending_receipts view
+     */
+    public static function getWarehousePendingReceipts($pdo, $warehouseShopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_warehouse_pending_receipts
+                WHERE DestinationShopID = ?
+            ");
+            $stmt->execute([$warehouseShopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getWarehousePendingReceipts Error: " . $e->getMessage());
             return [];
         }
     }
@@ -1379,6 +1444,79 @@ class DBProcedures {
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             error_log("getShopMonthlySalesTrend Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺按艺术家利润分析
+     * Uses vw_shop_artist_profit_analysis view
+     */
+    public static function getShopArtistProfitAnalysis($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_shop_artist_profit_analysis
+                WHERE ShopID = ?
+                ORDER BY GrossProfit DESC
+            ");
+            $stmt->execute([$shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopArtistProfitAnalysis Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取按艺术家销售明细
+     * Uses vw_artist_sales_detail view
+     */
+    public static function getArtistSalesDetail($pdo, $shopId, $artistName) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_artist_sales_detail
+                WHERE ShopID = ? AND ArtistName = ?
+            ");
+            $stmt->execute([$shopId, $artistName]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getArtistSalesDetail Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取店铺批次售卖分析
+     * Uses vw_shop_batch_sales_analysis view
+     */
+    public static function getShopBatchSalesAnalysis($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_shop_batch_sales_analysis
+                WHERE ShopID = ?
+            ");
+            $stmt->execute([$shopId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getShopBatchSalesAnalysis Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取批次售卖明细
+     * Uses vw_batch_sales_detail view
+     */
+    public static function getBatchSalesDetail($pdo, $shopId, $batchNo) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_batch_sales_detail
+                WHERE ShopID = ? AND BatchNo = ?
+            ");
+            $stmt->execute([$shopId, $batchNo]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getBatchSalesDetail Error: " . $e->getMessage());
             return [];
         }
     }
@@ -2587,20 +2725,71 @@ class DBProcedures {
     }
 
     // ----------------
-    // Pagination Support
+    // Pagination Support with Search and Filter
     // ----------------
 
     /**
-     * Get inventory count for a shop (for pagination)
+     * Build WHERE clause and params for inventory filters
      */
-    public static function getShopInventoryCount($pdo, $shopId, $viewMode = 'summary') {
+    private static function buildInventoryFilterConditions($filters, $hasShopId = true) {
+        $conditions = [];
+        $params = [];
+
+        if (!empty($filters['search'])) {
+            $conditions[] = "(Title LIKE ? OR ArtistName LIKE ?)";
+            $search = '%' . $filters['search'] . '%';
+            $params[] = $search;
+            $params[] = $search;
+        }
+
+        if (!empty($filters['batch'])) {
+            $conditions[] = "BatchNo = ?";
+            $params[] = $filters['batch'];
+        }
+
+        return ['conditions' => $conditions, 'params' => $params];
+    }
+
+    /**
+     * Build ORDER BY clause for inventory sorting
+     */
+    private static function buildInventoryOrderBy($sort, $viewMode) {
+        switch ($sort) {
+            case 'price_asc':
+                return $viewMode === 'summary' ? 'ORDER BY MinPrice ASC' : 'ORDER BY UnitPrice ASC';
+            case 'price_desc':
+                return $viewMode === 'summary' ? 'ORDER BY MaxPrice DESC' : 'ORDER BY UnitPrice DESC';
+            case 'days_asc':
+                return 'ORDER BY DaysInStock ASC';
+            case 'days_desc':
+                return 'ORDER BY DaysInStock DESC';
+            default:
+                return 'ORDER BY Title, ConditionGrade';
+        }
+    }
+
+    /**
+     * Get inventory count for a shop (for pagination) with filters
+     */
+    public static function getShopInventoryCount($pdo, $shopId, $viewMode = 'summary', $filters = []) {
         try {
-            if ($viewMode === 'summary') {
-                $stmt = $pdo->prepare("SELECT COUNT(DISTINCT CONCAT(ReleaseID, '-', ConditionGrade)) AS cnt FROM vw_stock_summary WHERE ShopID = ?");
-            } else {
-                $stmt = $pdo->prepare("SELECT COUNT(*) AS cnt FROM vw_stock_detail WHERE ShopID = ?");
+            $filter = self::buildInventoryFilterConditions($filters);
+            $params = [$shopId];
+            $whereExtra = '';
+
+            if (!empty($filter['conditions'])) {
+                $whereExtra = ' AND ' . implode(' AND ', $filter['conditions']);
+                $params = array_merge($params, $filter['params']);
             }
-            $stmt->execute([$shopId]);
+
+            if ($viewMode === 'summary') {
+                $sql = "SELECT COUNT(DISTINCT CONCAT(ReleaseID, '-', ConditionGrade)) AS cnt FROM vw_stock_summary WHERE ShopID = ?" . $whereExtra;
+            } else {
+                $sql = "SELECT COUNT(*) AS cnt FROM vw_stock_detail WHERE ShopID = ?" . $whereExtra;
+            }
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
             $result = $stmt->fetch();
             return (int)($result['cnt'] ?? 0);
         } catch (PDOException $e) {
@@ -2610,17 +2799,30 @@ class DBProcedures {
     }
 
     /**
-     * Get paginated inventory summary for a shop
+     * Get paginated inventory summary for a shop with filters
      */
-    public static function getInventorySummaryPaginated($pdo, $shopId, $limit = 20, $offset = 0) {
+    public static function getInventorySummaryPaginated($pdo, $shopId, $limit = 20, $offset = 0, $filters = []) {
         try {
+            $filter = self::buildInventoryFilterConditions($filters);
+            $orderBy = self::buildInventoryOrderBy($filters['sort'] ?? '', 'summary');
+            $params = [$shopId];
+            $whereExtra = '';
+
+            if (!empty($filter['conditions'])) {
+                $whereExtra = ' AND ' . implode(' AND ', $filter['conditions']);
+                $params = array_merge($params, $filter['params']);
+            }
+
+            $params[] = $limit;
+            $params[] = $offset;
+
             $stmt = $pdo->prepare("
                 SELECT * FROM vw_stock_summary
-                WHERE ShopID = ?
-                ORDER BY Title, ConditionGrade
+                WHERE ShopID = ? $whereExtra
+                $orderBy
                 LIMIT ? OFFSET ?
             ");
-            $stmt->execute([$shopId, $limit, $offset]);
+            $stmt->execute($params);
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             error_log("getInventorySummaryPaginated Error: " . $e->getMessage());
@@ -2629,17 +2831,30 @@ class DBProcedures {
     }
 
     /**
-     * Get paginated inventory detail for a shop
+     * Get paginated inventory detail for a shop with filters
      */
-    public static function getInventoryDetailPaginated($pdo, $shopId, $limit = 20, $offset = 0) {
+    public static function getInventoryDetailPaginated($pdo, $shopId, $limit = 20, $offset = 0, $filters = []) {
         try {
+            $filter = self::buildInventoryFilterConditions($filters);
+            $orderBy = self::buildInventoryOrderBy($filters['sort'] ?? '', 'detail');
+            $params = [$shopId];
+            $whereExtra = '';
+
+            if (!empty($filter['conditions'])) {
+                $whereExtra = ' AND ' . implode(' AND ', $filter['conditions']);
+                $params = array_merge($params, $filter['params']);
+            }
+
+            $params[] = $limit;
+            $params[] = $offset;
+
             $stmt = $pdo->prepare("
                 SELECT * FROM vw_stock_detail
-                WHERE ShopID = ?
-                ORDER BY Title, ConditionGrade, StockItemID
+                WHERE ShopID = ? $whereExtra
+                $orderBy
                 LIMIT ? OFFSET ?
             ");
-            $stmt->execute([$shopId, $limit, $offset]);
+            $stmt->execute($params);
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             error_log("getInventoryDetailPaginated Error: " . $e->getMessage());
@@ -2648,15 +2863,26 @@ class DBProcedures {
     }
 
     /**
-     * Get inventory count for all shops (for admin pagination)
+     * Get inventory count for all shops (for admin pagination) with filters
      */
-    public static function getAllShopsInventoryCount($pdo, $viewMode = 'summary') {
+    public static function getAllShopsInventoryCount($pdo, $viewMode = 'summary', $filters = []) {
         try {
-            if ($viewMode === 'summary') {
-                $result = $pdo->query("SELECT COUNT(DISTINCT CONCAT(ShopID, '-', ReleaseID, '-', ConditionGrade)) AS cnt FROM vw_stock_summary")->fetch();
-            } else {
-                $result = $pdo->query("SELECT COUNT(*) AS cnt FROM vw_stock_detail")->fetch();
+            $filter = self::buildInventoryFilterConditions($filters, false);
+            $where = '';
+
+            if (!empty($filter['conditions'])) {
+                $where = 'WHERE ' . implode(' AND ', $filter['conditions']);
             }
+
+            if ($viewMode === 'summary') {
+                $sql = "SELECT COUNT(DISTINCT CONCAT(ShopID, '-', ReleaseID, '-', ConditionGrade)) AS cnt FROM vw_stock_summary $where";
+            } else {
+                $sql = "SELECT COUNT(*) AS cnt FROM vw_stock_detail $where";
+            }
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($filter['params']);
+            $result = $stmt->fetch();
             return (int)($result['cnt'] ?? 0);
         } catch (PDOException $e) {
             error_log("getAllShopsInventoryCount Error: " . $e->getMessage());
@@ -2665,17 +2891,29 @@ class DBProcedures {
     }
 
     /**
-     * Get paginated inventory summary for all shops (admin)
-     * Uses vw_all_shops_inventory_summary view
+     * Get paginated inventory summary for all shops (admin) with filters
      */
-    public static function getInventorySummaryAllShopsPaginated($pdo, $limit = 20, $offset = 0) {
+    public static function getInventorySummaryAllShopsPaginated($pdo, $limit = 20, $offset = 0, $filters = []) {
         try {
+            $filter = self::buildInventoryFilterConditions($filters, false);
+            $orderBy = self::buildInventoryOrderBy($filters['sort'] ?? '', 'summary');
+            $where = '';
+
+            if (!empty($filter['conditions'])) {
+                $where = 'WHERE ' . implode(' AND ', $filter['conditions']);
+            }
+
+            $params = $filter['params'];
+            $params[] = $limit;
+            $params[] = $offset;
+
             $stmt = $pdo->prepare("
                 SELECT * FROM vw_all_shops_inventory_summary
-                ORDER BY ShopName, Title, ConditionGrade
+                $where
+                $orderBy
                 LIMIT ? OFFSET ?
             ");
-            $stmt->execute([$limit, $offset]);
+            $stmt->execute($params);
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             error_log("getInventorySummaryAllShopsPaginated Error: " . $e->getMessage());
@@ -2684,20 +2922,67 @@ class DBProcedures {
     }
 
     /**
-     * Get paginated inventory detail for all shops (admin)
-     * Uses vw_all_shops_inventory_detail view
+     * Get paginated inventory detail for all shops (admin) with filters
      */
-    public static function getInventoryDetailAllShopsPaginated($pdo, $limit = 20, $offset = 0) {
+    public static function getInventoryDetailAllShopsPaginated($pdo, $limit = 20, $offset = 0, $filters = []) {
         try {
+            $filter = self::buildInventoryFilterConditions($filters, false);
+            $orderBy = self::buildInventoryOrderBy($filters['sort'] ?? '', 'detail');
+            $where = '';
+
+            if (!empty($filter['conditions'])) {
+                $where = 'WHERE ' . implode(' AND ', $filter['conditions']);
+            }
+
+            $params = $filter['params'];
+            $params[] = $limit;
+            $params[] = $offset;
+
             $stmt = $pdo->prepare("
                 SELECT * FROM vw_all_shops_inventory_detail
-                ORDER BY ShopName, Title, ConditionGrade, StockItemID
+                $where
+                $orderBy
                 LIMIT ? OFFSET ?
             ");
-            $stmt->execute([$limit, $offset]);
+            $stmt->execute($params);
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             error_log("getInventoryDetailAllShopsPaginated Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get distinct batch numbers for a shop's inventory
+     */
+    public static function getInventoryBatches($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT DISTINCT BatchNo FROM vw_stock_detail
+                WHERE ShopID = ? AND BatchNo IS NOT NULL AND BatchNo != ''
+                ORDER BY BatchNo DESC
+            ");
+            $stmt->execute([$shopId]);
+            return array_column($stmt->fetchAll(), 'BatchNo');
+        } catch (PDOException $e) {
+            error_log("getInventoryBatches Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get distinct batch numbers for all shops' inventory
+     */
+    public static function getInventoryBatchesAllShops($pdo) {
+        try {
+            $stmt = $pdo->query("
+                SELECT DISTINCT BatchNo FROM vw_stock_detail
+                WHERE BatchNo IS NOT NULL AND BatchNo != ''
+                ORDER BY BatchNo DESC
+            ");
+            return array_column($stmt->fetchAll(), 'BatchNo');
+        } catch (PDOException $e) {
+            error_log("getInventoryBatchesAllShops Error: " . $e->getMessage());
             return [];
         }
     }

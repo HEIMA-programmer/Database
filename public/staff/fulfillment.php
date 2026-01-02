@@ -89,6 +89,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    // 【新增】处理采购订单收货确认（仓库员工）
+    if ($action === 'receive_supplier_order') {
+        $orderId = (int)($_POST['order_id'] ?? 0);
+
+        if ($shopType !== 'Warehouse') {
+            flash('Only warehouse staff can receive supplier orders.', 'danger');
+            header('Location: fulfillment.php?tab=procurement');
+            exit;
+        }
+
+        if ($orderId <= 0) {
+            flash('Invalid order ID.', 'danger');
+            header('Location: fulfillment.php?tab=procurement');
+            exit;
+        }
+
+        $result = handleProcurementReceivePOWithCondition($pdo, $orderId, $shopId, 'New');
+        flash($result['message'], $result['success'] ? 'success' : 'danger');
+
+        header('Location: fulfillment.php?tab=procurement');
+        exit;
+    }
+
     // 【新增】处理目标店铺收货确认
     // 【修复】支持批量处理多个TransferID
     if ($action === 'receive_transfer') {
@@ -198,6 +221,14 @@ $pendingTransferCount = array_sum(array_column($pendingTransfers, 'Quantity'));
 $incomingTransfers = DBProcedures::getFulfillmentIncomingTransfersGrouped($pdo, $shopId);
 $incomingTransferCount = array_sum(array_column($incomingTransfers, 'Quantity'));
 
+// 【新增】获取仓库待收货的采购订单（仅限仓库员工）
+$pendingSupplierReceipts = [];
+$pendingSupplierReceiptCount = 0;
+if ($shopType === 'Warehouse') {
+    $pendingSupplierReceipts = DBProcedures::getWarehousePendingReceipts($pdo, $shopId);
+    $pendingSupplierReceiptCount = count($pendingSupplierReceipts);
+}
+
 // 当前标签页
 $currentTab = $_GET['tab'] ?? 'orders';
 
@@ -216,7 +247,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<!-- Tab Navigation: Customer Orders / Pending Shipments / Incoming Transfers -->
+<!-- Tab Navigation: Customer Orders / Pending Shipments / Incoming Transfers / Procurement (Warehouse only) -->
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
         <a class="nav-link <?= $currentTab == 'orders' ? 'active bg-dark text-warning' : 'text-light' ?>" href="?tab=orders">
@@ -242,6 +273,16 @@ require_once __DIR__ . '/../../includes/header.php';
             <?php endif; ?>
         </a>
     </li>
+    <?php if ($shopType === 'Warehouse'): ?>
+    <li class="nav-item">
+        <a class="nav-link <?= $currentTab == 'procurement' ? 'active bg-dark text-primary' : 'text-light' ?>" href="?tab=procurement">
+            <i class="fa-solid fa-boxes-packing me-1"></i>Supplier Receipts
+            <?php if ($pendingSupplierReceiptCount > 0): ?>
+                <span class="badge bg-primary"><?= $pendingSupplierReceiptCount ?></span>
+            <?php endif; ?>
+        </a>
+    </li>
+    <?php endif; ?>
 </ul>
 
 <?php if ($currentTab == 'orders'): ?>
@@ -569,6 +610,83 @@ require_once __DIR__ . '/../../includes/header.php';
                             <input type="hidden" name="action" value="receive_transfer">
                             <button type="submit" class="btn btn-success">
                                 <i class="fa-solid fa-check me-1"></i>Confirm Receipt (<?= $transfer['Quantity'] ?> items)
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
+<?php elseif ($currentTab == 'procurement' && $shopType === 'Warehouse'): ?>
+<!-- Supplier Order Receipts Section (Warehouse Only) -->
+<div class="alert alert-primary mb-4">
+    <i class="fa-solid fa-info-circle me-2"></i>
+    This shows purchase orders from suppliers waiting to be received. When you confirm receipt, inventory items will be added to the warehouse.
+</div>
+
+<?php if (empty($pendingSupplierReceipts)): ?>
+    <div class="text-center py-5">
+        <div class="display-1 text-secondary mb-3"><i class="fa-solid fa-boxes-packing"></i></div>
+        <h3 class="text-white">No pending supplier receipts</h3>
+        <p class="no-orders-message">All purchase orders have been received.</p>
+    </div>
+<?php else: ?>
+    <div class="row row-cols-1 row-cols-lg-2 g-4">
+        <?php foreach ($pendingSupplierReceipts as $po): ?>
+            <div class="col">
+                <div class="card bg-dark border-primary h-100">
+                    <div class="card-header bg-dark border-primary d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong class="text-primary">PO #<?= $po['SupplierOrderID'] ?></strong>
+                            <span class="badge bg-warning text-dark ms-2">Awaiting Receipt</span>
+                        </div>
+                        <small class="text-muted"><?= date('M d, H:i', strtotime($po['OrderDate'])) ?></small>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <small class="text-muted">Supplier</small>
+                                <div class="text-white">
+                                    <i class="fa-solid fa-truck-field me-1 text-info"></i>
+                                    <?= h($po['SupplierName']) ?>
+                                </div>
+                            </div>
+                            <div class="col-6 text-end">
+                                <small class="text-muted">Quantity</small>
+                                <div class="text-warning fw-bold fs-5"><?= $po['TotalItems'] ?> units</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <small class="text-muted d-block">Album</small>
+                            <div class="text-white fw-bold"><?= h($po['ReleaseTitle']) ?></div>
+                            <small class="text-warning"><?= h($po['ArtistName']) ?></small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-4">
+                                <small class="text-muted">Condition</small>
+                                <div><span class="badge bg-secondary"><?= h($po['ConditionGrade']) ?></span></div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <small class="text-muted">Unit Cost</small>
+                                <div class="text-danger"><?= formatPrice($po['UnitCost']) ?></div>
+                            </div>
+                            <div class="col-4 text-end">
+                                <small class="text-muted">Sale Price</small>
+                                <div class="text-success fw-bold"><?= formatPrice($po['SalePrice']) ?></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer bg-dark border-primary">
+                        <form method="POST" class="d-grid" onsubmit="return confirm('Confirm receipt of this order? This will add items to inventory.');">
+                            <input type="hidden" name="order_id" value="<?= $po['SupplierOrderID'] ?>">
+                            <input type="hidden" name="action" value="receive_supplier_order">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fa-solid fa-check me-1"></i>Confirm Receipt (<?= $po['TotalItems'] ?> items)
                             </button>
                         </form>
                     </div>

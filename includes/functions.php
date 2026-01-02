@@ -638,6 +638,80 @@ function prepareUsersPageData($pdo) {
 }
 
 /**
+ * 准备Manager用户管理页面数据
+ * 只显示自己和本店铺的Staff，只能新增Staff角色
+ */
+function prepareManagerUsersPageData($pdo, $shopId, $employeeId) {
+    return [
+        'employees' => DBProcedures::getEmployeesByShop($pdo, $shopId, $employeeId),
+        'shop_id'   => $shopId,
+        'roles'     => ['Staff']  // Manager只能新增Staff
+    ];
+}
+
+/**
+ * 处理Manager员工操作（增删改）
+ * 限制：只能操作本店铺的Staff，不能删除自己
+ */
+function handleManagerEmployeeAction($pdo, $action, $data, $managerShopId) {
+    switch ($action) {
+        case 'add':
+            // Manager只能新增Staff
+            if ($data['role'] !== 'Staff') {
+                return ['success' => false, 'message' => 'You can only add Staff members.'];
+            }
+            $hash = password_hash($data['password'], PASSWORD_DEFAULT);
+            $result = DBProcedures::addEmployee($pdo, $data['name'], $data['username'], $hash, 'Staff', $managerShopId);
+            if ($result) {
+                return ['success' => true, 'message' => "Staff member '{$data['name']}' added successfully."];
+            }
+            return ['success' => false, 'message' => 'Failed to add staff member.'];
+
+        case 'edit':
+            // 验证是本店铺的Staff
+            $employee = DBProcedures::getEmployeeById($pdo, $data['employee_id']);
+            if (!$employee) {
+                return ['success' => false, 'message' => 'Employee not found.'];
+            }
+            // Manager不能编辑自己的角色和店铺
+            if ($data['employee_id'] == $data['current_user_id']) {
+                // 只允许修改姓名和密码
+                $hash = !empty($data['password']) ? password_hash($data['password'], PASSWORD_DEFAULT) : null;
+                $result = DBProcedures::updateEmployee($pdo, $data['employee_id'], $data['name'], $employee['Role'], $employee['ShopID'], $hash);
+            } else {
+                // 只能编辑本店铺的Staff
+                if ($employee['ShopID'] != $managerShopId || $employee['Role'] !== 'Staff') {
+                    return ['success' => false, 'message' => 'You can only edit staff members in your shop.'];
+                }
+                $hash = !empty($data['password']) ? password_hash($data['password'], PASSWORD_DEFAULT) : null;
+                $result = DBProcedures::updateEmployee($pdo, $data['employee_id'], $data['name'], 'Staff', $managerShopId, $hash);
+            }
+            if ($result) {
+                return ['success' => true, 'message' => 'Employee details updated.'];
+            }
+            return ['success' => false, 'message' => 'Failed to update employee.'];
+
+        case 'delete':
+            if ($data['employee_id'] == $data['current_user_id']) {
+                return ['success' => false, 'message' => 'You cannot delete your own account.'];
+            }
+            // 验证是本店铺的Staff
+            $employee = DBProcedures::getEmployeeById($pdo, $data['employee_id']);
+            if (!$employee || $employee['ShopID'] != $managerShopId || $employee['Role'] !== 'Staff') {
+                return ['success' => false, 'message' => 'You can only delete staff members in your shop.'];
+            }
+            $result = DBProcedures::deleteEmployee($pdo, $data['employee_id'], $data['current_user_id']);
+            if ($result) {
+                return ['success' => true, 'message' => 'Staff member dismissed.'];
+            }
+            return ['success' => false, 'message' => 'Cannot delete staff. They may be linked to transaction records.'];
+
+        default:
+            return ['success' => false, 'message' => 'Unknown action.'];
+    }
+}
+
+/**
  * 准备供应商管理页面数据
  */
 function prepareSuppliersPageData($pdo) {
@@ -673,10 +747,11 @@ function prepareProcurementPageData($pdo) {
     $warehouseId = getShopIdByType($pdo, 'Warehouse');
 
     return [
-        'warehouse_id'  => $warehouseId,
-        'suppliers'     => DBProcedures::getSupplierList($pdo),
-        'releases'      => DBProcedures::getReleaseList($pdo),
-        'pending_orders'=> DBProcedures::getPendingSupplierOrders($pdo)
+        'warehouse_id'    => $warehouseId,
+        'suppliers'       => DBProcedures::getSupplierList($pdo),
+        'releases'        => DBProcedures::getReleaseList($pdo),
+        'pending_orders'  => DBProcedures::getPendingSupplierOrders($pdo),
+        'received_orders' => DBProcedures::getReceivedSupplierOrders($pdo)
     ];
 }
 
@@ -747,9 +822,11 @@ function prepareReportsPageData($pdo, $shopId = null) {
     if ($shopId !== null) {
         // 店铺级别数据
         return [
-            'turnover_stats' => DBProcedures::getShopSalesByGenre($pdo, $shopId),
-            'sales_trend'    => DBProcedures::getShopMonthlySalesTrend($pdo, $shopId, 12),
-            'shop_id'        => $shopId
+            'turnover_stats'     => DBProcedures::getShopSalesByGenre($pdo, $shopId),
+            'sales_trend'        => DBProcedures::getShopMonthlySalesTrend($pdo, $shopId, 12),
+            'artist_profit'      => DBProcedures::getShopArtistProfitAnalysis($pdo, $shopId),
+            'batch_sales'        => DBProcedures::getShopBatchSalesAnalysis($pdo, $shopId),
+            'shop_id'            => $shopId
         ];
     }
 
@@ -1327,50 +1404,60 @@ function getPaginationData($currentPage, $totalItems, $perPage, $baseUrl = '?') 
 }
 
 /**
- * Prepare paginated inventory data for a shop
+ * Prepare paginated inventory data for a shop with search and filter
+ * @param array $filters ['search' => string, 'batch' => string, 'sort' => string]
  */
-function prepareInventoryPageDataPaginated($pdo, $shopId, $viewMode, $page = 1, $perPage = 20) {
-    // Get total count
-    $totalItems = DBProcedures::getShopInventoryCount($pdo, $shopId, $viewMode);
+function prepareInventoryPageDataPaginated($pdo, $shopId, $viewMode, $page = 1, $perPage = 20, $filters = []) {
+    // Get total count with filters
+    $totalItems = DBProcedures::getShopInventoryCount($pdo, $shopId, $viewMode, $filters);
 
     // Calculate offset
     $offset = ($page - 1) * $perPage;
 
-    // Get paginated data
+    // Get paginated data with filters
     if ($viewMode === 'summary') {
-        $inventory = DBProcedures::getInventorySummaryPaginated($pdo, $shopId, $perPage, $offset);
+        $inventory = DBProcedures::getInventorySummaryPaginated($pdo, $shopId, $perPage, $offset, $filters);
     } else {
-        $inventory = DBProcedures::getInventoryDetailPaginated($pdo, $shopId, $perPage, $offset);
+        $inventory = DBProcedures::getInventoryDetailPaginated($pdo, $shopId, $perPage, $offset, $filters);
     }
+
+    // Get batch list for filter dropdown
+    $batches = DBProcedures::getInventoryBatches($pdo, $shopId);
 
     return [
         'inventory' => $inventory,
         'total_items' => $totalItems,
-        'pagination' => getPaginationData($page, $totalItems, $perPage)
+        'pagination' => getPaginationData($page, $totalItems, $perPage),
+        'batches' => $batches
     ];
 }
 
 /**
- * Prepare paginated inventory data for all shops (admin)
+ * Prepare paginated inventory data for all shops (admin) with search and filter
+ * @param array $filters ['search' => string, 'batch' => string, 'sort' => string]
  */
-function prepareInventoryPageDataAllShopsPaginated($pdo, $viewMode, $page = 1, $perPage = 20) {
-    // Get total count
-    $totalItems = DBProcedures::getAllShopsInventoryCount($pdo, $viewMode);
+function prepareInventoryPageDataAllShopsPaginated($pdo, $viewMode, $page = 1, $perPage = 20, $filters = []) {
+    // Get total count with filters
+    $totalItems = DBProcedures::getAllShopsInventoryCount($pdo, $viewMode, $filters);
 
     // Calculate offset
     $offset = ($page - 1) * $perPage;
 
-    // Get paginated data
+    // Get paginated data with filters
     if ($viewMode === 'summary') {
-        $inventory = DBProcedures::getInventorySummaryAllShopsPaginated($pdo, $perPage, $offset);
+        $inventory = DBProcedures::getInventorySummaryAllShopsPaginated($pdo, $perPage, $offset, $filters);
     } else {
-        $inventory = DBProcedures::getInventoryDetailAllShopsPaginated($pdo, $perPage, $offset);
+        $inventory = DBProcedures::getInventoryDetailAllShopsPaginated($pdo, $perPage, $offset, $filters);
     }
+
+    // Get batch list for filter dropdown
+    $batches = DBProcedures::getInventoryBatchesAllShops($pdo);
 
     return [
         'inventory' => $inventory,
         'total_items' => $totalItems,
-        'pagination' => getPaginationData($page, $totalItems, $perPage)
+        'pagination' => getPaginationData($page, $totalItems, $perPage),
+        'batches' => $batches
     ];
 }
 

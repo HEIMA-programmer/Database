@@ -1702,3 +1702,113 @@ LEFT JOIN Shop s ON co.FulfilledByShopID = s.ShopID
 WHERE co.OrderStatus = 'Shipped'
   AND co.OrderType = 'Online'
   AND co.FulfillmentType = 'Shipping';
+
+-- ================================================
+-- 【架构重构Phase4】Manager Reports & Warehouse Views
+-- ================================================
+
+-- 105. Warehouse Pending Receipts View
+-- Used for warehouse staff to see pending supplier orders awaiting receipt
+CREATE OR REPLACE VIEW vw_warehouse_pending_receipts AS
+SELECT
+    so.SupplierOrderID,
+    s.Name AS SupplierName,
+    so.OrderDate,
+    so.DestinationShopID,
+    sol.ReleaseID,
+    r.Title AS ReleaseTitle,
+    r.ArtistName,
+    sol.Quantity AS TotalItems,
+    sol.UnitCost,
+    sol.TotalCost,
+    sol.ConditionGrade,
+    sol.SalePrice
+FROM SupplierOrder so
+JOIN Supplier s ON so.SupplierID = s.SupplierID
+JOIN SupplierOrderLine sol ON so.SupplierOrderID = sol.SupplierOrderID
+JOIN ReleaseAlbum r ON sol.ReleaseID = r.ReleaseID
+WHERE so.Status = 'Pending'
+ORDER BY so.OrderDate DESC;
+
+-- 106. Shop Artist Profit Analysis View
+-- Used for manager reports to analyze profit by artist
+CREATE OR REPLACE VIEW vw_shop_artist_profit_analysis AS
+SELECT
+    si.ShopID,
+    r.ArtistName,
+    COUNT(DISTINCT ol.StockItemID) AS ItemsSold,
+    SUM(ol.PriceAtSale) AS TotalRevenue,
+    SUM(COALESCE(sic.UnitCost, si.UnitPrice * 0.6)) AS TotalCost,
+    SUM(ol.PriceAtSale) - SUM(COALESCE(sic.UnitCost, si.UnitPrice * 0.6)) AS GrossProfit,
+    ROUND(((SUM(ol.PriceAtSale) - SUM(COALESCE(sic.UnitCost, si.UnitPrice * 0.6))) / NULLIF(SUM(ol.PriceAtSale), 0)) * 100, 1) AS ProfitMargin
+FROM OrderLine ol
+JOIN StockItem si ON ol.StockItemID = si.StockItemID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+JOIN CustomerOrder co ON ol.OrderID = co.OrderID
+LEFT JOIN vw_stock_item_with_cost sic ON si.StockItemID = sic.StockItemID
+WHERE co.OrderStatus IN ('Paid', 'Completed', 'Shipped')
+GROUP BY si.ShopID, r.ArtistName
+ORDER BY GrossProfit DESC;
+
+-- 107. Artist Sales Detail View
+-- Used for manager reports to show individual sales for an artist
+CREATE OR REPLACE VIEW vw_artist_sales_detail AS
+SELECT
+    si.ShopID,
+    r.ArtistName,
+    co.OrderID,
+    co.OrderDate,
+    COALESCE(c.Name, 'Guest') AS CustomerName,
+    r.Title,
+    si.ConditionGrade,
+    ol.PriceAtSale,
+    COALESCE(sic.UnitCost, si.UnitPrice * 0.6) AS Cost,
+    ol.PriceAtSale - COALESCE(sic.UnitCost, si.UnitPrice * 0.6) AS Profit
+FROM OrderLine ol
+JOIN StockItem si ON ol.StockItemID = si.StockItemID
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+JOIN CustomerOrder co ON ol.OrderID = co.OrderID
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+LEFT JOIN vw_stock_item_with_cost sic ON si.StockItemID = sic.StockItemID
+WHERE co.OrderStatus IN ('Paid', 'Completed', 'Shipped')
+ORDER BY co.OrderDate DESC;
+
+-- 108. Shop Batch Sales Analysis View
+-- Used for manager reports to analyze batch sell-through rates
+CREATE OR REPLACE VIEW vw_shop_batch_sales_analysis AS
+SELECT
+    si.ShopID,
+    si.BatchNo,
+    COUNT(DISTINCT si.StockItemID) AS TotalItems,
+    SUM(CASE WHEN si.Status = 'Sold' THEN 1 ELSE 0 END) AS SoldItems,
+    SUM(CASE WHEN si.Status = 'Available' THEN 1 ELSE 0 END) AS AvailableItems,
+    SUM(CASE WHEN si.Status = 'Sold' THEN ol.PriceAtSale ELSE 0 END) AS TotalRevenue,
+    MIN(si.AcquiredDate) AS AcquiredDate
+FROM StockItem si
+LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
+WHERE si.BatchNo IS NOT NULL AND si.BatchNo != ''
+GROUP BY si.ShopID, si.BatchNo
+ORDER BY AcquiredDate DESC;
+
+-- 109. Batch Sales Detail View
+-- Used for manager reports to show individual items in a batch
+CREATE OR REPLACE VIEW vw_batch_sales_detail AS
+SELECT
+    si.ShopID,
+    si.BatchNo,
+    si.StockItemID,
+    r.Title,
+    r.ArtistName,
+    si.ConditionGrade,
+    si.UnitPrice,
+    si.Status,
+    si.AcquiredDate,
+    CASE WHEN si.Status = 'Sold' THEN ol.PriceAtSale ELSE NULL END AS SoldPrice,
+    CASE WHEN si.Status = 'Sold' THEN co.OrderDate ELSE NULL END AS SoldDate,
+    CASE WHEN si.Status = 'Sold' THEN COALESCE(c.Name, 'Guest') ELSE NULL END AS CustomerName
+FROM StockItem si
+JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
+LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
+LEFT JOIN CustomerOrder co ON ol.OrderID = co.OrderID
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+ORDER BY si.Status DESC, r.Title;

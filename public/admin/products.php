@@ -304,9 +304,10 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<?php require_once __DIR__ . '/../../includes/footer.php'; ?>
-<!-- 【修复】预加载数据，解决AJAX loading问题 -->
+<!-- 【修复】预加载数据和JS文件放在footer之前，与pos.php保持一致 -->
 <script>
 window.preloadedStockPrices = <?= json_encode($stockPrices, JSON_UNESCAPED_UNICODE) ?>;
 </script>
 <script src="../assets/js/pages/admin-products.js"></script>
+
+<?php require_once __DIR__ . '/../../includes/footer.php'; ?>

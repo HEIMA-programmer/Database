@@ -61,11 +61,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】在按钮点击时保存数据，确保模态框打开时能获取到
+    // 【修复】使用 mousedown 事件（比 click 更早触发），确保在 show.bs.modal 之前保存数据
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('mousedown', function() {
             currentGenre = this.dataset.genre || null;
         });
+    });
+
+    // 【修复】使用事件委托作为备用方案
+    document.addEventListener('mousedown', function(e) {
+        const btn = e.target.closest('.btn-genre-detail');
+        if (btn) {
+            currentGenre = btn.dataset.genre || null;
+        }
     });
 
     if (genreModalEl) {
@@ -91,15 +99,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         genreModalEl.addEventListener('hidden.bs.modal', function() {
+            const titleEl = document.getElementById('genreTitle');
             const contentEl = document.getElementById('genreDetailContent');
             const emptyEl = document.getElementById('genreDetailEmpty');
             const bodyEl = document.getElementById('genreDetailBody');
 
+            // 重置标题，避免显示上次的内容
+            if (titleEl) titleEl.textContent = '';
             if (contentEl) contentEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (bodyEl) bodyEl.innerHTML = '';
-            // 清除保存的数据
-            currentGenre = null;
+            // 注意：不再清除 currentGenre，让下次 mousedown 事件来更新
         });
     }
 
@@ -162,11 +172,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】在按钮点击时保存数据，确保模态框打开时能获取到
+    // 【修复】使用 mousedown 事件（比 click 更早触发），确保在 show.bs.modal 之前保存数据
     document.querySelectorAll('.btn-month-detail').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('mousedown', function() {
             currentMonth = this.dataset.month || null;
         });
+    });
+
+    // 【修复】使用事件委托作为备用方案
+    document.addEventListener('mousedown', function(e) {
+        const btn = e.target.closest('.btn-month-detail');
+        if (btn) {
+            currentMonth = btn.dataset.month || null;
+        }
     });
 
     if (monthModalEl) {
@@ -192,15 +210,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         monthModalEl.addEventListener('hidden.bs.modal', function() {
+            const titleEl = document.getElementById('monthTitle');
             const contentEl = document.getElementById('monthDetailContent');
             const emptyEl = document.getElementById('monthDetailEmpty');
             const bodyEl = document.getElementById('monthDetailBody');
 
+            // 重置标题，避免显示上次的内容
+            if (titleEl) titleEl.textContent = '';
             if (contentEl) contentEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (bodyEl) bodyEl.innerHTML = '';
-            // 清除保存的数据
-            currentMonth = null;
+            // 注意：不再清除 currentMonth，让下次 mousedown 事件来更新
         });
     }
 });

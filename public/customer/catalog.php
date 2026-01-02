@@ -186,7 +186,7 @@ document.querySelectorAll('.filter-auto-submit').forEach(function(select) {
                             </span>
                             <?php if (!$hasStock): ?>
                                 <span class="position-absolute top-0 start-0 m-2 badge bg-danger">
-                                    <i class="fa-solid fa-ban me-1"></i>无库存
+                                    <i class="fa-solid fa-ban me-1"></i>Out of Stock
                                 </span>
                             <?php endif; ?>
                         </div>

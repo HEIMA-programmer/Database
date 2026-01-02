@@ -57,7 +57,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
         <?php if ($release['Description']): ?>
         <div class="mb-4">
-            <p class="text-muted"><?= nl2br(h($release['Description'])) ?></p>
+            <p class="text-light opacity-75"><?= nl2br(h($release['Description'])) ?></p>
         </div>
         <?php endif; ?>
 
@@ -102,38 +102,36 @@ require_once __DIR__ . '/../../includes/header.php';
                             default       => 'bg-secondary text-light'
                         };
                     ?>
-                    <div class="list-group-item bg-dark border-secondary">
-                        <form action="../api/customer/cart.php" method="POST" class="row align-items-center">
+                    <div class="list-group-item bg-dark border-secondary py-3">
+                        <form action="../api/customer/cart.php" method="POST" class="d-flex align-items-center flex-wrap gap-3">
                             <input type="hidden" name="action" value="add_multiple">
                             <input type="hidden" name="release_id" value="<?= $release['ReleaseID'] ?>">
                             <input type="hidden" name="condition" value="<?= h($stock['ConditionGrade']) ?>">
-                            <!-- 【修复】添加shop_id确保正确的店铺限制 -->
                             <input type="hidden" name="shop_id" value="<?= $shopId ?>">
 
-                            <div class="col-md-3">
+                            <div style="min-width: 80px;">
                                 <span class="badge <?= $condClass ?> fs-6 px-3 py-2">
                                     <?= h($stock['ConditionGrade']) ?>
                                 </span>
                             </div>
 
-                            <div class="col-md-3">
-                                <div class="text-warning fw-bold fs-5">
+                            <div style="min-width: 100px;">
+                                <div class="text-warning fw-bold fs-5 lh-1">
                                     <?= formatPrice($stock['UnitPrice']) ?>
                                 </div>
                                 <small class="text-muted">per item</small>
                             </div>
 
-                            <div class="col-md-3">
-                                <div class="text-light">
+                            <div style="min-width: 120px;">
+                                <div class="text-light d-flex align-items-center">
                                     <i class="fa-solid fa-cubes me-1"></i>
-                                    <strong><?= $stock['AvailableQuantity'] ?></strong> available
+                                    <strong><?= $stock['AvailableQuantity'] ?></strong>&nbsp;available
                                 </div>
                             </div>
 
-                            <div class="col-md-3">
+                            <div class="ms-auto">
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text bg-secondary border-secondary text-light">Qty</span>
-                                    <!-- 【修复】移除10张限制，只受available数量限制 -->
                                     <select name="quantity" class="form-select form-select-sm bg-dark text-light border-secondary">
                                         <?php for ($i = 1; $i <= $stock['AvailableQuantity']; $i++): ?>
                                             <option value="<?= $i ?>"><?= $i ?></option>

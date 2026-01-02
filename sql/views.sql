@@ -1619,3 +1619,64 @@ SELECT
 FROM vw_staff_inventory_detail sd
 JOIN Shop s ON sd.ShopID = s.ShopID
 JOIN ReleaseAlbum r ON sd.ReleaseID = r.ReleaseID;
+
+-- ================================================
+-- Missing Views for Inventory and Artist Filter
+-- ================================================
+
+-- 101. Release Basic Info View
+-- Used for artist filter dropdown and basic release info
+CREATE OR REPLACE VIEW vw_release_basic AS
+SELECT
+    ReleaseID,
+    Title,
+    ArtistName,
+    Genre,
+    ReleaseYear,
+    Format,
+    Description,
+    BaseUnitCost
+FROM ReleaseAlbum;
+
+-- 102. Stock Summary View (Alias for pagination support)
+-- Used by staff/manager/admin inventory pages for summary view
+CREATE OR REPLACE VIEW vw_stock_summary AS
+SELECT
+    s.ShopID,
+    sh.Name AS ShopName,
+    s.ReleaseID,
+    r.Title,
+    r.ArtistName,
+    r.Genre,
+    s.ConditionGrade,
+    COUNT(*) AS AvailableQuantity,
+    MIN(s.UnitPrice) AS MinPrice,
+    MAX(s.UnitPrice) AS MaxPrice,
+    AVG(s.UnitPrice) AS AvgPrice
+FROM StockItem s
+JOIN Shop sh ON s.ShopID = sh.ShopID
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+WHERE s.Status = 'Available'
+GROUP BY s.ShopID, sh.Name, s.ReleaseID, r.Title, r.ArtistName, r.Genre, s.ConditionGrade;
+
+-- 103. Stock Detail View
+-- Used by staff/manager/admin inventory pages for detail view
+CREATE OR REPLACE VIEW vw_stock_detail AS
+SELECT
+    s.StockItemID,
+    s.ShopID,
+    sh.Name AS ShopName,
+    s.ReleaseID,
+    s.BatchNo,
+    s.ConditionGrade,
+    s.UnitPrice,
+    s.Status,
+    s.AcquiredDate,
+    r.Title,
+    r.ArtistName,
+    r.Genre,
+    DATEDIFF(NOW(), s.AcquiredDate) AS DaysInStock
+FROM StockItem s
+JOIN Shop sh ON s.ShopID = sh.ShopID
+JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
+WHERE s.Status = 'Available';

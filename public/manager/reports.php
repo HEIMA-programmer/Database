@@ -244,10 +244,11 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<?php require_once __DIR__ . '/../../includes/footer.php'; ?>
-<!-- 【修复】预加载数据，解决AJAX loading问题 -->
+<!-- 【修复】预加载数据和JS文件放在footer之前，与pos.php保持一致 -->
 <script>
 window.preloadedGenreDetails = <?= json_encode($genreDetails, JSON_UNESCAPED_UNICODE) ?>;
 window.preloadedMonthDetails = <?= json_encode($monthDetails, JSON_UNESCAPED_UNICODE) ?>;
 </script>
 <script src="../assets/js/pages/manager-reports.js"></script>
+
+<?php require_once __DIR__ . '/../../includes/footer.php'; ?>

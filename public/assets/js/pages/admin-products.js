@@ -32,9 +32,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ========== Price Modal ==========
-    const priceModalEl = document.getElementById('priceModal');
-    // 保存当前点击的数据
-    let currentPriceData = { releaseId: null, releaseTitle: '' };
 
     function renderPriceData(releaseId, releaseTitle) {
         if (!releaseId) {
@@ -152,21 +149,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】结合 click 和 show.bs.modal 两种事件
-    // click 事件：保存数据（this 可靠获取按钮）
-    // show.bs.modal 事件：渲染内容（模态框打开时的正确时机）
+    // 【修复】直接在 click 事件中渲染，避免 show.bs.modal 事件时序问题
+    // Bootstrap 的 show.bs.modal 事件触发早于 click 回调完成，导致数据延迟一次
     document.querySelectorAll('.price-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            currentPriceData.releaseId = this.dataset.releaseId;
-            currentPriceData.releaseTitle = this.dataset.releaseTitle || '';
-        });
-    });
-
-    if (priceModalEl) {
-        priceModalEl.addEventListener('show.bs.modal', function() {
-            if (currentPriceData.releaseId) {
-                renderPriceData(currentPriceData.releaseId, currentPriceData.releaseTitle);
+            const releaseId = this.dataset.releaseId;
+            const releaseTitle = this.dataset.releaseTitle || '';
+            if (releaseId) {
+                renderPriceData(releaseId, releaseTitle);
             }
         });
-    }
+    });
 });

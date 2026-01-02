@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ========== Genre Detail Modal ==========
+    const genreModalEl = document.getElementById('genreDetailModal');
+    let currentGenreData = { genre: null };
+
     function renderGenreDetail(genre) {
         if (!genre) {
             console.error('Genre is empty');
@@ -57,17 +60,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用 click 事件（和其他正常工作的按钮一样的处理方式）
+    // 【修复】结合 click 和 show.bs.modal 两种事件
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
         btn.addEventListener('click', function() {
-            const genre = this.dataset.genre;
-            if (genre) {
-                renderGenreDetail(genre);
-            }
+            currentGenreData.genre = this.dataset.genre;
         });
     });
 
+    if (genreModalEl) {
+        genreModalEl.addEventListener('show.bs.modal', function() {
+            if (currentGenreData.genre) {
+                renderGenreDetail(currentGenreData.genre);
+            }
+        });
+    }
+
     // ========== Month Detail Modal ==========
+    const monthModalEl = document.getElementById('monthDetailModal');
+    let currentMonthData = { month: null };
+
     const typeBadges = {
         'POS': '<span class="badge bg-warning text-dark">POS</span>',
         'OnlinePickup': '<span class="badge bg-info">Pickup</span>',
@@ -122,13 +133,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用 click 事件（和其他正常工作的按钮一样的处理方式）
+    // 【修复】结合 click 和 show.bs.modal 两种事件
     document.querySelectorAll('.btn-month-detail').forEach(btn => {
         btn.addEventListener('click', function() {
-            const month = this.dataset.month;
-            if (month) {
-                renderMonthDetail(month);
-            }
+            currentMonthData.month = this.dataset.month;
         });
     });
+
+    if (monthModalEl) {
+        monthModalEl.addEventListener('show.bs.modal', function() {
+            if (currentMonthData.month) {
+                renderMonthDetail(currentMonthData.month);
+            }
+        });
+    }
 });

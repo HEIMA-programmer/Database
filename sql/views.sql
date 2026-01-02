@@ -1720,7 +1720,7 @@ SELECT
     r.ArtistName,
     sol.Quantity AS TotalItems,
     sol.UnitCost,
-    sol.TotalCost,
+    (sol.Quantity * sol.UnitCost) AS TotalCost,
     sol.ConditionGrade,
     sol.SalePrice
 FROM SupplierOrder so

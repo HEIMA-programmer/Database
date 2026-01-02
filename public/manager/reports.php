@@ -244,19 +244,50 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<!-- 【修复】使用完整的JSON转义标志，防止数据中的特殊字符破坏JavaScript -->
+<!-- 【诊断】添加调试信息 -->
 <?php
 $jsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
 $genreJson = json_encode($genreDetails ?: [], $jsonFlags);
 $monthJson = json_encode($monthDetails ?: [], $jsonFlags);
 // 确保JSON编码成功，失败时回退到空对象
+$genreError = ($genreJson === false) ? json_last_error_msg() : null;
+$monthError = ($monthJson === false) ? json_last_error_msg() : null;
 if ($genreJson === false) $genreJson = '{}';
 if ($monthJson === false) $monthJson = '{}';
 ?>
 <script>
-window.preloadedGenreDetails = <?= $genreJson ?>;
-window.preloadedMonthDetails = <?= $monthJson ?>;
+// 【诊断】检查数据加载
+console.log('=== Reports Page Debug ===');
+console.log('Genre JSON length:', '<?= strlen($genreJson) ?>');
+console.log('Month JSON length:', '<?= strlen($monthJson) ?>');
+<?php if ($genreError): ?>console.error('Genre JSON encode error:', '<?= $genreError ?>');<?php endif; ?>
+<?php if ($monthError): ?>console.error('Month JSON encode error:', '<?= $monthError ?>');<?php endif; ?>
+
+try {
+    window.preloadedGenreDetails = <?= $genreJson ?>;
+    console.log('Genre details loaded:', typeof window.preloadedGenreDetails, Object.keys(window.preloadedGenreDetails || {}).length, 'keys');
+} catch(e) {
+    console.error('Failed to parse genre JSON:', e);
+    window.preloadedGenreDetails = {};
+}
+
+try {
+    window.preloadedMonthDetails = <?= $monthJson ?>;
+    console.log('Month details loaded:', typeof window.preloadedMonthDetails, Object.keys(window.preloadedMonthDetails || {}).length, 'keys');
+} catch(e) {
+    console.error('Failed to parse month JSON:', e);
+    window.preloadedMonthDetails = {};
+}
+
+// 【诊断】检查函数是否定义
+console.log('renderGenreDetail defined:', typeof renderGenreDetail);
+console.log('renderMonthDetail defined:', typeof renderMonthDetail);
 </script>
 <script src="../assets/js/pages/manager-reports.js"></script>
+<script>
+// 【诊断】JS加载后再次检查
+console.log('After JS load - renderGenreDetail:', typeof renderGenreDetail);
+console.log('After JS load - renderMonthDetail:', typeof renderMonthDetail);
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

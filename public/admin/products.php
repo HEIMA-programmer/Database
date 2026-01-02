@@ -304,16 +304,35 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<!-- 【修复】使用完整的JSON转义标志，防止数据中的特殊字符破坏JavaScript -->
+<!-- 【诊断】添加调试信息 -->
 <?php
 $jsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
 $stockJson = json_encode($stockPrices ?: [], $jsonFlags);
 // 确保JSON编码成功，失败时回退到空对象
+$stockError = ($stockJson === false) ? json_last_error_msg() : null;
 if ($stockJson === false) $stockJson = '{}';
 ?>
 <script>
-window.preloadedStockPrices = <?= $stockJson ?>;
+// 【诊断】检查数据加载
+console.log('=== Products Page Debug ===');
+console.log('Stock JSON length:', '<?= strlen($stockJson) ?>');
+<?php if ($stockError): ?>console.error('Stock JSON encode error:', '<?= $stockError ?>');<?php endif; ?>
+
+try {
+    window.preloadedStockPrices = <?= $stockJson ?>;
+    console.log('Stock prices loaded:', typeof window.preloadedStockPrices, Object.keys(window.preloadedStockPrices || {}).length, 'keys');
+} catch(e) {
+    console.error('Failed to parse stock JSON:', e);
+    window.preloadedStockPrices = {};
+}
+
+// 【诊断】检查函数是否定义
+console.log('renderPriceData defined:', typeof renderPriceData);
 </script>
 <script src="../assets/js/pages/admin-products.js"></script>
+<script>
+// 【诊断】JS加载后再次检查
+console.log('After JS load - renderPriceData:', typeof renderPriceData);
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

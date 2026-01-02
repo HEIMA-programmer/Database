@@ -13,8 +13,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ========== Genre Detail Modal ==========
     const genreModalEl = document.getElementById('genreDetailModal');
-    // 保存当前选中的genre
-    let currentGenre = null;
+    // 【修复】保存最近点击的按钮元素
+    let lastClickedGenreBtn = null;
 
     function renderGenreDetail(genre) {
         if (!genre) {
@@ -61,31 +61,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用 mousedown 事件（比 click 更早触发），确保在 show.bs.modal 之前保存数据
-    document.querySelectorAll('.btn-genre-detail').forEach(btn => {
-        btn.addEventListener('mousedown', function() {
-            currentGenre = this.dataset.genre || null;
-        });
-    });
-
-    // 【修复】使用事件委托作为备用方案
+    // 【修复】使用事件委托捕获 mousedown，保存按钮元素
     document.addEventListener('mousedown', function(e) {
         const btn = e.target.closest('.btn-genre-detail');
         if (btn) {
-            currentGenre = btn.dataset.genre || null;
+            lastClickedGenreBtn = btn;
         }
     });
 
     if (genreModalEl) {
         genreModalEl.addEventListener('show.bs.modal', function(event) {
-            // 优先使用 relatedTarget，如果为空则使用保存的数据
-            const button = event.relatedTarget;
-            const genre = (button && button.dataset.genre) ? button.dataset.genre : currentGenre;
+            // 获取触发按钮：优先使用 relatedTarget，否则使用保存的按钮
+            const button = event.relatedTarget || lastClickedGenreBtn;
+
+            // 从按钮获取数据
+            let genre = null;
+            if (button && button.dataset) {
+                genre = button.dataset.genre || button.getAttribute('data-genre');
+            }
 
             if (genre) {
                 renderGenreDetail(genre);
             } else {
-                // 如果没有数据，显示空提示
                 const emptyEl = document.getElementById('genreDetailEmpty');
                 const loadingEl = document.getElementById('genreDetailLoading');
                 const contentEl = document.getElementById('genreDetailContent');
@@ -104,19 +101,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const emptyEl = document.getElementById('genreDetailEmpty');
             const bodyEl = document.getElementById('genreDetailBody');
 
-            // 重置标题，避免显示上次的内容
             if (titleEl) titleEl.textContent = '';
             if (contentEl) contentEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (bodyEl) bodyEl.innerHTML = '';
-            // 注意：不再清除 currentGenre，让下次 mousedown 事件来更新
         });
     }
 
     // ========== Month Detail Modal ==========
     const monthModalEl = document.getElementById('monthDetailModal');
-    // 保存当前选中的month
-    let currentMonth = null;
+    // 【修复】保存最近点击的按钮元素
+    let lastClickedMonthBtn = null;
 
     const typeBadges = {
         'POS': '<span class="badge bg-warning text-dark">POS</span>',
@@ -172,31 +167,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用 mousedown 事件（比 click 更早触发），确保在 show.bs.modal 之前保存数据
-    document.querySelectorAll('.btn-month-detail').forEach(btn => {
-        btn.addEventListener('mousedown', function() {
-            currentMonth = this.dataset.month || null;
-        });
-    });
-
-    // 【修复】使用事件委托作为备用方案
+    // 【修复】使用事件委托捕获 mousedown，保存按钮元素
     document.addEventListener('mousedown', function(e) {
         const btn = e.target.closest('.btn-month-detail');
         if (btn) {
-            currentMonth = btn.dataset.month || null;
+            lastClickedMonthBtn = btn;
         }
     });
 
     if (monthModalEl) {
         monthModalEl.addEventListener('show.bs.modal', function(event) {
-            // 优先使用 relatedTarget，如果为空则使用保存的数据
-            const button = event.relatedTarget;
-            const month = (button && button.dataset.month) ? button.dataset.month : currentMonth;
+            // 获取触发按钮：优先使用 relatedTarget，否则使用保存的按钮
+            const button = event.relatedTarget || lastClickedMonthBtn;
+
+            // 从按钮获取数据
+            let month = null;
+            if (button && button.dataset) {
+                month = button.dataset.month || button.getAttribute('data-month');
+            }
 
             if (month) {
                 renderMonthDetail(month);
             } else {
-                // 如果没有数据，显示空提示
                 const emptyEl = document.getElementById('monthDetailEmpty');
                 const loadingEl = document.getElementById('monthDetailLoading');
                 const contentEl = document.getElementById('monthDetailContent');
@@ -215,12 +207,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const emptyEl = document.getElementById('monthDetailEmpty');
             const bodyEl = document.getElementById('monthDetailBody');
 
-            // 重置标题，避免显示上次的内容
             if (titleEl) titleEl.textContent = '';
             if (contentEl) contentEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (bodyEl) bodyEl.innerHTML = '';
-            // 注意：不再清除 currentMonth，让下次 mousedown 事件来更新
         });
     }
 });

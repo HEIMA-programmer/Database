@@ -113,3 +113,38 @@ function renderMonthDetail(month) {
         emptyEl.classList.remove('d-none');
     }
 }
+
+// 【修复】使用Bootstrap的show.bs.modal事件，避免onclick冲突
+document.addEventListener('DOMContentLoaded', function() {
+    // Genre Detail Modal
+    const genreModal = document.getElementById('genreDetailModal');
+    if (genreModal) {
+        genreModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            if (!button) return;
+
+            const genre = button.getAttribute('data-genre');
+            console.log('Genre modal show event:', genre);
+
+            if (genre) {
+                renderGenreDetail(genre);
+            }
+        });
+    }
+
+    // Month Detail Modal
+    const monthModal = document.getElementById('monthDetailModal');
+    if (monthModal) {
+        monthModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            if (!button) return;
+
+            const month = button.getAttribute('data-month');
+            console.log('Month modal show event:', month);
+
+            if (month) {
+                renderMonthDetail(month);
+            }
+        });
+    }
+});

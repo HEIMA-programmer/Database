@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // ========== Price Modal（AJAX按需加载）==========
+    // ========== Price Modal ==========
     const priceModalEl = document.getElementById('priceModal');
     let currentReleaseId = null;
     let currentReleaseTitle = null;
@@ -137,26 +137,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 在按钮点击时直接调用加载函数并打开模态框
-    // 【修复】参考 staff-pos.js 的模式，避免 show.bs.modal 事件不可靠问题
-    document.querySelectorAll('.price-btn').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            currentReleaseId = this.dataset.releaseId;
-            currentReleaseTitle = this.dataset.releaseTitle;
-
-            // 重置模态框状态
+    // 【修复】使用 show.bs.modal 事件，配合 data-bs-toggle 属性
+    // 这种方式比手动调用 modal.show() 更可靠
+    priceModalEl.addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        if (button && button.dataset.releaseId) {
+            currentReleaseId = button.dataset.releaseId;
+            currentReleaseTitle = button.dataset.releaseTitle;
+            // 重置状态
             document.getElementById('priceLoading').classList.remove('d-none');
             document.getElementById('priceContent').classList.add('d-none');
             document.getElementById('priceEmpty').classList.add('d-none');
             document.getElementById('priceCardsContainer').innerHTML = '';
-
-            const modal = bootstrap.Modal.getOrCreateInstance(priceModalEl);
-            modal.show();
-
-            // 直接调用加载函数
+            // 加载数据
             loadAndRenderPriceData(currentReleaseId, currentReleaseTitle);
-        });
+        }
     });
 
     // 模态框关闭时重置状态

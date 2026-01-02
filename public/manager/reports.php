@@ -85,6 +85,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         <td class="text-end text-success fw-bold"><?= formatPrice($stat['TotalRevenue']) ?></td>
                         <td class="text-center">
                             <button type="button" class="btn btn-sm btn-outline-info btn-genre-detail"
+                                    data-bs-toggle="modal" data-bs-target="#genreDetailModal"
                                     data-genre="<?= h($stat['Genre']) ?>" title="View Orders">
                                 <i class="fa-solid fa-list"></i>
                             </button>
@@ -136,6 +137,7 @@ require_once __DIR__ . '/../../includes/header.php';
                     </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-info btn-month-detail"
+                                data-bs-toggle="modal" data-bs-target="#monthDetailModal"
                                 data-month="<?= h($trend['SalesMonth']) ?>" title="View Orders">
                             <i class="fa-solid fa-list"></i>
                         </button>

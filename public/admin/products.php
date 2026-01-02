@@ -127,6 +127,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
                         <button class="btn btn-sm btn-outline-warning price-btn"
+                                data-bs-toggle="modal" data-bs-target="#priceModal"
                                 data-release-id="<?= $r['ReleaseID'] ?>"
                                 data-release-title="<?= h($r['Title']) ?>"
                                 title="Adjust Prices">

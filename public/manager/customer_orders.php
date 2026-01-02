@@ -44,6 +44,15 @@ require_once __DIR__ . '/../../includes/header.php';
 </div>
 
 <!-- 订单类型标签页 -->
+<?php
+// 预先计算各类订单数量
+$posOrders = array_filter($orders, fn($o) => $o['OrderCategory'] === 'POS');
+$pickupOrders = array_filter($orders, fn($o) => $o['OrderCategory'] === 'OnlinePickup');
+$onlineOrders = array_filter($orders, fn($o) => $o['OrderCategory'] === 'OnlineSales');
+$posCount = count($posOrders);
+$pickupCount = count($pickupOrders);
+$onlineCount = count($onlineOrders);
+?>
 <ul class="nav nav-tabs mb-4" id="orderTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="all-tab" data-bs-toggle="tab" data-bs-target="#all" type="button">
@@ -54,24 +63,27 @@ require_once __DIR__ . '/../../includes/header.php';
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="pos-tab" data-bs-toggle="tab" data-bs-target="#pos" type="button">
             <i class="fa-solid fa-cash-register me-1"></i>POS
+            <?php if ($posCount > 0): ?><span class="badge bg-warning text-dark"><?= $posCount ?></span><?php endif; ?>
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="pickup-tab" data-bs-toggle="tab" data-bs-target="#pickup" type="button">
             <i class="fa-solid fa-store me-1"></i>Online Pickup
+            <?php if ($pickupCount > 0): ?><span class="badge bg-info"><?= $pickupCount ?></span><?php endif; ?>
         </button>
     </li>
     <?php endif; ?>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="online-tab" data-bs-toggle="tab" data-bs-target="#online" type="button">
             <i class="fa-solid fa-globe me-1"></i>Online Shipping
+            <?php if ($onlineCount > 0): ?><span class="badge bg-success"><?= $onlineCount ?></span><?php endif; ?>
         </button>
     </li>
     <?php if (!$isWarehouse): ?>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="buyback-tab" data-bs-toggle="tab" data-bs-target="#buyback" type="button">
             <i class="fa-solid fa-recycle me-1 text-danger"></i>Buyback
-            <span class="badge bg-danger"><?= count($buybacks) ?></span>
+            <?php if (count($buybacks) > 0): ?><span class="badge bg-danger"><?= count($buybacks) ?></span><?php endif; ?>
         </button>
     </li>
     <?php endif; ?>
@@ -134,9 +146,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <!-- POS Orders -->
     <?php if (!$isWarehouse): ?>
     <div class="tab-pane fade" id="pos" role="tabpanel">
-        <?php
-        $posOrders = array_filter($orders, fn($o) => $o['OrderCategory'] === 'POS');
-        if (empty($posOrders)): ?>
+        <?php if (empty($posOrders)): ?>
             <div class="alert alert-info">No POS orders found.</div>
         <?php else: ?>
         <div class="table-responsive">
@@ -161,9 +171,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
     <!-- Online Pickup -->
     <div class="tab-pane fade" id="pickup" role="tabpanel">
-        <?php
-        $pickupOrders = array_filter($orders, fn($o) => $o['OrderCategory'] === 'OnlinePickup');
-        if (empty($pickupOrders)): ?>
+        <?php if (empty($pickupOrders)): ?>
             <div class="alert alert-info">No pickup orders found.</div>
         <?php else: ?>
         <div class="table-responsive">
@@ -189,9 +197,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
     <!-- Online Shipping -->
     <div class="tab-pane fade" id="online" role="tabpanel">
-        <?php
-        $onlineOrders = array_filter($orders, fn($o) => $o['OrderCategory'] === 'OnlineSales');
-        if (empty($onlineOrders)): ?>
+        <?php if (empty($onlineOrders)): ?>
             <div class="alert alert-info">No online shipping orders found.</div>
         <?php else: ?>
         <div class="table-responsive">

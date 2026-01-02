@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return result.success ? result.data : [];
     }
 
-    // ========== Genre Detail Modal（AJAX方式）==========
+    // ========== Genre Detail Modal ==========
     const genreModalEl = document.getElementById('genreDetailModal');
     let currentGenre = null;
 
@@ -63,25 +63,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 在按钮点击时直接调用加载函数并打开模态框
-    // 【修复】参考 staff-pos.js 的模式，避免 show.bs.modal 事件不可靠问题
-    document.querySelectorAll('.btn-genre-detail').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            currentGenre = this.dataset.genre;
-
-            // 重置模态框状态
+    // 【修复】使用 show.bs.modal 事件，配合 data-bs-toggle 属性
+    // 这种方式比手动调用 modal.show() 更可靠
+    genreModalEl.addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        if (button && button.dataset.genre) {
+            currentGenre = button.dataset.genre;
+            // 重置状态
             document.getElementById('genreDetailLoading').classList.remove('d-none');
             document.getElementById('genreDetailContent').classList.add('d-none');
             document.getElementById('genreDetailEmpty').classList.add('d-none');
             document.getElementById('genreDetailBody').innerHTML = '';
-
-            const modal = bootstrap.Modal.getOrCreateInstance(genreModalEl);
-            modal.show();
-
-            // 直接调用加载函数
+            // 加载数据
             loadGenreDetail(currentGenre);
-        });
+        }
     });
 
     genreModalEl.addEventListener('hidden.bs.modal', function() {
@@ -91,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function() {
         currentGenre = null;
     });
 
-    // ========== Month Detail Modal（AJAX方式）==========
+    // ========== Month Detail Modal ==========
     const monthModalEl = document.getElementById('monthDetailModal');
     let currentMonth = null;
 
@@ -138,25 +133,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 在按钮点击时直接调用加载函数并打开模态框
-    // 【修复】参考 staff-pos.js 的模式，避免 show.bs.modal 事件不可靠问题
-    document.querySelectorAll('.btn-month-detail').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            currentMonth = this.dataset.month;
-
-            // 重置模态框状态
+    // 【修复】使用 show.bs.modal 事件，配合 data-bs-toggle 属性
+    monthModalEl.addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        if (button && button.dataset.month) {
+            currentMonth = button.dataset.month;
+            // 重置状态
             document.getElementById('monthDetailLoading').classList.remove('d-none');
             document.getElementById('monthDetailContent').classList.add('d-none');
             document.getElementById('monthDetailEmpty').classList.add('d-none');
             document.getElementById('monthDetailBody').innerHTML = '';
-
-            const modal = bootstrap.Modal.getOrCreateInstance(monthModalEl);
-            modal.show();
-
-            // 直接调用加载函数
+            // 加载数据
             loadMonthDetail(currentMonth);
-        });
+        }
     });
 
     monthModalEl.addEventListener('hidden.bs.modal', function() {

@@ -177,13 +177,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         priceModal.addEventListener('shown.bs.modal', function(event) {
-            // 【诊断】检查模态框内容
-            console.log('Modal shown, checking elements...');
-            console.log('Modal element:', this);
-            console.log('Modal innerHTML length:', this.innerHTML.length);
-            console.log('priceModalTitle:', this.querySelector('#priceModalTitle'));
-            console.log('priceContent:', this.querySelector('#priceContent'));
-            console.log('priceEmpty:', this.querySelector('#priceEmpty'));
+            // 【诊断】详细检查模态框内容
+            console.log('=== Modal Debug ===');
+            const modalBody = this.querySelector('.modal-body');
+            console.log('modal-body children:', modalBody ? modalBody.children.length : 'NO MODAL BODY');
+            if (modalBody) {
+                Array.from(modalBody.children).forEach((child, i) => {
+                    console.log(`  Child ${i}:`, child.id || child.className, child.tagName);
+                });
+            }
+            console.log('priceEmpty by ID:', this.querySelector('#priceEmpty'));
+            console.log('priceEmpty by class:', this.querySelector('.alert-warning'));
 
             // 模态框完全显示后，渲染数据
             if (pendingRender && pendingRender.releaseId) {

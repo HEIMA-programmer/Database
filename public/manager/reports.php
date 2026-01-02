@@ -38,12 +38,6 @@ require_once __DIR__ . '/../../includes/header.php';
 <!-- ========== 表现层 ========== -->
 <div class="row mb-4">
     <div class="col-12">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="dashboard.php" class="text-warning">Dashboard</a></li>
-                <li class="breadcrumb-item active text-light">Performance Reports</li>
-            </ol>
-        </nav>
         <h2 class="text-info display-6 fw-bold"><i class="fa-solid fa-file-invoice-dollar me-2"></i>Performance Reports</h2>
         <p class="text-secondary">Sales analytics for <span class="text-info fw-bold"><?= h($_SESSION['shop_name'] ?? 'Your Store') ?></span></p>
     </div>
@@ -236,6 +230,5 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<script src="../assets/js/pages/manager-reports.js"></script>
-
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>
+<script src="../assets/js/pages/manager-reports.js"></script>

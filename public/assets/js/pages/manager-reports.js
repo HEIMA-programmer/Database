@@ -12,7 +12,7 @@ function escapeHtml(text) {
 }
 
 // ========== Genre Detail Modal ==========
-// 【修复】从模态框元素内部查找子元素，避免DOM查询问题
+// 【修复】简化元素依赖，只使用必要的元素
 function renderGenreDetail(genre, modalElement) {
     if (!genre) {
         console.error('Genre is empty');
@@ -26,22 +26,16 @@ function renderGenreDetail(genre, modalElement) {
     }
 
     const titleEl = modal.querySelector('#genreTitle');
-    const loadingEl = modal.querySelector('#genreDetailLoading');
     const contentEl = modal.querySelector('#genreDetailContent');
-    const emptyEl = modal.querySelector('#genreDetailEmpty');
     const bodyEl = modal.querySelector('#genreDetailBody');
 
-    if (!titleEl || !contentEl || !emptyEl || !bodyEl) {
-        console.error('Genre modal elements not found inside modal');
+    if (!titleEl || !contentEl || !bodyEl) {
+        console.error('Genre modal essential elements not found');
         return;
     }
 
     titleEl.textContent = genre;
-
-    // 先隐藏所有状态
-    if (loadingEl) loadingEl.classList.add('d-none');
     contentEl.classList.add('d-none');
-    emptyEl.classList.add('d-none');
 
     // 从预加载数据获取
     const data = window.preloadedGenreDetails && window.preloadedGenreDetails[genre];
@@ -59,8 +53,11 @@ function renderGenreDetail(genre, modalElement) {
         bodyEl.innerHTML = html;
         contentEl.classList.remove('d-none');
     } else {
-        emptyEl.textContent = 'No order details found for this genre.';
-        emptyEl.classList.remove('d-none');
+        // 【修复】直接在表格中显示"无数据"消息
+        bodyEl.innerHTML = `<tr><td colspan="7" class="text-center text-warning py-4">
+            <i class="fa-solid fa-info-circle me-1"></i>No order details found for this genre.
+        </td></tr>`;
+        contentEl.classList.remove('d-none');
     }
 }
 
@@ -71,7 +68,7 @@ const typeBadges = {
     'OnlineSales': '<span class="badge bg-success">Shipping</span>'
 };
 
-// 【修复】从模态框元素内部查找子元素，避免DOM查询问题
+// 【修复】简化元素依赖，只使用必要的元素
 function renderMonthDetail(month, modalElement) {
     if (!month) {
         console.error('Month is empty');
@@ -85,22 +82,16 @@ function renderMonthDetail(month, modalElement) {
     }
 
     const titleEl = modal.querySelector('#monthTitle');
-    const loadingEl = modal.querySelector('#monthDetailLoading');
     const contentEl = modal.querySelector('#monthDetailContent');
-    const emptyEl = modal.querySelector('#monthDetailEmpty');
     const bodyEl = modal.querySelector('#monthDetailBody');
 
-    if (!titleEl || !contentEl || !emptyEl || !bodyEl) {
-        console.error('Month modal elements not found inside modal');
+    if (!titleEl || !contentEl || !bodyEl) {
+        console.error('Month modal essential elements not found');
         return;
     }
 
     titleEl.textContent = month;
-
-    // 先隐藏所有状态
-    if (loadingEl) loadingEl.classList.add('d-none');
     contentEl.classList.add('d-none');
-    emptyEl.classList.add('d-none');
 
     // 从预加载数据获取
     const data = window.preloadedMonthDetails && window.preloadedMonthDetails[month];
@@ -121,8 +112,11 @@ function renderMonthDetail(month, modalElement) {
         bodyEl.innerHTML = html;
         contentEl.classList.remove('d-none');
     } else {
-        emptyEl.textContent = 'No order details found for this month.';
-        emptyEl.classList.remove('d-none');
+        // 【修复】直接在表格中显示"无数据"消息
+        bodyEl.innerHTML = `<tr><td colspan="7" class="text-center text-warning py-4">
+            <i class="fa-solid fa-info-circle me-1"></i>No order details found for this month.
+        </td></tr>`;
+        contentEl.classList.remove('d-none');
     }
 }
 

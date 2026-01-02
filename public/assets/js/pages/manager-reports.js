@@ -12,8 +12,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ========== Genre Detail Modal ==========
-    const genreModalEl = document.getElementById('genreDetailModal');
-    let currentGenreData = { genre: null };
 
     function renderGenreDetail(genre) {
         if (!genre) {
@@ -60,24 +58,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】结合 click 和 show.bs.modal 两种事件
+    // 【修复】直接在 click 事件中渲染，避免 show.bs.modal 事件时序问题
+    // Bootstrap 的 show.bs.modal 事件触发早于 click 回调完成，导致数据延迟一次
     document.querySelectorAll('.btn-genre-detail').forEach(btn => {
         btn.addEventListener('click', function() {
-            currentGenreData.genre = this.dataset.genre;
+            const genre = this.dataset.genre;
+            if (genre) {
+                renderGenreDetail(genre);
+            }
         });
     });
 
-    if (genreModalEl) {
-        genreModalEl.addEventListener('show.bs.modal', function() {
-            if (currentGenreData.genre) {
-                renderGenreDetail(currentGenreData.genre);
-            }
-        });
-    }
-
     // ========== Month Detail Modal ==========
-    const monthModalEl = document.getElementById('monthDetailModal');
-    let currentMonthData = { month: null };
 
     const typeBadges = {
         'POS': '<span class="badge bg-warning text-dark">POS</span>',
@@ -133,18 +125,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】结合 click 和 show.bs.modal 两种事件
+    // 【修复】直接在 click 事件中渲染，避免 show.bs.modal 事件时序问题
     document.querySelectorAll('.btn-month-detail').forEach(btn => {
         btn.addEventListener('click', function() {
-            currentMonthData.month = this.dataset.month;
-        });
-    });
-
-    if (monthModalEl) {
-        monthModalEl.addEventListener('show.bs.modal', function() {
-            if (currentMonthData.month) {
-                renderMonthDetail(currentMonthData.month);
+            const month = this.dataset.month;
+            if (month) {
+                renderMonthDetail(month);
             }
         });
-    }
+    });
 });

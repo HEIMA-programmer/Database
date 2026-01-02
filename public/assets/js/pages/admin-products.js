@@ -166,6 +166,22 @@ document.addEventListener('DOMContentLoaded', function() {
         priceModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
             if (!button) return;
+
+            // 【修复】立即清空旧内容，显示loading状态，避免旧内容闪现
+            const containerEl = this.querySelector('#priceCardsContainer');
+            const contentEl = this.querySelector('#priceContent');
+            if (containerEl) {
+                containerEl.innerHTML = `
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-warning" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>`;
+            }
+            if (contentEl) {
+                contentEl.classList.remove('d-none');
+            }
+
             // 保存数据，等模态框完全显示后再渲染
             pendingRender = {
                 releaseId: button.getAttribute('data-release-id'),

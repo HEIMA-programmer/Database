@@ -86,16 +86,20 @@ JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID;
 
 -- 3. [Customer View] My Orders List
 -- 【修复】添加 FulfillmentType 字段，用于正确区分 Pickup 和 Delivery 订单
+-- 【修复】添加 ShopID 和 CustomerName 字段，用于 Staff API 订单详情验证
 CREATE OR REPLACE VIEW vw_customer_my_orders_list AS
 SELECT
-    OrderID,
-    CustomerID,
-    OrderDate,
-    OrderStatus,
-    TotalAmount,
-    OrderType,
-    FulfillmentType
-FROM CustomerOrder;
+    co.OrderID,
+    co.CustomerID,
+    co.OrderDate,
+    co.OrderStatus,
+    co.TotalAmount,
+    co.OrderType,
+    co.FulfillmentType,
+    co.FulfilledByShopID AS ShopID,
+    COALESCE(c.Name, 'Walk-in Customer') AS CustomerName
+FROM CustomerOrder co
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID;
 
 -- 4. [Customer View] Profile & Membership Info
 CREATE OR REPLACE VIEW vw_customer_profile_info AS

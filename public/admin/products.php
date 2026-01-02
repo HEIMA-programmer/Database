@@ -262,7 +262,7 @@ require_once __DIR__ . '/../../includes/header.php';
                     <div id="priceContent" class="d-none">
                         <div class="alert alert-info mb-3">
                             <i class="fa-solid fa-info-circle me-1"></i>
-                            只需填写您想要更改的成色价格即可，留空的成色将保持原价不变。
+                            Only fill in the new price for conditions you want to change. Leave blank to keep the current price.
                         </div>
                         <!-- 【修复】改用卡片布局避免rowspan造成的UI错乱 -->
                         <div id="priceCardsContainer"></div>

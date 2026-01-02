@@ -32,9 +32,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ========== Price Modal ==========
-    const priceModalEl = document.getElementById('priceModal');
-    let pendingPrice = { releaseId: null, releaseTitle: '' };
-
     function renderPriceData(releaseId, releaseTitle) {
         if (!releaseId) {
             console.error('ReleaseId is empty');
@@ -151,20 +148,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用 shown.bs.modal 事件（模态框完全显示后触发）
-    // 此时 click 事件肯定已执行完毕，pendingPrice 已正确设置
+    // 【修复】直接在 click 事件中调用渲染函数，与 edit-btn 处理方式保持一致
+    // 避免使用中间变量和 shown.bs.modal 事件导致的缓存问题
     document.querySelectorAll('.price-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            pendingPrice.releaseId = this.dataset.releaseId;
-            pendingPrice.releaseTitle = this.dataset.releaseTitle || '';
+            renderPriceData(this.dataset.releaseId, this.dataset.releaseTitle || '');
         });
     });
-
-    if (priceModalEl) {
-        priceModalEl.addEventListener('shown.bs.modal', function() {
-            if (pendingPrice.releaseId) {
-                renderPriceData(pendingPrice.releaseId, pendingPrice.releaseTitle);
-            }
-        });
-    }
 });

@@ -153,12 +153,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】在按钮点击时保存数据，确保模态框打开时能获取到
+    // 【修复】使用 mousedown 事件（比 click 更早触发），确保在 show.bs.modal 之前保存数据
     document.querySelectorAll('.price-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('mousedown', function() {
             currentReleaseId = this.dataset.releaseId || null;
             currentReleaseTitle = this.dataset.releaseTitle || '';
         });
+    });
+
+    // 【修复】使用事件委托作为备用方案，处理可能的动态元素
+    document.addEventListener('mousedown', function(e) {
+        const btn = e.target.closest('.price-btn');
+        if (btn) {
+            currentReleaseId = btn.dataset.releaseId || null;
+            currentReleaseTitle = btn.dataset.releaseTitle || '';
+        }
     });
 
     if (priceModalEl) {
@@ -184,18 +193,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // 模态框关闭时重置状态
+        // 模态框关闭时重置UI状态（但不清除保存的数据，让下次mousedown来更新）
         priceModalEl.addEventListener('hidden.bs.modal', function() {
+            const titleEl = document.getElementById('priceModalTitle');
             const contentEl = document.getElementById('priceContent');
             const emptyEl = document.getElementById('priceEmpty');
             const containerEl = document.getElementById('priceCardsContainer');
 
+            // 重置标题，避免显示上次的内容
+            if (titleEl) titleEl.textContent = '';
             if (contentEl) contentEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (containerEl) containerEl.innerHTML = '';
-            // 清除保存的数据
-            currentReleaseId = null;
-            currentReleaseTitle = null;
+            // 注意：不再清除 currentReleaseId/currentReleaseTitle
+            // 让下次 mousedown 事件来更新它们
         });
     }
 });

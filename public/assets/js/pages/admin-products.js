@@ -160,20 +160,35 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // 【修复】Price modal - 使用Bootstrap的show.bs.modal事件，避免onclick冲突
+    // 【修复】Price modal - 使用shown.bs.modal事件（模态框完全显示后）确保DOM稳定
     const priceModal = document.getElementById('priceModal');
     if (priceModal) {
+        // 存储当前要渲染的数据
+        let pendingRender = null;
+
         priceModal.addEventListener('show.bs.modal', function(event) {
-            // 获取触发按钮
             const button = event.relatedTarget;
             if (!button) return;
+            // 保存数据，等模态框完全显示后再渲染
+            pendingRender = {
+                releaseId: button.getAttribute('data-release-id'),
+                releaseTitle: button.getAttribute('data-release-title')
+            };
+        });
 
-            const releaseId = button.getAttribute('data-release-id');
-            const releaseTitle = button.getAttribute('data-release-title');
+        priceModal.addEventListener('shown.bs.modal', function(event) {
+            // 【诊断】检查模态框内容
+            console.log('Modal shown, checking elements...');
+            console.log('Modal element:', this);
+            console.log('Modal innerHTML length:', this.innerHTML.length);
+            console.log('priceModalTitle:', this.querySelector('#priceModalTitle'));
+            console.log('priceContent:', this.querySelector('#priceContent'));
+            console.log('priceEmpty:', this.querySelector('#priceEmpty'));
 
-            // 调用渲染函数，传入模态框元素本身
-            if (releaseId) {
-                renderPriceData(releaseId, releaseTitle, this);
+            // 模态框完全显示后，渲染数据
+            if (pendingRender && pendingRender.releaseId) {
+                renderPriceData(pendingRender.releaseId, pendingRender.releaseTitle, this);
+                pendingRender = null;
             }
         });
     }

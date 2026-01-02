@@ -275,14 +275,13 @@ class DBProcedures {
 
     /**
      * Get inventory summary for all shops (Admin view)
+     * Uses vw_all_shops_inventory_summary view
      */
     public static function getInventorySummaryAllShops($pdo) {
         try {
             $stmt = $pdo->query("
-                SELECT s.Name as ShopName, i.*
-                FROM vw_inventory_summary i
-                JOIN Shop s ON i.ShopID = s.ShopID
-                ORDER BY s.Name, i.Title, i.ConditionGrade
+                SELECT * FROM vw_all_shops_inventory_summary
+                ORDER BY ShopName, Title, ConditionGrade
             ");
             return $stmt->fetchAll();
         } catch (PDOException $e) {
@@ -293,15 +292,13 @@ class DBProcedures {
 
     /**
      * Get inventory detail for all shops (Admin view)
+     * Uses vw_all_shops_inventory_detail view
      */
     public static function getInventoryDetailAllShops($pdo) {
         try {
             $stmt = $pdo->query("
-                SELECT s.Name as ShopName, i.*
-                FROM vw_staff_inventory_detail i
-                JOIN Shop s ON i.ShopID = s.ShopID
-                WHERE i.Status = 'Available'
-                ORDER BY s.Name, i.AcquiredDate DESC
+                SELECT * FROM vw_all_shops_inventory_detail
+                ORDER BY ShopName, AcquiredDate DESC
             ");
             return $stmt->fetchAll();
         } catch (PDOException $e) {
@@ -2648,14 +2645,13 @@ class DBProcedures {
 
     /**
      * Get paginated inventory summary for all shops (admin)
+     * Uses vw_all_shops_inventory_summary view
      */
     public static function getInventorySummaryAllShopsPaginated($pdo, $limit = 20, $offset = 0) {
         try {
             $stmt = $pdo->prepare("
-                SELECT ss.*, s.Name as ShopName
-                FROM vw_stock_summary ss
-                JOIN Shop s ON ss.ShopID = s.ShopID
-                ORDER BY s.Name, ss.Title, ss.ConditionGrade
+                SELECT * FROM vw_all_shops_inventory_summary
+                ORDER BY ShopName, Title, ConditionGrade
                 LIMIT ? OFFSET ?
             ");
             $stmt->execute([$limit, $offset]);
@@ -2668,14 +2664,13 @@ class DBProcedures {
 
     /**
      * Get paginated inventory detail for all shops (admin)
+     * Uses vw_all_shops_inventory_detail view
      */
     public static function getInventoryDetailAllShopsPaginated($pdo, $limit = 20, $offset = 0) {
         try {
             $stmt = $pdo->prepare("
-                SELECT sd.*, s.Name as ShopName
-                FROM vw_stock_detail sd
-                JOIN Shop s ON sd.ShopID = s.ShopID
-                ORDER BY s.Name, sd.Title, sd.ConditionGrade, sd.StockItemID
+                SELECT * FROM vw_all_shops_inventory_detail
+                ORDER BY ShopName, Title, ConditionGrade, StockItemID
                 LIMIT ? OFFSET ?
             ");
             $stmt->execute([$limit, $offset]);

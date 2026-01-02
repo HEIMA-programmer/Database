@@ -77,6 +77,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageData = prepareProductsPageData($pdo);
 $releases = $pageData['releases'];
 
+// 【修复】预加载所有release的库存价格数据 - 解决AJAX loading一直显示的问题
+$stockPrices = [];
+foreach ($releases as $r) {
+    $releaseId = $r['ReleaseID'];
+    $stockData = DBProcedures::getStockPriceByCondition($pdo, $releaseId);
+    // 转换为前端需要的格式
+    $safeData = [];
+    foreach ($stockData as $row) {
+        $safeData[] = [
+            'condition' => $row['ConditionGrade'],
+            'shop' => $row['ShopName'],
+            'qty' => (int)$row['Quantity'],
+            'price' => (float)$row['MinPrice']
+        ];
+    }
+    $stockPrices[$releaseId] = $safeData;
+}
+
 require_once __DIR__ . '/../../includes/header.php';
 ?>
 
@@ -287,4 +305,8 @@ require_once __DIR__ . '/../../includes/header.php';
 </div>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>
+<!-- 【修复】预加载数据，解决AJAX loading问题 -->
+<script>
+window.preloadedStockPrices = <?= json_encode($stockPrices, JSON_UNESCAPED_UNICODE) ?>;
+</script>
 <script src="../assets/js/pages/admin-products.js"></script>

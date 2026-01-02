@@ -28,9 +28,19 @@ $pageData = prepareReportsPageData($pdo, $shopId);
 $turnoverStats = $pageData['turnover_stats'];
 $salesTrend = $pageData['sales_trend'];
 
-// 【安全修复】移除预加载的销售详情数据
-// 销售详情通过AJAX从后端API按需获取 (api/manager/report_details.php)
-// 避免在页面加载时暴露所有客户和价格信息
+// 【修复】预加载销售详情数据 - 解决AJAX loading一直显示的问题
+// 将数据预先加载到页面，避免异步加载的兼容性问题
+$genreDetails = [];
+foreach ($turnoverStats as $stat) {
+    $genre = $stat['Genre'];
+    $genreDetails[$genre] = DBProcedures::getSalesByGenreDetail($pdo, $shopId, $genre);
+}
+
+$monthDetails = [];
+foreach ($salesTrend as $trend) {
+    $month = $trend['SalesMonth'];
+    $monthDetails[$month] = DBProcedures::getMonthlySalesDetail($pdo, $shopId, $month);
+}
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
@@ -233,4 +243,9 @@ require_once __DIR__ . '/../../includes/header.php';
 </div>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>
+<!-- 【修复】预加载数据，解决AJAX loading问题 -->
+<script>
+window.preloadedGenreDetails = <?= json_encode($genreDetails, JSON_UNESCAPED_UNICODE) ?>;
+window.preloadedMonthDetails = <?= json_encode($monthDetails, JSON_UNESCAPED_UNICODE) ?>;
+</script>
 <script src="../assets/js/pages/manager-reports.js"></script>

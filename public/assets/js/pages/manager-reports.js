@@ -120,73 +120,31 @@ function renderMonthDetail(month, modalElement) {
     }
 }
 
-// 【修复】使用shown.bs.modal事件（模态框完全显示后）确保DOM稳定
+// 直接在show.bs.modal事件中渲染（数据已预加载，无需等待）
 document.addEventListener('DOMContentLoaded', function() {
     // Genre Detail Modal
     const genreModal = document.getElementById('genreDetailModal');
     if (genreModal) {
-        let pendingGenre = null;
-
         genreModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
             if (!button) return;
 
-            // 【修复】立即清空旧内容，显示loading状态，避免旧内容闪现
-            const bodyEl = this.querySelector('#genreDetailBody');
-            const contentEl = this.querySelector('#genreDetailContent');
-            if (bodyEl) {
-                bodyEl.innerHTML = `<tr><td colspan="7" class="text-center py-4">
-                    <div class="spinner-border text-warning" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </td></tr>`;
-            }
-            if (contentEl) {
-                contentEl.classList.remove('d-none');
-            }
-
-            pendingGenre = button.getAttribute('data-genre');
-        });
-
-        genreModal.addEventListener('shown.bs.modal', function(event) {
-            if (pendingGenre) {
-                renderGenreDetail(pendingGenre, this);
-                pendingGenre = null;
-            }
+            const genre = button.getAttribute('data-genre');
+            // 数据已预加载，直接渲染
+            renderGenreDetail(genre, this);
         });
     }
 
     // Month Detail Modal
     const monthModal = document.getElementById('monthDetailModal');
     if (monthModal) {
-        let pendingMonth = null;
-
         monthModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
             if (!button) return;
 
-            // 【修复】立即清空旧内容，显示loading状态，避免旧内容闪现
-            const bodyEl = this.querySelector('#monthDetailBody');
-            const contentEl = this.querySelector('#monthDetailContent');
-            if (bodyEl) {
-                bodyEl.innerHTML = `<tr><td colspan="7" class="text-center py-4">
-                    <div class="spinner-border text-warning" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </td></tr>`;
-            }
-            if (contentEl) {
-                contentEl.classList.remove('d-none');
-            }
-
-            pendingMonth = button.getAttribute('data-month');
-        });
-
-        monthModal.addEventListener('shown.bs.modal', function(event) {
-            if (pendingMonth) {
-                renderMonthDetail(pendingMonth, this);
-                pendingMonth = null;
-            }
+            const month = button.getAttribute('data-month');
+            // 数据已预加载，直接渲染
+            renderMonthDetail(month, this);
         });
     }
 });

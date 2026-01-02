@@ -1570,10 +1570,12 @@ class DBProcedures {
 
     /**
      * 获取订单基础信息（用于API验证和显示）
+     * 【修复】使用 vw_customer_my_orders_list 替代 vw_staff_pos_history
+     * vw_staff_pos_history 只包含 InStore 订单，无法验证 Online 订单
      */
     public static function getOrderBasicInfo($pdo, $orderId) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_staff_pos_history WHERE OrderID = ?");
+            $stmt = $pdo->prepare("SELECT * FROM vw_customer_my_orders_list WHERE OrderID = ?");
             $stmt->execute([$orderId]);
             return $stmt->fetch();
         } catch (PDOException $e) {

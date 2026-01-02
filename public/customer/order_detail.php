@@ -323,9 +323,13 @@ require_once __DIR__ . '/../../includes/header.php';
 let cancelModal, confirmReceivedModal, alertModal;
 
 document.addEventListener('DOMContentLoaded', function() {
-    cancelModal = new bootstrap.Modal(document.getElementById('cancelOrderModal'));
-    confirmReceivedModal = new bootstrap.Modal(document.getElementById('confirmReceivedModal'));
-    alertModal = new bootstrap.Modal(document.getElementById('alertModal'));
+    const cancelModalEl = document.getElementById('cancelOrderModal');
+    const confirmReceivedModalEl = document.getElementById('confirmReceivedModal');
+    const alertModalEl = document.getElementById('alertModal');
+
+    if (cancelModalEl) cancelModal = new bootstrap.Modal(cancelModalEl);
+    if (confirmReceivedModalEl) confirmReceivedModal = new bootstrap.Modal(confirmReceivedModalEl);
+    if (alertModalEl) alertModal = new bootstrap.Modal(alertModalEl);
 
     const countdownEl = document.getElementById('countdown-display');
     if (!countdownEl) return;
@@ -352,11 +356,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function showCancelModal() {
-    cancelModal.show();
+    if (cancelModal) cancelModal.show();
 }
 
 function showConfirmReceivedModal() {
-    confirmReceivedModal.show();
+    if (confirmReceivedModal) confirmReceivedModal.show();
 }
 
 function showAlert(title, message, callback) {

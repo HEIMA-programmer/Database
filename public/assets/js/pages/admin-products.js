@@ -32,6 +32,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ========== Price Modal ==========
+    const priceModalEl = document.getElementById('priceModal');
+    // 保存当前点击的数据
+    let currentPriceData = { releaseId: null, releaseTitle: '' };
+
     function renderPriceData(releaseId, releaseTitle) {
         if (!releaseId) {
             console.error('ReleaseId is empty');
@@ -148,15 +152,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用 click 事件（和 edit-btn 一样的处理方式）
-    // 在 click 事件中 this 直接就是按钮元素，数据获取更可靠
+    // 【修复】结合 click 和 show.bs.modal 两种事件
+    // click 事件：保存数据（this 可靠获取按钮）
+    // show.bs.modal 事件：渲染内容（模态框打开时的正确时机）
     document.querySelectorAll('.price-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            const releaseId = this.dataset.releaseId;
-            const releaseTitle = this.dataset.releaseTitle || '';
-            if (releaseId) {
-                renderPriceData(releaseId, releaseTitle);
-            }
+            currentPriceData.releaseId = this.dataset.releaseId;
+            currentPriceData.releaseTitle = this.dataset.releaseTitle || '';
         });
     });
+
+    if (priceModalEl) {
+        priceModalEl.addEventListener('show.bs.modal', function() {
+            if (currentPriceData.releaseId) {
+                renderPriceData(currentPriceData.releaseId, currentPriceData.releaseTitle);
+            }
+        });
+    }
 });

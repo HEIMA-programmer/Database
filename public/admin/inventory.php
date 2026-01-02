@@ -1,40 +1,30 @@
 <?php
 /**
- * Inventory Management Page
- * Presentation layer - only responsible for data display and user interaction
+ * Admin Inventory View
+ * Shows inventory from all shops with pagination
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
-requireRole(['Staff', 'Manager']);
+requireRole('Admin');
 
-// Verify employee shop association from database
-$employeeId = $_SESSION['user_id'] ?? null;
-if (!$employeeId) {
-    flash('Session expired. Please re-login.', 'warning');
-    header('Location: /login.php');
-    exit;
-}
+// Get list of shops for filter
+$shops = DBProcedures::getShopList($pdo);
+$selectedShopId = isset($_GET['shop_id']) ? (int)$_GET['shop_id'] : 0;
 
-// Get and verify employee info
-$employee = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
-if (!$employee) {
-    flash('Employee information not found. Please contact administrator.', 'danger');
-    header('Location: /login.php');
-    exit;
-}
-
-// Use database-verified shop ID
-$shopId = $employee['ShopID'];
-$_SESSION['shop_id'] = $shopId;
-
-// ========== Data Preparation ==========
+// View mode and pagination
 $viewMode = $_GET['view'] ?? 'summary';
 $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 15;
 
-$pageData = prepareInventoryPageDataPaginated($pdo, $shopId, $viewMode, $page, $perPage);
+// Get paginated inventory data
+if ($selectedShopId > 0) {
+    $pageData = prepareInventoryPageDataPaginated($pdo, $selectedShopId, $viewMode, $page, $perPage);
+} else {
+    // Get all inventory
+    $pageData = prepareInventoryPageDataAllShopsPaginated($pdo, $viewMode, $page, $perPage);
+}
 $inventory = $pageData['inventory'];
 $totalItems = $pageData['total_items'];
 $pagination = $pageData['pagination'];
@@ -42,18 +32,39 @@ $pagination = $pageData['pagination'];
 require_once __DIR__ . '/../../includes/header.php';
 ?>
 
-<!-- ========== 表现层 ========== -->
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="text-warning"><i class="fa-solid fa-boxes-stacked me-2"></i>Local Inventory</h2>
+    <div>
+        <h2 class="text-warning"><i class="fa-solid fa-warehouse me-2"></i>Inventory Overview</h2>
+        <p class="text-muted mb-0">View inventory across all locations</p>
+    </div>
     <div class="d-flex gap-2 align-items-center">
-        <span class="badge bg-secondary fs-6"><?= $totalItems ?> Items in Stock</span>
+        <span class="badge bg-secondary fs-6"><?= $totalItems ?> Items</span>
         <div class="btn-group" role="group">
-            <a href="?view=detail" class="btn btn-sm <?= $viewMode === 'detail' ? 'btn-warning' : 'btn-outline-warning' ?>">
+            <a href="?view=detail<?= $selectedShopId ? '&shop_id='.$selectedShopId : '' ?>" class="btn btn-sm <?= $viewMode === 'detail' ? 'btn-warning' : 'btn-outline-warning' ?>">
                 <i class="fa-solid fa-list me-1"></i>Detail
             </a>
-            <a href="?view=summary" class="btn btn-sm <?= $viewMode === 'summary' ? 'btn-warning' : 'btn-outline-warning' ?>">
+            <a href="?view=summary<?= $selectedShopId ? '&shop_id='.$selectedShopId : '' ?>" class="btn btn-sm <?= $viewMode === 'summary' ? 'btn-warning' : 'btn-outline-warning' ?>">
                 <i class="fa-solid fa-chart-bar me-1"></i>Summary
             </a>
+        </div>
+    </div>
+</div>
+
+<!-- Shop Filter -->
+<div class="card bg-dark border-secondary mb-4">
+    <div class="card-body py-2">
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <span class="text-muted me-2"><i class="fa-solid fa-filter me-1"></i>Filter by Shop:</span>
+            <a href="?view=<?= $viewMode ?>" class="btn btn-sm <?= $selectedShopId == 0 ? 'btn-warning' : 'btn-outline-warning' ?>">
+                All Shops
+            </a>
+            <?php foreach ($shops as $shop): ?>
+                <a href="?view=<?= $viewMode ?>&shop_id=<?= $shop['ShopID'] ?>"
+                   class="btn btn-sm <?= $selectedShopId == $shop['ShopID'] ? 'btn-info' : 'btn-outline-info' ?>">
+                    <i class="fa-solid <?= $shop['Type'] == 'Warehouse' ? 'fa-warehouse' : 'fa-store' ?> me-1"></i>
+                    <?= h($shop['Name']) ?>
+                </a>
+            <?php endforeach; ?>
         </div>
     </div>
 </div>
@@ -64,6 +75,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <table class="table table-dark table-hover align-middle mb-0">
             <thead>
                 <tr>
+                    <?php if ($selectedShopId == 0): ?><th>Shop</th><?php endif; ?>
                     <th>Album</th>
                     <th>Genre</th>
                     <th>Condition</th>
@@ -75,9 +87,12 @@ require_once __DIR__ . '/../../includes/header.php';
             <tbody>
                 <?php foreach ($inventory as $item): ?>
                 <tr>
+                    <?php if ($selectedShopId == 0): ?>
+                    <td><span class="badge bg-secondary"><?= h($item['ShopName'] ?? 'N/A') ?></span></td>
+                    <?php endif; ?>
                     <td>
                         <div class="fw-bold"><?= h($item['Title']) ?></div>
-                        <div class="small text-muted"><?= h($item['ArtistName']) ?></div>
+                        <div class="small text-warning"><?= h($item['ArtistName']) ?></div>
                     </td>
                     <td><span class="badge bg-secondary"><?= h($item['Genre']) ?></span></td>
                     <td><?= h($item['ConditionGrade']) ?></td>
@@ -100,7 +115,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 <?php endforeach; ?>
                 <?php if (empty($inventory)): ?>
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-4">No inventory items found.</td>
+                    <td colspan="<?= $selectedShopId == 0 ? 7 : 6 ?>" class="text-center text-muted py-4">No inventory items found.</td>
                 </tr>
                 <?php endif; ?>
             </tbody>
@@ -114,6 +129,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <table class="table table-dark table-hover align-middle mb-0">
             <thead>
                 <tr>
+                    <?php if ($selectedShopId == 0): ?><th>Shop</th><?php endif; ?>
                     <th>Batch No</th>
                     <th>Album</th>
                     <th>Condition</th>
@@ -125,10 +141,13 @@ require_once __DIR__ . '/../../includes/header.php';
             <tbody>
                 <?php foreach ($inventory as $item): ?>
                 <tr>
+                    <?php if ($selectedShopId == 0): ?>
+                    <td><span class="badge bg-secondary"><?= h($item['ShopName'] ?? 'N/A') ?></span></td>
+                    <?php endif; ?>
                     <td class="font-monospace text-info"><?= h($item['BatchNo']) ?></td>
                     <td>
                         <div class="fw-bold"><?= h($item['Title']) ?></div>
-                        <div class="small text-muted"><?= h($item['ArtistName']) ?></div>
+                        <div class="small text-warning"><?= h($item['ArtistName']) ?></div>
                     </td>
                     <td><?= h($item['ConditionGrade']) ?></td>
                     <td class="text-warning"><?= formatPrice($item['UnitPrice']) ?></td>
@@ -144,7 +163,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 <?php endforeach; ?>
                 <?php if (empty($inventory)): ?>
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-4">No inventory items found.</td>
+                    <td colspan="<?= $selectedShopId == 0 ? 7 : 6 ?>" class="text-center text-muted py-4">No inventory items found.</td>
                 </tr>
                 <?php endif; ?>
             </tbody>
@@ -160,7 +179,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <!-- Previous button -->
         <li class="page-item <?= !$pagination['has_prev'] ? 'disabled' : '' ?>">
             <a class="page-link bg-dark border-secondary text-light"
-               href="?view=<?= $viewMode ?>&page=<?= $pagination['prev_page'] ?>">
+               href="?view=<?= $viewMode ?><?= $selectedShopId ? '&shop_id='.$selectedShopId : '' ?>&page=<?= $pagination['prev_page'] ?>">
                 <i class="fa-solid fa-chevron-left"></i>
             </a>
         </li>
@@ -174,7 +193,7 @@ require_once __DIR__ . '/../../includes/header.php';
             <?php else: ?>
                 <li class="page-item <?= $p === $pagination['current_page'] ? 'active' : '' ?>">
                     <a class="page-link <?= $p === $pagination['current_page'] ? 'bg-warning text-dark border-warning' : 'bg-dark border-secondary text-light' ?>"
-                       href="?view=<?= $viewMode ?>&page=<?= $p ?>">
+                       href="?view=<?= $viewMode ?><?= $selectedShopId ? '&shop_id='.$selectedShopId : '' ?>&page=<?= $p ?>">
                         <?= $p ?>
                     </a>
                 </li>
@@ -184,7 +203,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <!-- Next button -->
         <li class="page-item <?= !$pagination['has_next'] ? 'disabled' : '' ?>">
             <a class="page-link bg-dark border-secondary text-light"
-               href="?view=<?= $viewMode ?>&page=<?= $pagination['next_page'] ?>">
+               href="?view=<?= $viewMode ?><?= $selectedShopId ? '&shop_id='.$selectedShopId : '' ?>&page=<?= $pagination['next_page'] ?>">
                 <i class="fa-solid fa-chevron-right"></i>
             </a>
         </li>

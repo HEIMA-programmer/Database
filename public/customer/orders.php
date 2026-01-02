@@ -87,7 +87,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             <?php elseif ($o['OrderStatus'] === 'Pending' && $isExpired): ?>
                                 <br>
                                 <small class="text-danger">
-                                    <i class="fa-solid fa-exclamation-triangle me-1"></i>已超时
+                                    <i class="fa-solid fa-exclamation-triangle me-1"></i>Expired
                                 </small>
                             <?php endif; ?>
                         </td>
@@ -120,15 +120,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         function updateDisplay() {
             if (remaining <= 0) {
-                display.textContent = '已超时';
-                // 自动取消订单
+                display.textContent = 'Expired';
+                // Auto cancel order
                 cancelExpiredOrder(orderId);
                 return;
             }
 
             const minutes = Math.floor(remaining / 60);
             const seconds = remaining % 60;
-            display.textContent = `${minutes}:${seconds.toString().padStart(2, '0')} 剩余`;
+            display.textContent = `${minutes}:${seconds.toString().padStart(2, '0')} remaining`;
 
             remaining--;
             setTimeout(updateDisplay, 1000);

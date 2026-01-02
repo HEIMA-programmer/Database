@@ -153,15 +153,17 @@ function getSuggestedSalePrice($unitCost) {
  * 改用 DBProcedures::getCatalogByShop 和 DBProcedures::getReleaseGenres
  * 已更新以匹配 ReleaseAlbum 架构
  */
-function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '') {
+function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '', $artist = '') {
 
     // 【架构重构Phase3】使用 DBProcedures 替换直接SQL查询
-    $items = DBProcedures::getCatalogByShop($pdo, $shopId, $search, $genre);
+    $items = DBProcedures::getCatalogByShop($pdo, $shopId, $search, $genre, $artist);
     $genres = DBProcedures::getReleaseGenres($pdo);
+    $artists = DBProcedures::getReleaseArtists($pdo);
 
     return [
         'items' => $items,
-        'genres' => $genres
+        'genres' => $genres,
+        'artists' => $artists
     ];
 }
 
@@ -692,6 +694,26 @@ function prepareInventoryPageData($pdo, $shopId, $viewMode = 'detail') {
         $totalItems = array_sum(array_column($inventory, 'AvailableQuantity'));
     } else {
         $inventory = DBProcedures::getInventoryDetail($pdo, $shopId);
+        $totalItems = count($inventory);
+    }
+
+    return [
+        'inventory'    => $inventory,
+        'total_items'  => $totalItems,
+        'view_mode'    => $viewMode
+    ];
+}
+
+/**
+ * Prepare inventory page data for all shops (Admin view)
+ */
+function prepareInventoryPageDataAllShops($pdo, $viewMode = 'detail') {
+
+    if ($viewMode === 'summary') {
+        $inventory = DBProcedures::getInventorySummaryAllShops($pdo);
+        $totalItems = array_sum(array_column($inventory, 'AvailableQuantity'));
+    } else {
+        $inventory = DBProcedures::getInventoryDetailAllShops($pdo);
         $totalItems = count($inventory);
     }
 
@@ -1248,5 +1270,133 @@ function handleProcurementReceivePOWithCondition($pdo, $orderId, $warehouseId, $
         }
         return ['success' => false, 'message' => 'Failed to receive order.'];
     }
+}
+
+// ----------------
+// Pagination Helper
+// ----------------
+
+/**
+ * Generate pagination data for display
+ * @param int $currentPage Current page number
+ * @param int $totalItems Total number of items
+ * @param int $perPage Items per page
+ * @param string $baseUrl Base URL for pagination links
+ * @return array Pagination data including page numbers and navigation
+ */
+function getPaginationData($currentPage, $totalItems, $perPage, $baseUrl = '?') {
+    $totalPages = max(1, ceil($totalItems / $perPage));
+    $currentPage = max(1, min($currentPage, $totalPages));
+
+    // Calculate visible page range
+    $range = 2; // Show 2 pages on each side of current
+    $startPage = max(1, $currentPage - $range);
+    $endPage = min($totalPages, $currentPage + $range);
+
+    // Build page numbers array
+    $pages = [];
+    if ($startPage > 1) {
+        $pages[] = 1;
+        if ($startPage > 2) {
+            $pages[] = '...';
+        }
+    }
+    for ($i = $startPage; $i <= $endPage; $i++) {
+        $pages[] = $i;
+    }
+    if ($endPage < $totalPages) {
+        if ($endPage < $totalPages - 1) {
+            $pages[] = '...';
+        }
+        $pages[] = $totalPages;
+    }
+
+    return [
+        'current_page' => $currentPage,
+        'total_pages' => $totalPages,
+        'total_items' => $totalItems,
+        'per_page' => $perPage,
+        'pages' => $pages,
+        'has_prev' => $currentPage > 1,
+        'has_next' => $currentPage < $totalPages,
+        'prev_page' => $currentPage - 1,
+        'next_page' => $currentPage + 1,
+        'offset' => ($currentPage - 1) * $perPage,
+        'base_url' => $baseUrl
+    ];
+}
+
+/**
+ * Prepare paginated inventory data for a shop
+ */
+function prepareInventoryPageDataPaginated($pdo, $shopId, $viewMode, $page = 1, $perPage = 20) {
+    // Get total count
+    $totalItems = DBProcedures::getShopInventoryCount($pdo, $shopId, $viewMode);
+
+    // Calculate offset
+    $offset = ($page - 1) * $perPage;
+
+    // Get paginated data
+    if ($viewMode === 'summary') {
+        $inventory = DBProcedures::getInventorySummaryPaginated($pdo, $shopId, $perPage, $offset);
+    } else {
+        $inventory = DBProcedures::getInventoryDetailPaginated($pdo, $shopId, $perPage, $offset);
+    }
+
+    return [
+        'inventory' => $inventory,
+        'total_items' => $totalItems,
+        'pagination' => getPaginationData($page, $totalItems, $perPage)
+    ];
+}
+
+/**
+ * Prepare paginated inventory data for all shops (admin)
+ */
+function prepareInventoryPageDataAllShopsPaginated($pdo, $viewMode, $page = 1, $perPage = 20) {
+    // Get total count
+    $totalItems = DBProcedures::getAllShopsInventoryCount($pdo, $viewMode);
+
+    // Calculate offset
+    $offset = ($page - 1) * $perPage;
+
+    // Get paginated data
+    if ($viewMode === 'summary') {
+        $inventory = DBProcedures::getInventorySummaryAllShopsPaginated($pdo, $perPage, $offset);
+    } else {
+        $inventory = DBProcedures::getInventoryDetailAllShopsPaginated($pdo, $perPage, $offset);
+    }
+
+    return [
+        'inventory' => $inventory,
+        'total_items' => $totalItems,
+        'pagination' => getPaginationData($page, $totalItems, $perPage)
+    ];
+}
+
+// ----------------
+// Notification Badge Helpers
+// ----------------
+
+/**
+ * Get notification counts for Staff navigation
+ * Returns counts for Fulfillment, Pickup, and Transfers
+ */
+function getStaffNotificationCounts($pdo, $shopId) {
+    return [
+        'fulfillment' => DBProcedures::getPendingFulfillmentCount($pdo, $shopId),
+        'pickup' => DBProcedures::getPendingPickupCount($pdo, $shopId),
+        'transfers' => DBProcedures::getPendingTransferOutCount($pdo, $shopId)
+    ];
+}
+
+/**
+ * Get notification counts for Admin navigation
+ * Returns count for pending requests
+ */
+function getAdminNotificationCounts($pdo) {
+    return [
+        'requests' => DBProcedures::getAdminPendingRequestsCount($pdo)
+    ];
 }
 ?>

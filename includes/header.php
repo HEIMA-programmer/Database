@@ -3,9 +3,24 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/db_procedures.php';
 
-// 获取当前脚本名称，用于高亮导航栏
+// Get current page name for nav highlighting
 $current_page = basename($_SERVER['PHP_SELF']);
+
+// Get notification counts for navigation badges
+$navNotifications = ['staff' => [], 'admin' => []];
+if (isset($_SESSION['user_id']) && isset($pdo)) {
+    if (hasRole('Staff') || hasRole('Manager')) {
+        $shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;
+        if ($shopId) {
+            $navNotifications['staff'] = getStaffNotificationCounts($pdo, $shopId);
+        }
+    }
+    if (hasRole('Admin')) {
+        $navNotifications['admin'] = getAdminNotificationCounts($pdo);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -64,15 +79,28 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'pickup.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pickup.php">
+                <a class="nav-link position-relative <?= $current_page == 'pickup.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/pickup.php">
                     <i class="fa-solid fa-box-open me-1"></i>Pickups
+                    <?php if (($navNotifications['staff']['pickup'] ?? 0) > 0): ?>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            <?= $navNotifications['staff']['pickup'] ?>
+                        </span>
+                    <?php endif; ?>
                 </a>
             </li>
             <?php endif; ?>
-            <!-- 所有员工通用菜单 -->
+            <!-- All staff menu items -->
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'fulfillment.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/fulfillment.php">
+                <a class="nav-link position-relative <?= $current_page == 'fulfillment.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/fulfillment.php">
                     <i class="fa-solid fa-truck-fast me-1"></i>Fulfillment
+                    <?php
+                    $fulfillmentTotal = ($navNotifications['staff']['fulfillment'] ?? 0) + ($navNotifications['staff']['transfers'] ?? 0);
+                    if ($fulfillmentTotal > 0):
+                    ?>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            <?= $fulfillmentTotal ?>
+                        </span>
+                    <?php endif; ?>
                 </a>
             </li>
             <li class="nav-item">
@@ -94,6 +122,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/inventory.php">
+                    <i class="fa-solid fa-boxes-stacked me-1"></i>Inventory
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'requests.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/requests.php">
                     <i class="fa-solid fa-envelope me-1"></i>Requests
                 </a>
@@ -112,13 +145,23 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'requests.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/requests.php">
+                <a class="nav-link position-relative <?= $current_page == 'requests.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/requests.php">
                     <i class="fa-solid fa-clipboard-check me-1"></i>Requests
+                    <?php if (($navNotifications['admin']['requests'] ?? 0) > 0): ?>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            <?= $navNotifications['admin']['requests'] ?>
+                        </span>
+                    <?php endif; ?>
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link <?= $current_page == 'suppliers.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/suppliers.php">
                     <i class="fa-solid fa-truck-field me-1"></i>Suppliers
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/inventory.php">
+                    <i class="fa-solid fa-boxes-stacked me-1"></i>Inventory
                 </a>
             </li>
             <li class="nav-item">
@@ -160,11 +203,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <i class="fa-regular fa-circle-user me-1"></i><?= h($_SESSION['username']) ?>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end border-warning">
-                    <li><span class="dropdown-header text-muted">
+                    <li><span class="dropdown-header text-visible">
                         <i class="fa-solid fa-user-tag me-1"></i>Role: <?= h($_SESSION['role']) ?>
                     </span></li>
                     <?php if (isset($_SESSION['shop_name']) && !hasRole('Admin')): ?>
-                        <li><span class="dropdown-header text-muted small">
+                        <li><span class="dropdown-header text-visible small">
                             <i class="fa-solid fa-location-dot me-1"></i><?= h($_SESSION['shop_name']) ?>
                         </span></li>
                     <?php endif; ?>

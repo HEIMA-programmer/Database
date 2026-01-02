@@ -137,7 +137,7 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
         <div class="text-center mt-4">
-            <p class="text-muted small">
+            <p class="small demo-account-text">
                 Demo Accounts:<br>
                 <span class="text-warning">admin</span> / password123<br>
                 <span class="text-warning">alice@test.com</span> / password123

@@ -222,7 +222,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <h1 class="display-5 text-warning fw-bold">
             <i class="fa-solid fa-cash-register me-2"></i>Point of Sale
         </h1>
-        <p class="text-muted">
+        <p class="store-name-display">
             <i class="fa-solid fa-store me-1"></i><?= h($employee['ShopName']) ?>
         </p>
     </div>

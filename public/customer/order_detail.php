@@ -3,6 +3,7 @@
  * 【架构重构】订单详情页面
  * 表现层 - 仅负责数据展示和用户交互
  * 【新增】支持15分钟支付倒计时显示和手动取消订单
+ * 【新增】支持收货确认功能（Shipped状态的delivery订单）
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
@@ -21,6 +22,27 @@ if (!$orderId) {
     exit();
 }
 
+// ========== POST 请求处理 - 收货确认 ==========
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_received'])) {
+    $confirmOrderId = (int)$_POST['order_id'];
+
+    // 验证订单归属和状态
+    $orderCheck = DBProcedures::getOrderBasicInfo($pdo, $confirmOrderId);
+    if ($orderCheck && $orderCheck['CustomerID'] == $customerId && $orderCheck['OrderStatus'] === 'Shipped') {
+        // 更新订单状态为Completed
+        $result = DBProcedures::updateOrderStatus($pdo, $confirmOrderId, 'Completed');
+        if ($result) {
+            flash('Thank you! Your order has been marked as received.', 'success');
+        } else {
+            flash('Failed to confirm receipt. Please try again.', 'danger');
+        }
+    } else {
+        flash('Invalid order or order cannot be confirmed.', 'danger');
+    }
+    header("Location: order_detail.php?id=" . $confirmOrderId);
+    exit();
+}
+
 // ========== 数据准备 ==========
 $pageData = prepareOrderDetailPageData($pdo, $orderId, $customerId);
 
@@ -34,6 +56,26 @@ $order = $pageData['order'];
 $items = $pageData['items'];
 $statusClass = $pageData['status_class'];
 
+// 【新增】按Release+Condition+Price分组商品
+$itemsGrouped = [];
+foreach ($items as $item) {
+    $key = ($item['ReleaseID'] ?? $item['AlbumTitle']) . '_' . ($item['ConditionGrade'] ?? 'N/A') . '_' . $item['PriceAtSale'];
+    if (!isset($itemsGrouped[$key])) {
+        $itemsGrouped[$key] = [
+            'AlbumTitle' => $item['AlbumTitle'],
+            'ArtistName' => $item['ArtistName'] ?? '',
+            'ConditionGrade' => $item['ConditionGrade'] ?? 'N/A',
+            'PriceAtSale' => $item['PriceAtSale'],
+            'OriginalPrice' => $item['OriginalPrice'] ?? $item['PriceAtSale'],
+            'Quantity' => 1,
+            'Subtotal' => $item['PriceAtSale']
+        ];
+    } else {
+        $itemsGrouped[$key]['Quantity']++;
+        $itemsGrouped[$key]['Subtotal'] += $item['PriceAtSale'];
+    }
+}
+
 // 计算剩余支付时间
 $remainingSeconds = 0;
 $isExpired = false;
@@ -43,6 +85,11 @@ if ($order['OrderStatus'] === 'Pending') {
     $remainingSeconds = $expiryTime - time();
     $isExpired = $remainingSeconds <= 0;
 }
+
+// 判断是否可以确认收货
+$canConfirmReceived = ($order['OrderStatus'] === 'Shipped' &&
+                       $order['OrderType'] === 'Online' &&
+                       ($order['FulfillmentType'] ?? '') !== 'Pickup');
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
@@ -69,23 +116,54 @@ require_once __DIR__ . '/../../includes/header.php';
                         <thead>
                             <tr>
                                 <th>Album</th>
-                                <th class="text-end">Price</th>
+                                <th>Condition</th>
+                                <th class="text-center">Qty</th>
+                                <th class="text-end">Unit Price</th>
+                                <th class="text-end">Subtotal</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($items as $item): ?>
+                            <?php foreach ($itemsGrouped as $item): ?>
+                            <?php
+                                // 计算折扣
+                                $originalTotal = $item['OriginalPrice'] * $item['Quantity'];
+                                $discount = $originalTotal - $item['Subtotal'];
+                                $hasDiscount = $discount > 0.01;
+                            ?>
                             <tr>
                                 <td>
                                     <i class="fa-solid fa-compact-disc text-warning me-2"></i>
-                                    <?= h($item['AlbumTitle']) ?>
+                                    <span class="text-white"><?= h($item['AlbumTitle']) ?></span>
+                                    <?php if ($item['ArtistName']): ?>
+                                        <br><small class="text-warning"><?= h($item['ArtistName']) ?></small>
+                                    <?php endif; ?>
                                 </td>
-                                <td class="text-end text-success fw-bold"><?= formatPrice($item['PriceAtSale']) ?></td>
+                                <td>
+                                    <?php
+                                    $condClass = match($item['ConditionGrade']) {
+                                        'New', 'Mint' => 'bg-success',
+                                        'NM', 'VG+'   => 'bg-info text-dark',
+                                        default       => 'bg-secondary'
+                                    };
+                                    ?>
+                                    <span class="badge <?= $condClass ?>"><?= h($item['ConditionGrade']) ?></span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-warning text-dark"><?= $item['Quantity'] ?></span>
+                                </td>
+                                <td class="text-end text-muted"><?= formatPrice($item['PriceAtSale'] / $item['Quantity']) ?></td>
+                                <td class="text-end">
+                                    <span class="text-success fw-bold"><?= formatPrice($item['Subtotal']) ?></span>
+                                    <?php if ($hasDiscount): ?>
+                                        <br><small class="text-info">-<?= formatPrice($discount) ?> discount</small>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
                         <tfoot class="border-top border-secondary">
                             <tr>
-                                <th>Total</th>
+                                <th colspan="4">Total</th>
                                 <th class="text-end text-warning fs-5"><?= formatPrice($order['TotalAmount']) ?></th>
                             </tr>
                         </tfoot>
@@ -139,7 +217,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 <h6 class="mb-2"><i class="fa-solid fa-clock me-2"></i>Payment Required</h6>
                 <?php if (!$isExpired): ?>
                     <div class="mb-2">
-                        <span class="fw-bold">剩余支付时间: </span>
+                        <span class="fw-bold">Time remaining: </span>
                         <span id="countdown-display" class="text-danger fw-bold" data-remaining="<?= $remainingSeconds ?>"></span>
                     </div>
                     <p class="small mb-3">Please complete your payment within the time limit.</p>
@@ -147,28 +225,108 @@ require_once __DIR__ . '/../../includes/header.php';
                         <a href="pay.php?order_id=<?= $order['OrderID'] ?>" class="btn btn-dark btn-sm">
                             <i class="fa-solid fa-credit-card me-1"></i>Pay Now
                         </a>
-                        <button type="button" class="btn btn-outline-dark btn-sm" onclick="cancelOrder(<?= $order['OrderID'] ?>)">
+                        <button type="button" class="btn btn-outline-dark btn-sm" onclick="showCancelModal()">
                             <i class="fa-solid fa-times me-1"></i>Cancel Order
                         </button>
                     </div>
                 <?php else: ?>
                     <p class="text-danger fw-bold mb-2">
                         <i class="fa-solid fa-exclamation-triangle me-1"></i>
-                        支付已超时，订单将被自动取消
+                        Payment expired, order will be cancelled automatically
                     </p>
-                    <button type="button" class="btn btn-outline-dark btn-sm" onclick="cancelOrder(<?= $order['OrderID'] ?>)">
-                        <i class="fa-solid fa-times me-1"></i>取消订单
+                    <button type="button" class="btn btn-outline-dark btn-sm" onclick="showCancelModal()">
+                        <i class="fa-solid fa-times me-1"></i>Cancel Order
                     </button>
                 <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($canConfirmReceived): ?>
+        <div class="card bg-success text-white border-0 mb-3">
+            <div class="card-body">
+                <h6 class="mb-2"><i class="fa-solid fa-truck me-2"></i>Order Shipped</h6>
+                <p class="small mb-3">Your order has been shipped. Please confirm when you receive it.</p>
+                <form method="POST" id="confirmReceivedForm">
+                    <input type="hidden" name="confirm_received" value="1">
+                    <input type="hidden" name="order_id" value="<?= $order['OrderID'] ?>">
+                    <button type="button" class="btn btn-light btn-sm" onclick="showConfirmReceivedModal()">
+                        <i class="fa-solid fa-check me-1"></i>Confirm Received
+                    </button>
+                </form>
             </div>
         </div>
         <?php endif; ?>
     </div>
 </div>
 
+<!-- Custom Confirm Modal for Cancel Order -->
+<div class="modal fade custom-confirm-modal" id="cancelOrderModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa-solid fa-exclamation-triangle me-2"></i>Cancel Order</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to cancel this order? Inventory will be released.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Order</button>
+                <button type="button" class="btn btn-danger" onclick="cancelOrder(<?= $order['OrderID'] ?>)">Cancel Order</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Confirm Modal for Confirm Received -->
+<div class="modal fade custom-confirm-modal" id="confirmReceivedModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa-solid fa-check-circle me-2"></i>Confirm Receipt</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Have you received your order? This will mark the order as completed.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Not Yet</button>
+                <button type="button" class="btn btn-success" onclick="document.getElementById('confirmReceivedForm').submit()">
+                    Yes, I Received It
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Modal for showing messages -->
+<div class="modal fade custom-confirm-modal" id="alertModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="alertModalTitle">Notice</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="alertModalBody">
+                Message
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-warning" data-bs-dismiss="modal" id="alertModalBtn">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 倒计时和取消订单脚本 -->
 <script>
+let cancelModal, confirmReceivedModal, alertModal;
+
 document.addEventListener('DOMContentLoaded', function() {
+    cancelModal = new bootstrap.Modal(document.getElementById('cancelOrderModal'));
+    confirmReceivedModal = new bootstrap.Modal(document.getElementById('confirmReceivedModal'));
+    alertModal = new bootstrap.Modal(document.getElementById('alertModal'));
+
     const countdownEl = document.getElementById('countdown-display');
     if (!countdownEl) return;
 
@@ -176,8 +334,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateCountdown() {
         if (remaining <= 0) {
-            countdownEl.textContent = '已超时';
-            // 自动取消订单
+            countdownEl.textContent = 'Expired';
+            // Auto cancel order
             cancelOrder(<?= $order['OrderID'] ?>);
             return;
         }
@@ -193,29 +351,51 @@ document.addEventListener('DOMContentLoaded', function() {
     updateCountdown();
 });
 
-function cancelOrder(orderId) {
-    if (!confirm('确定要取消此订单吗？取消后库存将被释放。')) {
-        return;
+function showCancelModal() {
+    cancelModal.show();
+}
+
+function showConfirmReceivedModal() {
+    confirmReceivedModal.show();
+}
+
+function showAlert(title, message, callback) {
+    document.getElementById('alertModalTitle').textContent = title;
+    document.getElementById('alertModalBody').textContent = message;
+    const btn = document.getElementById('alertModalBtn');
+    if (callback) {
+        btn.onclick = function() {
+            alertModal.hide();
+            callback();
+        };
+    } else {
+        btn.onclick = function() { alertModal.hide(); };
     }
+    alertModal.show();
+}
+
+function cancelOrder(orderId) {
+    cancelModal.hide();
 
     fetch('cancel_order.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
-        credentials: 'same-origin', // 确保发送session cookies
+        credentials: 'same-origin',
         body: 'order_id=' + orderId
     }).then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('订单已取消');
-            location.reload();
+            showAlert('Order Cancelled', 'Your order has been cancelled successfully.', function() {
+                location.reload();
+            });
         } else {
-            alert('取消失败: ' + data.message);
+            showAlert('Error', 'Failed to cancel: ' + data.message);
         }
     }).catch(error => {
         console.error('Error:', error);
-        alert('操作失败，请重试');
+        showAlert('Error', 'Operation failed. Please try again.');
     });
 }
 </script>

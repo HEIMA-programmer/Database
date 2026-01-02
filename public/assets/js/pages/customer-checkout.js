@@ -63,5 +63,37 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Form validation - require address for shipping
+    const checkoutForm = document.querySelector('form');
+    const addressField = document.getElementById('shipping_address');
+
+    if (checkoutForm && addressField) {
+        checkoutForm.addEventListener('submit', function(e) {
+            const isWarehouse = !pickupRadio && !shippingRadio;
+            const needsAddress = isWarehouse || (shippingRadio && shippingRadio.checked);
+
+            if (needsAddress && !addressField.value.trim()) {
+                e.preventDefault();
+                addressField.classList.add('is-invalid');
+                addressField.focus();
+
+                // Show error message
+                let errorDiv = addressField.parentNode.querySelector('.invalid-feedback');
+                if (!errorDiv) {
+                    errorDiv = document.createElement('div');
+                    errorDiv.className = 'invalid-feedback';
+                    errorDiv.textContent = 'Please enter your shipping address';
+                    addressField.parentNode.appendChild(errorDiv);
+                }
+                return false;
+            }
+        });
+
+        // Clear error on input
+        addressField.addEventListener('input', function() {
+            this.classList.remove('is-invalid');
+        });
+    }
+
     updateUI();
 });

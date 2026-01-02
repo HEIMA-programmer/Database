@@ -52,7 +52,7 @@ require_once __DIR__ . '/../../includes/header.php';
 <div class="card bg-dark border-secondary mb-5">
     <div class="card-header border-secondary">
         <h5 class="card-title text-white mb-0"><i class="fa-solid fa-guitar me-2"></i>Inventory Turnover by Genre</h5>
-        <small class="text-muted">How fast are we selling different types of music?</small>
+        <small class="report-section-subtitle">How fast are we selling different types of music?</small>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -101,7 +101,7 @@ require_once __DIR__ . '/../../includes/header.php';
 <div class="card bg-dark border-secondary">
     <div class="card-header border-secondary">
         <h5 class="card-title text-white mb-0"><i class="fa-solid fa-chart-line me-2"></i>Monthly Sales Trend</h5>
-        <small class="text-muted">Revenue and order count by month</small>
+        <small class="report-section-subtitle">Revenue and order count by month</small>
     </div>
     <div class="card-body">
         <table class="table table-dark table-sm">

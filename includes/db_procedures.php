@@ -2701,5 +2701,28 @@ class DBProcedures {
             return [];
         }
     }
+
+    // ----------------
+    // Customer Notification Helpers
+    // ----------------
+
+    /**
+     * Get count of shipped delivery orders awaiting confirmation for a customer
+     * Uses vw_customer_shipped_delivery view
+     */
+    public static function getCustomerShippedDeliveryCount($pdo, $customerId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as cnt FROM vw_customer_shipped_delivery
+                WHERE CustomerID = ?
+            ");
+            $stmt->execute([$customerId]);
+            $result = $stmt->fetch();
+            return (int)($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getCustomerShippedDeliveryCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
 }
 ?>

@@ -66,6 +66,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     if ($result['success']) {
                         flash('Welcome to Retro Echo Records!', 'success');
+
+                        // Get login alerts for shipped orders
+                        $customerId = $_SESSION['user_id'];
+                        $alerts = getLoginAlerts($pdo, 'Customer', null, null, $customerId);
+                        foreach ($alerts as $alert) {
+                            flash('<i class="fa-solid ' . $alert['icon'] . ' me-2"></i>' . $alert['message'], $alert['type']);
+                        }
+
                         $redirect = $_SESSION['redirect_url'] ?? (BASE_URL . '/customer/catalog.php');
                         unset($_SESSION['redirect_url']);
                         header("Location: " . $redirect);

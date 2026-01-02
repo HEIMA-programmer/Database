@@ -49,8 +49,12 @@ require_once __DIR__ . '/../../includes/header.php';
                         $remainingSeconds = $expiryTime - time();
                         $isExpired = $remainingSeconds <= 0;
                     }
+                    // 检查是否是需要确认收货的 shipped delivery 订单
+                    $isShippedDelivery = ($o['OrderStatus'] === 'Shipped' &&
+                                          $o['OrderType'] === 'Online' &&
+                                          ($o['FulfillmentType'] ?? '') === 'Shipping');
                     ?>
-                    <tr data-order-id="<?= $o['OrderID'] ?>">
+                    <tr data-order-id="<?= $o['OrderID'] ?>" class="<?= $isShippedDelivery ? 'table-info' : '' ?>">
                         <td>#<?= $o['OrderID'] ?></td>
                         <td><?= formatDate($o['OrderDate']) ?></td>
                         <td>
@@ -74,11 +78,17 @@ require_once __DIR__ . '/../../includes/header.php';
                                 'Completed' => 'text-success',
                                 'Pending' => 'text-warning',
                                 'Cancelled' => 'text-danger',
+                                'Shipped' => 'text-info',
                                 default => 'text-white'
                             };
                             ?>
                             <span class="<?= $statusClass ?> fw-bold"><?= h($o['OrderStatus']) ?></span>
-                            <?php if ($o['OrderStatus'] === 'Pending' && !$isExpired): ?>
+                            <?php if ($isShippedDelivery): ?>
+                                <br>
+                                <span class="shipped-indicator">
+                                    <i class="fa-solid fa-box-open me-1"></i>Action Required
+                                </span>
+                            <?php elseif ($o['OrderStatus'] === 'Pending' && !$isExpired): ?>
                                 <br>
                                 <small class="countdown-timer text-danger" data-remaining="<?= $remainingSeconds ?>">
                                     <i class="fa-solid fa-clock me-1"></i>
@@ -93,9 +103,15 @@ require_once __DIR__ . '/../../includes/header.php';
                         </td>
                         <td class="text-warning fw-bold"><?= formatPrice($o['TotalAmount']) ?></td>
                         <td>
-                            <a href="order_detail.php?id=<?= $o['OrderID'] ?>" class="btn btn-sm btn-outline-warning">
-                                <i class="fa-solid fa-eye me-1"></i>Details
-                            </a>
+                            <?php if ($isShippedDelivery): ?>
+                                <a href="order_detail.php?id=<?= $o['OrderID'] ?>" class="btn btn-sm btn-success shipped-action-btn">
+                                    <i class="fa-solid fa-truck me-1"></i>Confirm Receipt
+                                </a>
+                            <?php else: ?>
+                                <a href="order_detail.php?id=<?= $o['OrderID'] ?>" class="btn btn-sm btn-outline-warning">
+                                    <i class="fa-solid fa-eye me-1"></i>Details
+                                </a>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>

@@ -58,15 +58,23 @@ $statusClass = $pageData['status_class'];
 
 // 【新增】按Release+Condition+Price分组商品
 $itemsGrouped = [];
+$totalDiscount = 0; // 计算总折扣
+$subtotalBeforeDiscount = 0; // 计算折扣前小计
+
 foreach ($items as $item) {
     $key = ($item['ReleaseID'] ?? $item['AlbumTitle']) . '_' . ($item['ConditionGrade'] ?? 'N/A') . '_' . $item['PriceAtSale'];
+    $originalPrice = $item['OriginalPrice'] ?? $item['PriceAtSale'];
+    $itemDiscount = $originalPrice - $item['PriceAtSale'];
+    $totalDiscount += $itemDiscount;
+    $subtotalBeforeDiscount += $originalPrice;
+
     if (!isset($itemsGrouped[$key])) {
         $itemsGrouped[$key] = [
             'AlbumTitle' => $item['AlbumTitle'],
             'ArtistName' => $item['ArtistName'] ?? '',
             'ConditionGrade' => $item['ConditionGrade'] ?? 'N/A',
             'PriceAtSale' => $item['PriceAtSale'],
-            'OriginalPrice' => $item['OriginalPrice'] ?? $item['PriceAtSale'],
+            'OriginalPrice' => $originalPrice,
             'Quantity' => 1,
             'Subtotal' => $item['PriceAtSale']
         ];
@@ -75,6 +83,12 @@ foreach ($items as $item) {
         $itemsGrouped[$key]['Subtotal'] += $item['PriceAtSale'];
     }
 }
+
+// 计算运费和积分
+$shippingCost = $order['ShippingCost'] ?? 0;
+$goodsAmount = $order['TotalAmount'] - $shippingCost;
+// 积分计算：每消费1元商品获得1积分（不含运费）
+$pointsEarned = floor($goodsAmount);
 
 // 计算剩余支付时间
 $remainingSeconds = 0;
@@ -162,8 +176,28 @@ require_once __DIR__ . '/../../includes/header.php';
                             <?php endforeach; ?>
                         </tbody>
                         <tfoot class="border-top border-secondary">
+                            <?php if ($totalDiscount > 0.01): ?>
                             <tr>
-                                <th colspan="4">Total</th>
+                                <td colspan="4" class="text-end text-muted">Subtotal</td>
+                                <td class="text-end text-muted"><?= formatPrice($subtotalBeforeDiscount) ?></td>
+                            </tr>
+                            <tr>
+                                <td colspan="4" class="text-end text-info">
+                                    <i class="fa-solid fa-tags me-1"></i>Member Discount
+                                </td>
+                                <td class="text-end text-info">-<?= formatPrice($totalDiscount) ?></td>
+                            </tr>
+                            <?php endif; ?>
+                            <?php if ($shippingCost > 0): ?>
+                            <tr>
+                                <td colspan="4" class="text-end text-muted">
+                                    <i class="fa-solid fa-truck me-1"></i>Shipping
+                                </td>
+                                <td class="text-end text-muted"><?= formatPrice($shippingCost) ?></td>
+                            </tr>
+                            <?php endif; ?>
+                            <tr>
+                                <th colspan="4" class="text-end">Total</th>
                                 <th class="text-end text-warning fs-5"><?= formatPrice($order['TotalAmount']) ?></th>
                             </tr>
                         </tfoot>
@@ -203,9 +237,24 @@ require_once __DIR__ . '/../../includes/header.php';
                         <small class="text-muted d-block">Fulfilled By</small>
                         <span class="text-light"><?= h($order['ShopName'] ?? 'Warehouse') ?></span>
                     </li>
-                    <li>
+                    <li class="mb-3">
                         <small class="text-muted d-block">Status</small>
                         <span class="badge <?= $statusClass ?>"><?= h($order['OrderStatus']) ?></span>
+                    </li>
+                    <li>
+                        <small class="text-muted d-block">Points Earned</small>
+                        <?php if ($order['OrderStatus'] === 'Completed'): ?>
+                            <span class="text-warning fw-bold">
+                                <i class="fa-solid fa-star me-1"></i>+<?= number_format($pointsEarned) ?> pts
+                            </span>
+                        <?php elseif (in_array($order['OrderStatus'], ['Pending', 'Paid', 'Shipped'])): ?>
+                            <span class="text-muted">
+                                <i class="fa-regular fa-star me-1"></i>~<?= number_format($pointsEarned) ?> pts
+                                <small class="d-block text-light-50">(upon completion)</small>
+                            </span>
+                        <?php else: ?>
+                            <span class="text-muted">--</span>
+                        <?php endif; ?>
                     </li>
                 </ul>
             </div>

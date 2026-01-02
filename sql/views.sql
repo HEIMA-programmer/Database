@@ -1680,3 +1680,19 @@ FROM StockItem s
 JOIN Shop sh ON s.ShopID = sh.ShopID
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 WHERE s.Status = 'Available';
+
+-- 104. Customer Shipped Delivery Orders View
+-- Used for customer notification when delivery orders are shipped and need confirmation
+CREATE OR REPLACE VIEW vw_customer_shipped_delivery AS
+SELECT
+    co.OrderID,
+    co.CustomerID,
+    co.OrderDate,
+    co.TotalAmount,
+    co.ShippingAddress,
+    s.Name AS ShopName
+FROM CustomerOrder co
+LEFT JOIN Shop s ON co.FulfilledByShopID = s.ShopID
+WHERE co.OrderStatus = 'Shipped'
+  AND co.OrderType = 'Online'
+  AND co.FulfillmentType = 'Shipping';

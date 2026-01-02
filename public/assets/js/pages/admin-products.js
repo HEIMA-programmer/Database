@@ -33,9 +33,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ========== Price Modal ==========
     const priceModalEl = document.getElementById('priceModal');
-    // 保存当前选中的release信息
-    let currentReleaseId = null;
-    let currentReleaseTitle = null;
+    // 【修复】保存最近点击的按钮元素（而不是只保存数据），确保能正确获取数据
+    let lastClickedPriceBtn = null;
 
     function renderPriceData(releaseId, releaseTitle) {
         if (!releaseId) {
@@ -153,32 +152,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用 mousedown 事件（比 click 更早触发），确保在 show.bs.modal 之前保存数据
-    document.querySelectorAll('.price-btn').forEach(btn => {
-        btn.addEventListener('mousedown', function() {
-            currentReleaseId = this.dataset.releaseId || null;
-            currentReleaseTitle = this.dataset.releaseTitle || '';
-        });
-    });
-
-    // 【修复】使用事件委托作为备用方案，处理可能的动态元素
+    // 【修复】使用事件委托在 document 级别捕获 mousedown，保存按钮元素
+    // 这样无论点击的是按钮还是其内部图标，都能正确获取按钮
     document.addEventListener('mousedown', function(e) {
         const btn = e.target.closest('.price-btn');
         if (btn) {
-            currentReleaseId = btn.dataset.releaseId || null;
-            currentReleaseTitle = btn.dataset.releaseTitle || '';
+            lastClickedPriceBtn = btn;
         }
     });
 
     if (priceModalEl) {
         priceModalEl.addEventListener('show.bs.modal', function(event) {
-            // 优先使用 relatedTarget，如果为空则使用保存的数据
-            const button = event.relatedTarget;
-            const releaseId = (button && button.dataset.releaseId) ? button.dataset.releaseId : currentReleaseId;
-            const releaseTitle = (button && button.dataset.releaseTitle) ? button.dataset.releaseTitle : currentReleaseTitle;
+            // 获取触发按钮：优先使用 relatedTarget，否则使用保存的按钮
+            const button = event.relatedTarget || lastClickedPriceBtn;
+
+            // 从按钮获取数据
+            let releaseId = null;
+            let releaseTitle = '';
+
+            if (button && button.dataset) {
+                releaseId = button.dataset.releaseId || button.getAttribute('data-release-id');
+                releaseTitle = button.dataset.releaseTitle || button.getAttribute('data-release-title') || '';
+            }
 
             if (releaseId) {
-                renderPriceData(releaseId, releaseTitle || '');
+                renderPriceData(releaseId, releaseTitle);
             } else {
                 // 如果没有数据，显示空提示
                 const emptyEl = document.getElementById('priceEmpty');
@@ -193,20 +191,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // 模态框关闭时重置UI状态（但不清除保存的数据，让下次mousedown来更新）
+        // 模态框关闭时重置UI状态
         priceModalEl.addEventListener('hidden.bs.modal', function() {
             const titleEl = document.getElementById('priceModalTitle');
             const contentEl = document.getElementById('priceContent');
             const emptyEl = document.getElementById('priceEmpty');
             const containerEl = document.getElementById('priceCardsContainer');
 
-            // 重置标题，避免显示上次的内容
             if (titleEl) titleEl.textContent = '';
             if (contentEl) contentEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (containerEl) containerEl.innerHTML = '';
-            // 注意：不再清除 currentReleaseId/currentReleaseTitle
-            // 让下次 mousedown 事件来更新它们
+            // 不清除 lastClickedPriceBtn，让下次 mousedown 来更新
         });
     }
 });

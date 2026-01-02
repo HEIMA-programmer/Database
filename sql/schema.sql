@@ -199,16 +199,17 @@ CREATE TABLE ManagerRequest (
     RequestType ENUM('PriceAdjustment', 'TransferRequest') NOT NULL,
     RequestedByEmployeeID INT NOT NULL,
     FromShopID INT NOT NULL,
-    ToShopID INT DEFAULT NULL, -- 仅调货申请使用
+    ToShopID INT DEFAULT NULL, -- Only for transfer requests
     ReleaseID INT NOT NULL,
     ConditionGrade ENUM('New', 'Mint', 'NM', 'VG+', 'VG') NOT NULL,
     Quantity INT NOT NULL DEFAULT 1,
-    CurrentPrice DECIMAL(10,2) DEFAULT NULL, -- 当前价格
-    RequestedPrice DECIMAL(10,2) DEFAULT NULL, -- 申请调整后的价格（仅调价申请）
-    Reason TEXT, -- 申请理由
+    CurrentPrice DECIMAL(10,2) DEFAULT NULL, -- Current price
+    RequestedPrice DECIMAL(10,2) DEFAULT NULL, -- Requested new price (only for price adjustment)
+    Reason TEXT, -- Request reason
     Status ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
-    AdminResponseNote TEXT, -- Admin回复备注
+    AdminResponseNote TEXT, -- Admin response note
     RespondedByEmployeeID INT DEFAULT NULL,
+    ViewedByRequesterAt DATETIME DEFAULT NULL, -- When the requester viewed the response
     CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (RequestedByEmployeeID) REFERENCES Employee(EmployeeID),

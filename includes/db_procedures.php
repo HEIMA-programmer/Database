@@ -2734,14 +2734,49 @@ class DBProcedures {
     }
 
     /**
+     * Get incoming transfer count for a shop (InTransit status)
+     * Used for staff fulfillment navigation badge - receiving tab
+     */
+    public static function getIncomingTransferCount($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT COUNT(*) AS cnt FROM vw_fulfillment_incoming_transfers_grouped WHERE ToShopID = ?");
+            $stmt->execute([$shopId]);
+            $result = $stmt->fetch();
+            return (int)($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getIncomingTransferCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Get pending supplier receipt count for warehouse
+     * Used for staff fulfillment navigation badge - procurement tab
+     */
+    public static function getPendingSupplierReceiptCount($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT COUNT(*) AS cnt FROM vw_warehouse_pending_receipts WHERE ShopID = ?");
+            $stmt->execute([$shopId]);
+            $result = $stmt->fetch();
+            return (int)($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getPendingSupplierReceiptCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
      * Get count of responded requests (Approved/Rejected) for manager
      * Used for manager navigation badge
      */
     public static function getManagerRespondedRequestsCount($pdo, $employeeId) {
         try {
+            // Only count requests that have been responded (Approved/Rejected) but not yet viewed
             $stmt = $pdo->prepare("
-                SELECT COUNT(*) AS cnt FROM vw_manager_requests_sent
-                WHERE RequestedByEmployeeID = ? AND Status IN ('Approved', 'Rejected')
+                SELECT COUNT(*) AS cnt FROM ManagerRequest
+                WHERE RequestedByEmployeeID = ?
+                  AND Status IN ('Approved', 'Rejected')
+                  AND ViewedByRequesterAt IS NULL
             ");
             $stmt->execute([$employeeId]);
             $result = $stmt->fetch();
@@ -2749,6 +2784,21 @@ class DBProcedures {
         } catch (PDOException $e) {
             error_log("getManagerRespondedRequestsCount Error: " . $e->getMessage());
             return 0;
+        }
+    }
+
+    /**
+     * Mark all responded requests as viewed by the requester
+     * Called when manager visits the requests page
+     */
+    public static function markRequestsAsViewed($pdo, $employeeId) {
+        try {
+            $stmt = $pdo->prepare("CALL sp_mark_requests_viewed(?)");
+            $stmt->execute([$employeeId]);
+            return true;
+        } catch (PDOException $e) {
+            error_log("markRequestsAsViewed Error: " . $e->getMessage());
+            return false;
         }
     }
 

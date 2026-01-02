@@ -1,7 +1,7 @@
 <?php
 /**
- * 【新增】Warehouse库存调配页面 - Admin版
- * 用于将warehouse中的库存调配到长沙店和上海店
+ * Warehouse Stock Dispatch Page - Admin Version
+ * Dispatch inventory from warehouse to retail shops
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
@@ -59,9 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dispatch_stock'])) {
                 }
             }
 
-            flash("已创建 $initiatedCount 件商品到 $targetShopName 的调拨请求。请等待仓库员工确认发货。", 'success');
+            flash("Created dispatch request for $initiatedCount item(s) to $targetShopName. Waiting for warehouse staff to confirm shipment.", 'success');
         } else {
-            flash("调配失败：库存不足或发生错误。", 'danger');
+            flash("Dispatch failed: Insufficient stock or an error occurred.", 'danger');
         }
     }
 
@@ -93,21 +93,21 @@ require_once __DIR__ . '/../../includes/header.php';
             <h2 class="text-warning mb-1">
                 <i class="fa-solid fa-warehouse me-2"></i>Warehouse Dispatch
             </h2>
-            <p class="text-secondary mb-0">从仓库调配库存到各零售店铺（长沙店/上海店）</p>
+            <p class="text-secondary mb-0">Dispatch stock from warehouse to retail shops</p>
         </div>
         <a href="procurement.php" class="btn btn-outline-info">
-            <i class="fa-solid fa-arrow-left me-2"></i>返回采购管理
+            <i class="fa-solid fa-arrow-left me-2"></i>Back to Procurement
         </a>
     </div>
 </div>
 
-<!-- 库存统计卡片 -->
+<!-- Stock Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card bg-dark border-warning">
             <div class="card-body text-center">
                 <h3 class="text-warning mb-0"><?= count($warehouseStock) ?></h3>
-                <small class="text-muted">库存种类（Release/Condition）</small>
+                <small class="text-muted">Stock Varieties (Release/Condition)</small>
             </div>
         </div>
     </div>
@@ -115,7 +115,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <div class="card bg-dark border-info">
             <div class="card-body text-center">
                 <h3 class="text-info mb-0"><?= array_sum(array_column($warehouseStock, 'Quantity')) ?></h3>
-                <small class="text-muted">总库存数量</small>
+                <small class="text-muted">Total Stock Quantity</small>
             </div>
         </div>
     </div>
@@ -123,13 +123,13 @@ require_once __DIR__ . '/../../includes/header.php';
         <div class="card bg-dark border-success">
             <div class="card-body text-center">
                 <h3 class="text-success mb-0"><?= count($retailShops) ?></h3>
-                <small class="text-muted">零售店铺数量</small>
+                <small class="text-muted">Retail Shops</small>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Warehouse库存表格 -->
+<!-- Warehouse Stock Table -->
 <div class="card bg-dark border-secondary mb-4">
     <div class="card-header border-secondary d-flex justify-content-between align-items-center">
         <h5 class="card-title text-white mb-0">
@@ -140,19 +140,19 @@ require_once __DIR__ . '/../../includes/header.php';
         <table class="table table-dark table-hover mb-0 align-middle">
             <thead>
                 <tr>
-                    <th>专辑</th>
-                    <th>艺术家</th>
-                    <th>成色</th>
-                    <th class="text-center">可用数量</th>
-                    <th class="text-end">售价</th>
-                    <th class="text-center">操作</th>
+                    <th>Album</th>
+                    <th>Artist</th>
+                    <th>Condition</th>
+                    <th class="text-center">Available Qty</th>
+                    <th class="text-end">Price</th>
+                    <th class="text-center">Action</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($warehouseStock)): ?>
                     <tr>
                         <td colspan="6" class="text-center text-muted py-4">
-                            <i class="fa-solid fa-inbox me-2"></i>仓库暂无库存
+                            <i class="fa-solid fa-inbox me-2"></i>No stock in warehouse
                         </td>
                     </tr>
                 <?php else: ?>
@@ -173,7 +173,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                     data-release-title="<?= h($stock['Title']) ?>"
                                     data-condition="<?= h($stock['ConditionGrade']) ?>"
                                     data-max-qty="<?= $stock['Quantity'] ?>">
-                                <i class="fa-solid fa-truck me-1"></i>调配
+                                <i class="fa-solid fa-truck me-1"></i>Dispatch
                             </button>
                         </td>
                     </tr>
@@ -192,7 +192,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <div class="modal-content bg-dark text-light">
             <div class="modal-header border-secondary">
                 <h5 class="modal-title">
-                    <i class="fa-solid fa-truck text-warning me-2"></i>调配库存到店铺
+                    <i class="fa-solid fa-truck text-warning me-2"></i>Dispatch Stock to Shop
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
@@ -203,15 +203,15 @@ require_once __DIR__ . '/../../includes/header.php';
                     <input type="hidden" name="condition_grade" id="dispatch_condition">
 
                     <div class="alert alert-info">
-                        <strong>专辑:</strong> <span id="dispatch_title"></span><br>
-                        <strong>成色:</strong> <span id="dispatch_condition_display"></span><br>
-                        <strong>可用数量:</strong> <span id="dispatch_max_qty"></span>
+                        <strong>Album:</strong> <span id="dispatch_title"></span><br>
+                        <strong>Condition:</strong> <span id="dispatch_condition_display"></span><br>
+                        <strong>Available Qty:</strong> <span id="dispatch_max_qty"></span>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">目标店铺</label>
+                        <label class="form-label">Target Shop</label>
                         <select name="target_shop_id" class="form-select bg-dark text-white border-secondary" required>
-                            <option value="">选择店铺...</option>
+                            <option value="">Select shop...</option>
                             <?php foreach ($retailShops as $shop): ?>
                                 <option value="<?= $shop['ShopID'] ?>"><?= h($shop['Name']) ?></option>
                             <?php endforeach; ?>
@@ -219,26 +219,26 @@ require_once __DIR__ . '/../../includes/header.php';
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">调配数量</label>
+                        <label class="form-label">Quantity</label>
                         <input type="number" name="quantity" id="dispatch_quantity"
                                class="form-control bg-dark text-white border-secondary"
                                min="1" value="1" required>
-                        <small class="text-muted">最大可调配: <span id="dispatch_max_qty_hint">-</span></small>
+                        <small class="text-muted">Maximum available: <span id="dispatch_max_qty_hint">-</span></small>
                     </div>
 
                     <div class="alert alert-info">
                         <i class="fa-solid fa-info-circle me-2"></i>
-                        <strong>调配流程说明：</strong><br>
-                        1. Admin创建调配请求（当前步骤）<br>
-                        2. 仓库员工确认发货<br>
-                        3. 目标店铺员工确认收货<br>
-                        调拨完成后库存才会正式转移到目标店铺。
+                        <strong>Dispatch Process:</strong><br>
+                        1. Admin creates dispatch request (current step)<br>
+                        2. Warehouse staff confirms shipment<br>
+                        3. Target shop staff confirms receipt<br>
+                        Stock will be transferred to target shop after completion.
                     </div>
                 </div>
                 <div class="modal-footer border-secondary">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-warning fw-bold">
-                        <i class="fa-solid fa-truck me-1"></i>确认调配
+                        <i class="fa-solid fa-truck me-1"></i>Confirm Dispatch
                     </button>
                 </div>
             </form>

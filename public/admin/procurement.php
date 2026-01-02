@@ -191,6 +191,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 <tr>
                     <th>PO #</th>
                     <th>Supplier</th>
+                    <th>Albums (Condition)</th>
                     <th>Order Date</th>
                     <th>Received Date</th>
                     <th>Items</th>
@@ -203,6 +204,11 @@ require_once __DIR__ . '/../../includes/header.php';
                 <tr>
                     <td><span class="badge bg-secondary">#<?= $po['SupplierOrderID'] ?></span></td>
                     <td><?= h($po['SupplierName']) ?></td>
+                    <td>
+                        <small class="text-warning">
+                            <?= h($po['Albums'] ?? 'N/A') ?>
+                        </small>
+                    </td>
                     <td><?= date('Y-m-d', strtotime($po['OrderDate'])) ?></td>
                     <td><?= $po['ReceivedDate'] ? date('Y-m-d', strtotime($po['ReceivedDate'])) : '-' ?></td>
                     <td><?= $po['TotalItems'] ?? 0 ?> units</td>
@@ -211,7 +217,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 </tr>
                 <?php endforeach; ?>
                 <?php if(empty($receivedPOs)): ?>
-                    <tr><td colspan="7" class="text-center text-muted py-4">No order history available.</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">No order history available.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

@@ -15,21 +15,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['update_prices'])) {
         $releaseId = (int)$_POST['release_id'];
         $prices = $_POST['prices'] ?? [];
+        $shopPrices = $_POST['shop_prices'] ?? [];
         $updatedCount = 0;
 
         // 获取该release所有店铺的库存信息
         $stockData = DBProcedures::getStockPriceByCondition($pdo, $releaseId);
 
-        // 按condition分组找出所有需要更新的shopId
+        // 创建店铺名称到ID的映射
+        $shopNameToId = [];
         $shopsByCondition = [];
         foreach ($stockData as $row) {
             $cond = $row['ConditionGrade'];
+            $shopName = $row['ShopName'];
+            $shopId = $row['ShopID'];
+            $shopNameToId[$shopName] = $shopId;
             if (!isset($shopsByCondition[$cond])) {
                 $shopsByCondition[$cond] = [];
             }
-            $shopsByCondition[$cond][$row['ShopID']] = true;
+            $shopsByCondition[$cond][$shopId] = $shopName;
         }
 
+        // 处理按店铺单独定价 (shop_prices[condition][shopName] = price)
+        foreach ($shopPrices as $condition => $shopData) {
+            foreach ($shopData as $shopName => $newPrice) {
+                if ($newPrice !== '' && is_numeric($newPrice)) {
+                    $shopId = $shopNameToId[$shopName] ?? null;
+                    if ($shopId) {
+                        $result = DBProcedures::updateStockPrice($pdo, $shopId, $releaseId, $condition, (float)$newPrice);
+                        if ($result) $updatedCount++;
+                    }
+                }
+            }
+        }
+
+        // 处理统一定价 (prices[condition] = price) - 应用到所有未单独设置的店铺
         foreach ($prices as $condition => $newPrice) {
             if ($newPrice !== '' && is_numeric($newPrice)) {
                 // 更新所有有该condition库存的店铺

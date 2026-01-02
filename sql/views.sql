@@ -209,6 +209,7 @@ LEFT JOIN CustomerOrder co ON c.CustomerID = co.CustomerID
 GROUP BY c.CustomerID, c.Name, c.Email, c.Points, c.Birthday, mt.TierName;
 
 -- 12. [Admin View] Supplier Orders
+-- Fixed: Added album and condition information for order history display
 CREATE OR REPLACE VIEW vw_admin_supplier_orders AS
 SELECT
     so.SupplierOrderID,
@@ -220,12 +221,14 @@ SELECT
     so.ReceivedDate,
     so.TotalCost,
     COUNT(sol.ReleaseID) AS ItemTypes,
-    COALESCE(SUM(sol.Quantity), 0) AS TotalItems
+    COALESCE(SUM(sol.Quantity), 0) AS TotalItems,
+    GROUP_CONCAT(DISTINCT CONCAT(r.Title, ' (', sol.ConditionGrade, ')') SEPARATOR ', ') AS Albums
 FROM SupplierOrder so
 JOIN Supplier s ON so.SupplierID = s.SupplierID
 JOIN Employee e ON so.CreatedByEmployeeID = e.EmployeeID
 LEFT JOIN Shop sh ON so.DestinationShopID = sh.ShopID
 LEFT JOIN SupplierOrderLine sol ON so.SupplierOrderID = sol.SupplierOrderID
+LEFT JOIN ReleaseAlbum r ON sol.ReleaseID = r.ReleaseID
 GROUP BY so.SupplierOrderID, s.Name, e.Name, sh.Name, so.OrderDate, so.Status, so.ReceivedDate, so.TotalCost;
 
 
@@ -1775,6 +1778,7 @@ ORDER BY co.OrderDate DESC;
 
 -- 108. Shop Batch Sales Analysis View
 -- Used for manager reports to analyze batch sell-through rates
+-- Fixed: Join CustomerOrder to ensure only completed orders are counted
 CREATE OR REPLACE VIEW vw_shop_batch_sales_analysis AS
 SELECT
     si.ShopID,
@@ -1782,16 +1786,18 @@ SELECT
     COUNT(DISTINCT si.StockItemID) AS TotalItems,
     SUM(CASE WHEN si.Status = 'Sold' THEN 1 ELSE 0 END) AS SoldItems,
     SUM(CASE WHEN si.Status = 'Available' THEN 1 ELSE 0 END) AS AvailableItems,
-    SUM(CASE WHEN si.Status = 'Sold' THEN ol.PriceAtSale ELSE 0 END) AS TotalRevenue,
+    SUM(CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN ol.PriceAtSale ELSE 0 END) AS TotalRevenue,
     MIN(si.AcquiredDate) AS AcquiredDate
 FROM StockItem si
 LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
+LEFT JOIN CustomerOrder co ON ol.OrderID = co.OrderID
 WHERE si.BatchNo IS NOT NULL AND si.BatchNo != ''
 GROUP BY si.ShopID, si.BatchNo
 ORDER BY AcquiredDate DESC;
 
 -- 109. Batch Sales Detail View
 -- Used for manager reports to show individual items in a batch
+-- Fixed: Filter completed orders when showing sold price/date
 CREATE OR REPLACE VIEW vw_batch_sales_detail AS
 SELECT
     si.ShopID,
@@ -1803,9 +1809,9 @@ SELECT
     si.UnitPrice,
     si.Status,
     si.AcquiredDate,
-    CASE WHEN si.Status = 'Sold' THEN ol.PriceAtSale ELSE NULL END AS SoldPrice,
-    CASE WHEN si.Status = 'Sold' THEN co.OrderDate ELSE NULL END AS SoldDate,
-    CASE WHEN si.Status = 'Sold' THEN COALESCE(c.Name, 'Guest') ELSE NULL END AS CustomerName
+    CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN ol.PriceAtSale ELSE NULL END AS SoldPrice,
+    CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN co.OrderDate ELSE NULL END AS SoldDate,
+    CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN COALESCE(c.Name, 'Guest') ELSE NULL END AS CustomerName
 FROM StockItem si
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID

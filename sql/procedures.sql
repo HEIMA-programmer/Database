@@ -1492,4 +1492,23 @@ BEGIN
     FOR UPDATE;
 END$$
 
+-- ================================================
+-- 13. Manager Request Notification Tracking
+-- ================================================
+
+-- Mark manager requests as viewed by the requester
+-- Called when manager visits the requests page
+DROP PROCEDURE IF EXISTS sp_mark_requests_viewed$$
+CREATE PROCEDURE sp_mark_requests_viewed(
+    IN p_employee_id INT
+)
+BEGIN
+    -- Update all responded requests (Approved/Rejected) that haven't been viewed yet
+    UPDATE ManagerRequest
+    SET ViewedByRequesterAt = NOW()
+    WHERE RequestedByEmployeeID = p_employee_id
+      AND Status IN ('Approved', 'Rejected')
+      AND ViewedByRequesterAt IS NULL;
+END$$
+
 DELIMITER ;

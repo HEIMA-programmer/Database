@@ -157,43 +157,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // 【修复】Price modal - 使用shown.bs.modal事件（模态框完全显示后）确保DOM稳定
+    // Price modal - 直接在show.bs.modal事件中渲染（数据已预加载，无需等待）
     const priceModal = document.getElementById('priceModal');
     if (priceModal) {
-        // 存储当前要渲染的数据
-        let pendingRender = null;
-
         priceModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
             if (!button) return;
 
-            // 【修复】立即清空旧内容，显示loading状态，避免旧内容闪现
-            const containerEl = this.querySelector('#priceCardsContainer');
-            const contentEl = this.querySelector('#priceContent');
-            if (containerEl) {
-                containerEl.innerHTML = `
-                    <div class="text-center py-4">
-                        <div class="spinner-border text-warning" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                    </div>`;
-            }
-            if (contentEl) {
-                contentEl.classList.remove('d-none');
-            }
+            const releaseId = button.getAttribute('data-release-id');
+            const releaseTitle = button.getAttribute('data-release-title');
 
-            // 保存数据，等模态框完全显示后再渲染
-            pendingRender = {
-                releaseId: button.getAttribute('data-release-id'),
-                releaseTitle: button.getAttribute('data-release-title')
-            };
-        });
-
-        priceModal.addEventListener('shown.bs.modal', function(event) {
-            if (pendingRender && pendingRender.releaseId) {
-                renderPriceData(pendingRender.releaseId, pendingRender.releaseTitle, this);
-                pendingRender = null;
-            }
+            // 数据已预加载，直接渲染，无需loading
+            renderPriceData(releaseId, releaseTitle, this);
         });
     }
 });

@@ -244,11 +244,18 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<!-- 【修复】预加载数据和JS文件放在footer之前，与pos.php保持一致 -->
-<!-- 【修复】添加JSON_HEX_TAG避免数据中的</script>导致脚本提前结束 -->
+<!-- 【修复】使用完整的JSON转义标志，防止数据中的特殊字符破坏JavaScript -->
+<?php
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
+$genreJson = json_encode($genreDetails ?: [], $jsonFlags);
+$monthJson = json_encode($monthDetails ?: [], $jsonFlags);
+// 确保JSON编码成功，失败时回退到空对象
+if ($genreJson === false) $genreJson = '{}';
+if ($monthJson === false) $monthJson = '{}';
+?>
 <script>
-window.preloadedGenreDetails = <?= json_encode($genreDetails, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
-window.preloadedMonthDetails = <?= json_encode($monthDetails, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
+window.preloadedGenreDetails = <?= $genreJson ?>;
+window.preloadedMonthDetails = <?= $monthJson ?>;
 </script>
 <script src="../assets/js/pages/manager-reports.js"></script>
 

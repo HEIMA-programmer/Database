@@ -12,40 +12,32 @@ function escapeHtml(text) {
 }
 
 // ========== Price Modal ==========
-// 【修复】从模态框元素内部查找子元素，避免DOM查询问题
+// 【修复】简化元素依赖，只使用必要的元素
 function renderPriceData(releaseId, releaseTitle, modalElement) {
     if (!releaseId) {
         console.error('ReleaseId is empty');
         return;
     }
 
-    // 如果没有传入modalElement，尝试获取
     const modal = modalElement || document.getElementById('priceModal');
     if (!modal) {
         console.error('Price modal not found');
         return;
     }
 
-    // 从模态框内部查找元素，确保找到正确的元素
+    // 只获取必要的元素
     const titleEl = modal.querySelector('#priceModalTitle');
     const releaseIdEl = modal.querySelector('#price_release_id');
-    const loadingEl = modal.querySelector('#priceLoading');
     const contentEl = modal.querySelector('#priceContent');
-    const emptyEl = modal.querySelector('#priceEmpty');
     const containerEl = modal.querySelector('#priceCardsContainer');
 
-    if (!titleEl || !releaseIdEl || !contentEl || !emptyEl || !containerEl) {
-        console.error('Price modal elements not found inside modal');
+    if (!titleEl || !releaseIdEl || !contentEl || !containerEl) {
+        console.error('Price modal essential elements not found');
         return;
     }
 
     titleEl.textContent = releaseTitle || '';
     releaseIdEl.value = releaseId;
-
-    // 先隐藏所有状态
-    if (loadingEl) loadingEl.classList.add('d-none');
-    contentEl.classList.add('d-none');
-    emptyEl.classList.add('d-none');
 
     // 从预加载数据获取（支持数字和字符串类型的键）
     let data = window.preloadedStockPrices && window.preloadedStockPrices[releaseId];
@@ -132,8 +124,13 @@ function renderPriceData(releaseId, releaseTitle, modalElement) {
         containerEl.innerHTML = html;
         contentEl.classList.remove('d-none');
     } else {
-        emptyEl.textContent = 'No available stock found for this release.';
-        emptyEl.classList.remove('d-none');
+        // 【修复】直接在容器中显示"无数据"消息，不依赖可能消失的priceEmpty元素
+        containerEl.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fa-solid fa-exclamation-triangle me-1"></i>
+                No available stock found for this release.
+            </div>`;
+        contentEl.classList.remove('d-none');
     }
 }
 
@@ -177,15 +174,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         priceModal.addEventListener('shown.bs.modal', function(event) {
-            // 【诊断】检查模态框内容
-            console.log('Modal shown, checking elements...');
-            console.log('Modal element:', this);
-            console.log('Modal innerHTML length:', this.innerHTML.length);
-            console.log('priceModalTitle:', this.querySelector('#priceModalTitle'));
-            console.log('priceContent:', this.querySelector('#priceContent'));
-            console.log('priceEmpty:', this.querySelector('#priceEmpty'));
-
-            // 模态框完全显示后，渲染数据
             if (pendingRender && pendingRender.releaseId) {
                 renderPriceData(pendingRender.releaseId, pendingRender.releaseTitle, this);
                 pendingRender = null;

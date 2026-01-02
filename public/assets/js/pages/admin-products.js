@@ -177,6 +177,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         priceModal.addEventListener('shown.bs.modal', function(event) {
+            // 【诊断】检查模态框内容
+            console.log('Modal shown, checking elements...');
+            console.log('Modal element:', this);
+            console.log('Modal innerHTML length:', this.innerHTML.length);
+            console.log('priceModalTitle:', this.querySelector('#priceModalTitle'));
+            console.log('priceContent:', this.querySelector('#priceContent'));
+            console.log('priceEmpty:', this.querySelector('#priceEmpty'));
+
             // 模态框完全显示后，渲染数据
             if (pendingRender && pendingRender.releaseId) {
                 renderPriceData(pendingRender.releaseId, pendingRender.releaseTitle, this);

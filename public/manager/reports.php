@@ -88,10 +88,10 @@ require_once __DIR__ . '/../../includes/header.php';
                         <td class="<?= $speedClass ?> fw-bold"><?= $speedLabel ?></td>
                         <td class="text-end text-success fw-bold"><?= formatPrice($stat['TotalRevenue']) ?></td>
                         <td class="text-center">
-                            <!-- 【修复】使用onclick直接调用渲染函数，与pos.php的Detail按钮处理方式完全一致 -->
+                            <!-- 【修复】使用data属性传递数据，通过Bootstrap事件触发渲染 -->
                             <button type="button" class="btn btn-sm btn-outline-info"
                                     data-bs-toggle="modal" data-bs-target="#genreDetailModal"
-                                    onclick="renderGenreDetail(<?= htmlspecialchars(json_encode($stat['Genre']), ENT_QUOTES) ?>)" title="View Orders">
+                                    data-genre="<?= h($stat['Genre']) ?>" title="View Orders">
                                 <i class="fa-solid fa-list"></i>
                             </button>
                         </td>
@@ -141,10 +141,10 @@ require_once __DIR__ . '/../../includes/header.php';
                         </div>
                     </td>
                     <td class="text-center">
-                        <!-- 【修复】使用onclick直接调用渲染函数，与pos.php的Detail按钮处理方式完全一致 -->
+                        <!-- 【修复】使用data属性传递数据，通过Bootstrap事件触发渲染 -->
                         <button type="button" class="btn btn-sm btn-outline-info"
                                 data-bs-toggle="modal" data-bs-target="#monthDetailModal"
-                                onclick="renderMonthDetail(<?= htmlspecialchars(json_encode($trend['SalesMonth']), ENT_QUOTES) ?>)" title="View Orders">
+                                data-month="<?= h($trend['SalesMonth']) ?>" title="View Orders">
                             <i class="fa-solid fa-list"></i>
                         </button>
                     </td>

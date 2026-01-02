@@ -144,10 +144,11 @@ require_once __DIR__ . '/../../includes/header.php';
                                 title="Edit Release">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
-                        <!-- 【修复】使用onclick直接调用渲染函数，与pos.php的Detail按钮处理方式完全一致 -->
-                        <button class="btn btn-sm btn-outline-warning"
+                        <!-- 【修复】使用data属性传递数据，通过Bootstrap事件触发渲染 -->
+                        <button class="btn btn-sm btn-outline-warning price-btn"
                                 data-bs-toggle="modal" data-bs-target="#priceModal"
-                                onclick="renderPriceData(<?= $r['ReleaseID'] ?>, <?= htmlspecialchars(json_encode($r['Title']), ENT_QUOTES) ?>)"
+                                data-release-id="<?= $r['ReleaseID'] ?>"
+                                data-release-title="<?= h($r['Title']) ?>"
                                 title="Adjust Prices">
                             <i class="fa-solid fa-tag"></i>
                         </button>

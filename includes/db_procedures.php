@@ -952,28 +952,13 @@ class DBProcedures {
 
     /**
      * 获取仓库待收货的供应商订单（warehouse staff用）
+     * Uses vw_warehouse_pending_receipts view
      */
     public static function getWarehousePendingReceipts($pdo, $warehouseShopId) {
         try {
             $stmt = $pdo->prepare("
-                SELECT
-                    so.SupplierOrderID,
-                    s.Name AS SupplierName,
-                    so.OrderDate,
-                    sol.ReleaseID,
-                    r.Title AS ReleaseTitle,
-                    r.ArtistName,
-                    sol.Quantity AS TotalItems,
-                    sol.UnitCost,
-                    sol.TotalCost,
-                    sol.ConditionGrade,
-                    sol.SalePrice
-                FROM SupplierOrder so
-                JOIN Supplier s ON so.SupplierID = s.SupplierID
-                JOIN SupplierOrderLine sol ON so.SupplierOrderID = sol.SupplierOrderID
-                JOIN ReleaseAlbum r ON sol.ReleaseID = r.ReleaseID
-                WHERE so.Status = 'Pending' AND so.DestinationShopID = ?
-                ORDER BY so.OrderDate DESC
+                SELECT * FROM vw_warehouse_pending_receipts
+                WHERE DestinationShopID = ?
             ");
             $stmt->execute([$warehouseShopId]);
             return $stmt->fetchAll();
@@ -1465,23 +1450,13 @@ class DBProcedures {
 
     /**
      * 获取店铺按艺术家利润分析
+     * Uses vw_shop_artist_profit_analysis view
      */
     public static function getShopArtistProfitAnalysis($pdo, $shopId) {
         try {
             $stmt = $pdo->prepare("
-                SELECT
-                    r.ArtistName,
-                    COUNT(DISTINCT ol.StockItemID) AS ItemsSold,
-                    SUM(ol.PriceAtSale) AS TotalRevenue,
-                    SUM(COALESCE(si.SourceCost, si.UnitPrice * 0.6)) AS TotalCost,
-                    SUM(ol.PriceAtSale) - SUM(COALESCE(si.SourceCost, si.UnitPrice * 0.6)) AS GrossProfit,
-                    ROUND(((SUM(ol.PriceAtSale) - SUM(COALESCE(si.SourceCost, si.UnitPrice * 0.6))) / NULLIF(SUM(ol.PriceAtSale), 0)) * 100, 1) AS ProfitMargin
-                FROM OrderLine ol
-                JOIN StockItem si ON ol.StockItemID = si.StockItemID
-                JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-                JOIN CustomerOrder co ON ol.OrderID = co.OrderID
-                WHERE si.ShopID = ? AND co.OrderStatus IN ('Paid', 'Completed', 'Shipped')
-                GROUP BY r.ArtistName
+                SELECT * FROM vw_shop_artist_profit_analysis
+                WHERE ShopID = ?
                 ORDER BY GrossProfit DESC
             ");
             $stmt->execute([$shopId]);
@@ -1494,28 +1469,13 @@ class DBProcedures {
 
     /**
      * 获取按艺术家销售明细
+     * Uses vw_artist_sales_detail view
      */
     public static function getArtistSalesDetail($pdo, $shopId, $artistName) {
         try {
             $stmt = $pdo->prepare("
-                SELECT
-                    co.OrderID,
-                    co.OrderDate,
-                    c.Name AS CustomerName,
-                    r.Title,
-                    si.ConditionGrade,
-                    ol.PriceAtSale,
-                    COALESCE(si.SourceCost, si.UnitPrice * 0.6) AS Cost,
-                    ol.PriceAtSale - COALESCE(si.SourceCost, si.UnitPrice * 0.6) AS Profit
-                FROM OrderLine ol
-                JOIN StockItem si ON ol.StockItemID = si.StockItemID
-                JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-                JOIN CustomerOrder co ON ol.OrderID = co.OrderID
-                JOIN Customer c ON co.CustomerID = c.CustomerID
-                WHERE si.ShopID = ?
-                  AND r.ArtistName = ?
-                  AND co.OrderStatus IN ('Paid', 'Completed', 'Shipped')
-                ORDER BY co.OrderDate DESC
+                SELECT * FROM vw_artist_sales_detail
+                WHERE ShopID = ? AND ArtistName = ?
             ");
             $stmt->execute([$shopId, $artistName]);
             return $stmt->fetchAll();
@@ -1527,22 +1487,13 @@ class DBProcedures {
 
     /**
      * 获取店铺批次售卖分析
+     * Uses vw_shop_batch_sales_analysis view
      */
     public static function getShopBatchSalesAnalysis($pdo, $shopId) {
         try {
             $stmt = $pdo->prepare("
-                SELECT
-                    si.BatchNo,
-                    COUNT(DISTINCT si.StockItemID) AS TotalItems,
-                    SUM(CASE WHEN si.Status = 'Sold' THEN 1 ELSE 0 END) AS SoldItems,
-                    SUM(CASE WHEN si.Status = 'Available' THEN 1 ELSE 0 END) AS AvailableItems,
-                    SUM(CASE WHEN si.Status = 'Sold' THEN ol.PriceAtSale ELSE 0 END) AS TotalRevenue,
-                    MIN(si.AcquiredDate) AS AcquiredDate
-                FROM StockItem si
-                LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
-                WHERE si.ShopID = ? AND si.BatchNo IS NOT NULL AND si.BatchNo != ''
-                GROUP BY si.BatchNo
-                ORDER BY AcquiredDate DESC
+                SELECT * FROM vw_shop_batch_sales_analysis
+                WHERE ShopID = ?
             ");
             $stmt->execute([$shopId]);
             return $stmt->fetchAll();
@@ -1554,28 +1505,13 @@ class DBProcedures {
 
     /**
      * 获取批次售卖明细
+     * Uses vw_batch_sales_detail view
      */
     public static function getBatchSalesDetail($pdo, $shopId, $batchNo) {
         try {
             $stmt = $pdo->prepare("
-                SELECT
-                    si.StockItemID,
-                    r.Title,
-                    r.ArtistName,
-                    si.ConditionGrade,
-                    si.UnitPrice,
-                    si.Status,
-                    si.AcquiredDate,
-                    CASE WHEN si.Status = 'Sold' THEN ol.PriceAtSale ELSE NULL END AS SoldPrice,
-                    CASE WHEN si.Status = 'Sold' THEN co.OrderDate ELSE NULL END AS SoldDate,
-                    CASE WHEN si.Status = 'Sold' THEN c.Name ELSE NULL END AS CustomerName
-                FROM StockItem si
-                JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-                LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
-                LEFT JOIN CustomerOrder co ON ol.OrderID = co.OrderID
-                LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-                WHERE si.ShopID = ? AND si.BatchNo = ?
-                ORDER BY si.Status DESC, r.Title
+                SELECT * FROM vw_batch_sales_detail
+                WHERE ShopID = ? AND BatchNo = ?
             ");
             $stmt->execute([$shopId, $batchNo]);
             return $stmt->fetchAll();

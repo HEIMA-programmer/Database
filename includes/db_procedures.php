@@ -2565,6 +2565,25 @@ class DBProcedures {
         }
     }
 
+    /**
+     * Get count of responded requests (Approved/Rejected) for manager
+     * Used for manager navigation badge
+     */
+    public static function getManagerRespondedRequestsCount($pdo, $employeeId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) AS cnt FROM vw_manager_requests_sent
+                WHERE RequestedByEmployeeID = ? AND Status IN ('Approved', 'Rejected')
+            ");
+            $stmt->execute([$employeeId]);
+            $result = $stmt->fetch();
+            return (int)($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getManagerRespondedRequestsCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
     // ----------------
     // Pagination Support
     // ----------------

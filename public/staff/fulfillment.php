@@ -346,7 +346,10 @@ require_once __DIR__ . '/../../includes/header.php';
                         
                         <div class="mb-3">
                             <small class="text-muted d-block">Items</small>
-                            <small class="text-white"><?= h($order['ItemTitles']) ?></small>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-info"><?= $order['ItemCount'] ?> item<?= $order['ItemCount'] > 1 ? 's' : '' ?></span>
+                                <small class="text-white"><?= h($order['ItemTitles']) ?></small>
+                            </div>
                         </div>
                     </div>
                     

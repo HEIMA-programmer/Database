@@ -9,13 +9,17 @@ require_once __DIR__ . '/db_procedures.php';
 $current_page = basename($_SERVER['PHP_SELF']);
 
 // Get notification counts for navigation badges
-$navNotifications = ['staff' => [], 'admin' => []];
+$navNotifications = ['staff' => [], 'admin' => [], 'manager' => []];
 if (isset($_SESSION['user_id']) && isset($pdo)) {
     if (hasRole('Staff') || hasRole('Manager')) {
         $shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;
         if ($shopId) {
             $navNotifications['staff'] = getStaffNotificationCounts($pdo, $shopId);
         }
+    }
+    if (hasRole('Manager')) {
+        $employeeId = $_SESSION['user_id'];
+        $navNotifications['manager'] = getManagerNotificationCounts($pdo, $employeeId);
     }
     if (hasRole('Admin')) {
         $navNotifications['admin'] = getAdminNotificationCounts($pdo);
@@ -127,8 +131,13 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'requests.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/requests.php">
+                <a class="nav-link position-relative <?= $current_page == 'requests.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/requests.php">
                     <i class="fa-solid fa-envelope me-1"></i>Requests
+                    <?php if (($navNotifications['manager']['requests'] ?? 0) > 0): ?>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            <?= $navNotifications['manager']['requests'] ?>
+                        </span>
+                    <?php endif; ?>
                 </a>
             </li>
         <?php endif; ?>

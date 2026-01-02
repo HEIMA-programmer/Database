@@ -29,7 +29,7 @@ $turnoverStats = $pageData['turnover_stats'];
 $salesTrend = $pageData['sales_trend'];
 
 // 【安全修复】移除预加载的销售详情数据
-// 销售详情通过AJAX从后端API按需获取 (api_get_report_details.php)
+// 销售详情通过AJAX从后端API按需获取 (api/manager/report_details.php)
 // 避免在页面加载时暴露所有客户和价格信息
 
 require_once __DIR__ . '/../../includes/header.php';

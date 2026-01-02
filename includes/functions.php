@@ -1399,4 +1399,71 @@ function getAdminNotificationCounts($pdo) {
         'requests' => DBProcedures::getAdminPendingRequestsCount($pdo)
     ];
 }
+
+/**
+ * Get notification counts for Manager navigation
+ * Returns count for responded requests
+ */
+function getManagerNotificationCounts($pdo, $employeeId) {
+    return [
+        'requests' => DBProcedures::getManagerRespondedRequestsCount($pdo, $employeeId)
+    ];
+}
+
+/**
+ * Get login alerts for pending tasks based on user role
+ * Returns array of alert messages with type and icon
+ */
+function getLoginAlerts($pdo, $role, $shopId = null, $employeeId = null) {
+    $alerts = [];
+
+    if ($role === 'Staff' && $shopId) {
+        $counts = getStaffNotificationCounts($pdo, $shopId);
+        if ($counts['pickup'] > 0) {
+            $alerts[] = [
+                'type' => 'info',
+                'icon' => 'fa-box-open',
+                'message' => $counts['pickup'] . ' order(s) awaiting pickup'
+            ];
+        }
+        if ($counts['fulfillment'] > 0) {
+            $alerts[] = [
+                'type' => 'info',
+                'icon' => 'fa-truck-fast',
+                'message' => $counts['fulfillment'] . ' order(s) ready for fulfillment'
+            ];
+        }
+        if ($counts['transfers'] > 0) {
+            $alerts[] = [
+                'type' => 'warning',
+                'icon' => 'fa-right-left',
+                'message' => $counts['transfers'] . ' pending transfer(s) to process'
+            ];
+        }
+    }
+
+    if ($role === 'Manager' && $employeeId) {
+        $counts = getManagerNotificationCounts($pdo, $employeeId);
+        if ($counts['requests'] > 0) {
+            $alerts[] = [
+                'type' => 'success',
+                'icon' => 'fa-envelope-circle-check',
+                'message' => $counts['requests'] . ' request(s) have been responded to'
+            ];
+        }
+    }
+
+    if ($role === 'Admin') {
+        $counts = getAdminNotificationCounts($pdo);
+        if ($counts['requests'] > 0) {
+            $alerts[] = [
+                'type' => 'warning',
+                'icon' => 'fa-clipboard-check',
+                'message' => $counts['requests'] . ' pending request(s) from managers'
+            ];
+        }
+    }
+
+    return $alerts;
+}
 ?>

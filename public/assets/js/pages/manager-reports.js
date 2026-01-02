@@ -126,18 +126,23 @@ function renderMonthDetail(month, modalElement) {
     }
 }
 
-// 【修复】使用Bootstrap的show.bs.modal事件，传入模态框元素避免DOM查询问题
+// 【修复】使用shown.bs.modal事件（模态框完全显示后）确保DOM稳定
 document.addEventListener('DOMContentLoaded', function() {
     // Genre Detail Modal
     const genreModal = document.getElementById('genreDetailModal');
     if (genreModal) {
+        let pendingGenre = null;
+
         genreModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
             if (!button) return;
+            pendingGenre = button.getAttribute('data-genre');
+        });
 
-            const genre = button.getAttribute('data-genre');
-            if (genre) {
-                renderGenreDetail(genre, this);
+        genreModal.addEventListener('shown.bs.modal', function(event) {
+            if (pendingGenre) {
+                renderGenreDetail(pendingGenre, this);
+                pendingGenre = null;
             }
         });
     }
@@ -145,13 +150,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // Month Detail Modal
     const monthModal = document.getElementById('monthDetailModal');
     if (monthModal) {
+        let pendingMonth = null;
+
         monthModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
             if (!button) return;
+            pendingMonth = button.getAttribute('data-month');
+        });
 
-            const month = button.getAttribute('data-month');
-            if (month) {
-                renderMonthDetail(month, this);
+        monthModal.addEventListener('shown.bs.modal', function(event) {
+            if (pendingMonth) {
+                renderMonthDetail(pendingMonth, this);
+                pendingMonth = null;
             }
         });
     }

@@ -304,10 +304,15 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<!-- 【修复】预加载数据和JS文件放在footer之前，与pos.php保持一致 -->
-<!-- 【修复】添加JSON_HEX_TAG避免数据中的</script>导致脚本提前结束 -->
+<!-- 【修复】使用完整的JSON转义标志，防止数据中的特殊字符破坏JavaScript -->
+<?php
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
+$stockJson = json_encode($stockPrices ?: [], $jsonFlags);
+// 确保JSON编码成功，失败时回退到空对象
+if ($stockJson === false) $stockJson = '{}';
+?>
 <script>
-window.preloadedStockPrices = <?= json_encode($stockPrices, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
+window.preloadedStockPrices = <?= $stockJson ?>;
 </script>
 <script src="../assets/js/pages/admin-products.js"></script>
 

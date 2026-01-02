@@ -75,7 +75,9 @@ SELECT
     co.TotalAmount,
     r.Title AS AlbumTitle,
     r.ArtistName,
+    r.ReleaseID,
     ol.PriceAtSale,
+    s.UnitPrice AS OriginalPrice,
     s.ConditionGrade
 FROM CustomerOrder co
 JOIN OrderLine ol ON co.OrderID = ol.OrderID

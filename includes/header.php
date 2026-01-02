@@ -137,11 +137,6 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/inventory.php">
-                    <i class="fa-solid fa-boxes-stacked me-1"></i>Inventory
-                </a>
-            </li>
-            <li class="nav-item">
                 <a class="nav-link position-relative <?= $current_page == 'requests.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/requests.php">
                     <i class="fa-solid fa-envelope me-1"></i>Requests
                     <?php if (($navNotifications['manager']['requests'] ?? 0) > 0): ?>
@@ -149,6 +144,16 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
                             <?= $navNotifications['manager']['requests'] ?>
                         </span>
                     <?php endif; ?>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/staff/inventory.php">
+                    <i class="fa-solid fa-boxes-stacked me-1"></i>Inventory
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $current_page == 'users.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/manager/users.php">
+                    <i class="fa-solid fa-users me-1"></i>Users
                 </a>
             </li>
         <?php endif; ?>
@@ -180,13 +185,13 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/inventory.php">
-                    <i class="fa-solid fa-boxes-stacked me-1"></i>Inventory
+                <a class="nav-link <?= $current_page == 'users.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/users.php">
+                    <i class="fa-solid fa-users-gear me-1"></i>Users
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $current_page == 'users.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/users.php">
-                    <i class="fa-solid fa-users-gear me-1"></i>Users
+                <a class="nav-link <?= $current_page == 'inventory.php' ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/inventory.php">
+                    <i class="fa-solid fa-boxes-stacked me-1"></i>Inventory
                 </a>
             </li>
         <?php endif; ?>

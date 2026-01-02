@@ -1,6 +1,6 @@
 <?php
 /**
- * Inventory Management Page
+ * Inventory Management Page with Search and Filter
  * Presentation layer - only responsible for data display and user interaction
  */
 require_once __DIR__ . '/../../config/db_connect.php';
@@ -29,32 +29,106 @@ if (!$employee) {
 $shopId = $employee['ShopID'];
 $_SESSION['shop_id'] = $shopId;
 
-// ========== Data Preparation ==========
+// ========== Get Filter Parameters ==========
 $viewMode = $_GET['view'] ?? 'summary';
 $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 15;
 
-$pageData = prepareInventoryPageDataPaginated($pdo, $shopId, $viewMode, $page, $perPage);
+$filters = [
+    'search' => trim($_GET['q'] ?? ''),
+    'batch'  => $_GET['batch'] ?? '',
+    'sort'   => $_GET['sort'] ?? ''
+];
+
+// ========== Data Preparation ==========
+$pageData = prepareInventoryPageDataPaginated($pdo, $shopId, $viewMode, $page, $perPage, $filters);
 $inventory = $pageData['inventory'];
 $totalItems = $pageData['total_items'];
 $pagination = $pageData['pagination'];
+$batches = $pageData['batches'] ?? [];
+
+// Build query string for pagination links
+$queryParams = array_filter([
+    'view' => $viewMode,
+    'q' => $filters['search'],
+    'batch' => $filters['batch'],
+    'sort' => $filters['sort']
+]);
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
 
-<!-- ========== 表现层 ========== -->
+<!-- ========== Presentation Layer ========== -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="text-warning"><i class="fa-solid fa-boxes-stacked me-2"></i>Local Inventory</h2>
     <div class="d-flex gap-2 align-items-center">
-        <span class="badge bg-secondary fs-6"><?= $totalItems ?> Items in Stock</span>
+        <span class="badge bg-secondary fs-6"><?= $totalItems ?> Items</span>
         <div class="btn-group" role="group">
-            <a href="?view=detail" class="btn btn-sm <?= $viewMode === 'detail' ? 'btn-warning' : 'btn-outline-warning' ?>">
+            <a href="?<?= http_build_query(array_merge($queryParams, ['view' => 'detail', 'page' => 1])) ?>"
+               class="btn btn-sm <?= $viewMode === 'detail' ? 'btn-warning' : 'btn-outline-warning' ?>">
                 <i class="fa-solid fa-list me-1"></i>Detail
             </a>
-            <a href="?view=summary" class="btn btn-sm <?= $viewMode === 'summary' ? 'btn-warning' : 'btn-outline-warning' ?>">
+            <a href="?<?= http_build_query(array_merge($queryParams, ['view' => 'summary', 'page' => 1])) ?>"
+               class="btn btn-sm <?= $viewMode === 'summary' ? 'btn-warning' : 'btn-outline-warning' ?>">
                 <i class="fa-solid fa-chart-bar me-1"></i>Summary
             </a>
         </div>
+    </div>
+</div>
+
+<!-- Search and Filter Bar -->
+<div class="card bg-dark border-secondary mb-4">
+    <div class="card-body py-3">
+        <form method="GET" class="row g-3 align-items-end">
+            <input type="hidden" name="view" value="<?= h($viewMode) ?>">
+
+            <!-- Search -->
+            <div class="col-md-4">
+                <label class="form-label small text-muted">Search</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-secondary border-secondary"><i class="fa-solid fa-search text-muted"></i></span>
+                    <input type="text" name="q" class="form-control bg-dark text-white border-secondary"
+                           placeholder="Title or Artist..." value="<?= h($filters['search']) ?>">
+                </div>
+            </div>
+
+            <!-- Batch Filter -->
+            <div class="col-md-3">
+                <label class="form-label small text-muted">Batch</label>
+                <select name="batch" class="form-select bg-dark text-white border-secondary">
+                    <option value="">All Batches</option>
+                    <?php foreach ($batches as $b): ?>
+                        <option value="<?= h($b) ?>" <?= $filters['batch'] === $b ? 'selected' : '' ?>><?= h($b) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Sort -->
+            <div class="col-md-3">
+                <label class="form-label small text-muted">Sort By</label>
+                <select name="sort" class="form-select bg-dark text-white border-secondary">
+                    <option value="">Default (Title)</option>
+                    <option value="price_asc" <?= $filters['sort'] === 'price_asc' ? 'selected' : '' ?>>Price: Low to High</option>
+                    <option value="price_desc" <?= $filters['sort'] === 'price_desc' ? 'selected' : '' ?>>Price: High to Low</option>
+                    <?php if ($viewMode === 'detail'): ?>
+                    <option value="days_asc" <?= $filters['sort'] === 'days_asc' ? 'selected' : '' ?>>Days in Stock: Low to High</option>
+                    <option value="days_desc" <?= $filters['sort'] === 'days_desc' ? 'selected' : '' ?>>Days in Stock: High to Low</option>
+                    <?php endif; ?>
+                </select>
+            </div>
+
+            <!-- Buttons -->
+            <div class="col-md-2">
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-warning flex-grow-1">
+                        <i class="fa-solid fa-filter me-1"></i>Filter
+                    </button>
+                    <a href="?view=<?= $viewMode ?>" class="btn btn-outline-secondary" title="Clear filters">
+                        <i class="fa-solid fa-times"></i>
+                    </a>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -100,7 +174,13 @@ require_once __DIR__ . '/../../includes/header.php';
                 <?php endforeach; ?>
                 <?php if (empty($inventory)): ?>
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-4">No inventory items found.</td>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        <?php if (!empty($filters['search']) || !empty($filters['batch'])): ?>
+                            No items match your search criteria.
+                        <?php else: ?>
+                            No inventory items found.
+                        <?php endif; ?>
+                    </td>
                 </tr>
                 <?php endif; ?>
             </tbody>
@@ -144,7 +224,13 @@ require_once __DIR__ . '/../../includes/header.php';
                 <?php endforeach; ?>
                 <?php if (empty($inventory)): ?>
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-4">No inventory items found.</td>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        <?php if (!empty($filters['search']) || !empty($filters['batch'])): ?>
+                            No items match your search criteria.
+                        <?php else: ?>
+                            No inventory items found.
+                        <?php endif; ?>
+                    </td>
                 </tr>
                 <?php endif; ?>
             </tbody>
@@ -160,7 +246,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <!-- Previous button -->
         <li class="page-item <?= !$pagination['has_prev'] ? 'disabled' : '' ?>">
             <a class="page-link bg-dark border-secondary text-light"
-               href="?view=<?= $viewMode ?>&page=<?= $pagination['prev_page'] ?>">
+               href="?<?= http_build_query(array_merge($queryParams, ['page' => $pagination['prev_page']])) ?>">
                 <i class="fa-solid fa-chevron-left"></i>
             </a>
         </li>
@@ -174,7 +260,7 @@ require_once __DIR__ . '/../../includes/header.php';
             <?php else: ?>
                 <li class="page-item <?= $p === $pagination['current_page'] ? 'active' : '' ?>">
                     <a class="page-link <?= $p === $pagination['current_page'] ? 'bg-warning text-dark border-warning' : 'bg-dark border-secondary text-light' ?>"
-                       href="?view=<?= $viewMode ?>&page=<?= $p ?>">
+                       href="?<?= http_build_query(array_merge($queryParams, ['page' => $p])) ?>">
                         <?= $p ?>
                     </a>
                 </li>
@@ -184,7 +270,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <!-- Next button -->
         <li class="page-item <?= !$pagination['has_next'] ? 'disabled' : '' ?>">
             <a class="page-link bg-dark border-secondary text-light"
-               href="?view=<?= $viewMode ?>&page=<?= $pagination['next_page'] ?>">
+               href="?<?= http_build_query(array_merge($queryParams, ['page' => $pagination['next_page']])) ?>">
                 <i class="fa-solid fa-chevron-right"></i>
             </a>
         </li>

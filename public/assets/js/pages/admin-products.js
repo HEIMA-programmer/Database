@@ -26,8 +26,24 @@ function renderPriceData(releaseId, releaseTitle) {
     const emptyEl = document.getElementById('priceEmpty');
     const containerEl = document.getElementById('priceCardsContainer');
 
+    // 【诊断】检查每个元素
+    console.log('renderPriceData called:', releaseId, releaseTitle);
+    console.log('Elements found:', {
+        titleEl: !!titleEl,
+        releaseIdEl: !!releaseIdEl,
+        contentEl: !!contentEl,
+        emptyEl: !!emptyEl,
+        containerEl: !!containerEl
+    });
+
     if (!titleEl || !releaseIdEl || !contentEl || !emptyEl || !containerEl) {
-        console.error('Price modal elements not found');
+        console.error('Price modal elements not found - missing:', {
+            titleEl: !titleEl,
+            releaseIdEl: !releaseIdEl,
+            contentEl: !contentEl,
+            emptyEl: !emptyEl,
+            containerEl: !containerEl
+        });
         return;
     }
 

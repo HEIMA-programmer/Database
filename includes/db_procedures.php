@@ -273,6 +273,40 @@ class DBProcedures {
         }
     }
 
+    /**
+     * Get inventory summary for all shops (Admin view)
+     * Uses vw_all_shops_inventory_summary view
+     */
+    public static function getInventorySummaryAllShops($pdo) {
+        try {
+            $stmt = $pdo->query("
+                SELECT * FROM vw_all_shops_inventory_summary
+                ORDER BY ShopName, Title, ConditionGrade
+            ");
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getInventorySummaryAllShops Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get inventory detail for all shops (Admin view)
+     * Uses vw_all_shops_inventory_detail view
+     */
+    public static function getInventoryDetailAllShops($pdo) {
+        try {
+            $stmt = $pdo->query("
+                SELECT * FROM vw_all_shops_inventory_detail
+                ORDER BY ShopName, AcquiredDate DESC
+            ");
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getInventoryDetailAllShops Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
 
     // ----------------
     // 认证相关
@@ -2292,7 +2326,7 @@ class DBProcedures {
      * 【修复】配合修改后的视图，直接按ShopID查询，每个店铺显示所有15张专辑
      * 替换 functions.php:prepareCatalogPageDataByShop 中的直接表访问
      */
-    public static function getCatalogByShop($pdo, $shopId, $search = '', $genre = '') {
+    public static function getCatalogByShop($pdo, $shopId, $search = '', $genre = '', $artist = '') {
         try {
             $sql = "
                 SELECT ReleaseID, Title, Genre, Year, ArtistName, TotalAvailable, MinPrice, MaxPrice, AvailableConditions
@@ -2311,6 +2345,11 @@ class DBProcedures {
             if ($genre) {
                 $sql .= " AND Genre = ?";
                 $params[] = $genre;
+            }
+
+            if ($artist) {
+                $sql .= " AND ArtistName = ?";
+                $params[] = $artist;
             }
 
             $sql .= " ORDER BY TotalAvailable DESC, Title ASC";
@@ -2334,6 +2373,19 @@ class DBProcedures {
             return $stmt->fetchAll(PDO::FETCH_COLUMN);
         } catch (PDOException $e) {
             error_log("getReleaseGenres Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 获取所有专辑艺术家列表
+     */
+    public static function getReleaseArtists($pdo) {
+        try {
+            $stmt = $pdo->query("SELECT DISTINCT ArtistName FROM vw_release_basic ORDER BY ArtistName ASC");
+            return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } catch (PDOException $e) {
+            error_log("getReleaseArtists Error: " . $e->getMessage());
             return [];
         }
     }
@@ -2445,6 +2497,205 @@ class DBProcedures {
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             error_log("getShopCurrentInventoryCost Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // ----------------
+    // Notification Counts
+    // ----------------
+
+    /**
+     * Get pending pickup orders count for a shop
+     * Used for staff navigation badge
+     */
+    public static function getPendingPickupCount($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT COUNT(*) AS cnt FROM vw_staff_bopis_pending WHERE ShopID = ?");
+            $stmt->execute([$shopId]);
+            $result = $stmt->fetch();
+            return (int)($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getPendingPickupCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Get pending fulfillment orders count (Pending + Paid status)
+     * Used for staff navigation badge
+     */
+    public static function getPendingFulfillmentCount($pdo, $shopId) {
+        try {
+            $counts = self::getFulfillmentOrderStatusCounts($pdo, $shopId);
+            return ($counts['Pending'] ?? 0) + ($counts['Paid'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getPendingFulfillmentCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Get pending requests count (for Admin)
+     * Used for Admin navigation badge
+     */
+    public static function getAdminPendingRequestsCount($pdo) {
+        try {
+            $result = $pdo->query("SELECT COUNT(*) AS cnt FROM vw_admin_pending_requests")->fetch();
+            return (int)($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getAdminPendingRequestsCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Get pending transfer out count for a shop
+     * Used for staff fulfillment navigation badge
+     */
+    public static function getPendingTransferOutCount($pdo, $shopId) {
+        try {
+            $stmt = $pdo->prepare("SELECT COUNT(*) AS cnt FROM vw_fulfillment_pending_transfers_grouped WHERE FromShopID = ?");
+            $stmt->execute([$shopId]);
+            $result = $stmt->fetch();
+            return (int)($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getPendingTransferOutCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Get count of responded requests (Approved/Rejected) for manager
+     * Used for manager navigation badge
+     */
+    public static function getManagerRespondedRequestsCount($pdo, $employeeId) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) AS cnt FROM vw_manager_requests_sent
+                WHERE RequestedByEmployeeID = ? AND Status IN ('Approved', 'Rejected')
+            ");
+            $stmt->execute([$employeeId]);
+            $result = $stmt->fetch();
+            return (int)($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getManagerRespondedRequestsCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    // ----------------
+    // Pagination Support
+    // ----------------
+
+    /**
+     * Get inventory count for a shop (for pagination)
+     */
+    public static function getShopInventoryCount($pdo, $shopId, $viewMode = 'summary') {
+        try {
+            if ($viewMode === 'summary') {
+                $stmt = $pdo->prepare("SELECT COUNT(DISTINCT CONCAT(ReleaseID, '-', ConditionGrade)) AS cnt FROM vw_stock_summary WHERE ShopID = ?");
+            } else {
+                $stmt = $pdo->prepare("SELECT COUNT(*) AS cnt FROM vw_stock_detail WHERE ShopID = ?");
+            }
+            $stmt->execute([$shopId]);
+            $result = $stmt->fetch();
+            return (int)($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getShopInventoryCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Get paginated inventory summary for a shop
+     */
+    public static function getInventorySummaryPaginated($pdo, $shopId, $limit = 20, $offset = 0) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_stock_summary
+                WHERE ShopID = ?
+                ORDER BY Title, ConditionGrade
+                LIMIT ? OFFSET ?
+            ");
+            $stmt->execute([$shopId, $limit, $offset]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getInventorySummaryPaginated Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get paginated inventory detail for a shop
+     */
+    public static function getInventoryDetailPaginated($pdo, $shopId, $limit = 20, $offset = 0) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_stock_detail
+                WHERE ShopID = ?
+                ORDER BY Title, ConditionGrade, StockItemID
+                LIMIT ? OFFSET ?
+            ");
+            $stmt->execute([$shopId, $limit, $offset]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getInventoryDetailPaginated Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get inventory count for all shops (for admin pagination)
+     */
+    public static function getAllShopsInventoryCount($pdo, $viewMode = 'summary') {
+        try {
+            if ($viewMode === 'summary') {
+                $result = $pdo->query("SELECT COUNT(DISTINCT CONCAT(ShopID, '-', ReleaseID, '-', ConditionGrade)) AS cnt FROM vw_stock_summary")->fetch();
+            } else {
+                $result = $pdo->query("SELECT COUNT(*) AS cnt FROM vw_stock_detail")->fetch();
+            }
+            return (int)($result['cnt'] ?? 0);
+        } catch (PDOException $e) {
+            error_log("getAllShopsInventoryCount Error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Get paginated inventory summary for all shops (admin)
+     * Uses vw_all_shops_inventory_summary view
+     */
+    public static function getInventorySummaryAllShopsPaginated($pdo, $limit = 20, $offset = 0) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_all_shops_inventory_summary
+                ORDER BY ShopName, Title, ConditionGrade
+                LIMIT ? OFFSET ?
+            ");
+            $stmt->execute([$limit, $offset]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getInventorySummaryAllShopsPaginated Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get paginated inventory detail for all shops (admin)
+     * Uses vw_all_shops_inventory_detail view
+     */
+    public static function getInventoryDetailAllShopsPaginated($pdo, $limit = 20, $offset = 0) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM vw_all_shops_inventory_detail
+                ORDER BY ShopName, Title, ConditionGrade, StockItemID
+                LIMIT ? OFFSET ?
+            ");
+            $stmt->execute([$limit, $offset]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("getInventoryDetailAllShopsPaginated Error: " . $e->getMessage());
             return [];
         }
     }

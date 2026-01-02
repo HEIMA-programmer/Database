@@ -1578,3 +1578,43 @@ SELECT
     END AS UnitCost
 FROM StockItem si
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;
+
+-- 99. All-shops inventory summary view with shop name
+-- Used for admin inventory overview
+CREATE OR REPLACE VIEW vw_all_shops_inventory_summary AS
+SELECT
+    ss.ShopID,
+    s.Name AS ShopName,
+    s.Type AS ShopType,
+    ss.ReleaseID,
+    ss.Title,
+    ss.ArtistName,
+    ss.Genre,
+    ss.ConditionGrade,
+    ss.AvailableQuantity,
+    ss.MinPrice,
+    ss.MaxPrice,
+    ss.AvgPrice
+FROM vw_stock_summary ss
+JOIN Shop s ON ss.ShopID = s.ShopID;
+
+-- 100. All-shops inventory detail view with shop name
+-- Used for admin inventory detail view
+CREATE OR REPLACE VIEW vw_all_shops_inventory_detail AS
+SELECT
+    sd.StockItemID,
+    sd.ShopID,
+    s.Name AS ShopName,
+    s.Type AS ShopType,
+    sd.ReleaseID,
+    sd.Title,
+    sd.ArtistName,
+    sd.Genre,
+    sd.ConditionGrade,
+    sd.UnitPrice,
+    sd.BatchNo,
+    sd.Status,
+    sd.AcquiredDate,
+    sd.DaysInStock
+FROM vw_stock_detail sd
+JOIN Shop s ON sd.ShopID = s.ShopID;

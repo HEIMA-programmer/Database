@@ -181,7 +181,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <div class="text-center py-5">
         <div class="display-1 text-secondary mb-3"><i class="fa-solid fa-cart-shopping"></i></div>
         <h3 class="text-white">Your cart is empty</h3>
-        <p class="text-muted">Browse our catalog and add some records!</p>
+        <p class="cart-empty-message">Browse our catalog and add some records!</p>
         <a href="catalog.php" class="btn btn-warning mt-3">
             <i class="fa-solid fa-store me-1"></i> Browse Catalog
         </a>
@@ -247,10 +247,11 @@ require_once __DIR__ . '/../../includes/header.php';
                                 <td class="text-center">
                                     <?php if ($group['Quantity'] == 1): ?>
                                         <!-- 单个商品直接删除 -->
-                                        <form method="POST" class="d-inline">
+                                        <form method="POST" class="d-inline" id="removeForm_<?= $group['StockItemIds'][0] ?>">
                                             <input type="hidden" name="action" value="remove">
                                             <input type="hidden" name="stock_item_id" value="<?= $group['StockItemIds'][0] ?>">
-                                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" title="Remove"
+                                                    onclick="showConfirmModal('Remove Item', 'Are you sure you want to remove this item from your cart?', 'removeForm_<?= $group['StockItemIds'][0] ?>')">
                                                 <i class="fa-solid fa-trash"></i>
                                             </button>
                                         </form>
@@ -264,10 +265,11 @@ require_once __DIR__ . '/../../includes/header.php';
                                                     <i class="fa-solid fa-minus"></i>
                                                 </button>
                                             </form>
-                                            <form method="POST" class="d-inline" onsubmit="return confirm('Remove all <?= $group['Quantity'] ?> items?')">
+                                            <form method="POST" class="d-inline" id="removeGroupForm_<?= $group['StockItemIds'][0] ?>">
                                                 <input type="hidden" name="action" value="remove_group">
                                                 <input type="hidden" name="stock_item_ids" value="<?= implode(',', $group['StockItemIds']) ?>">
-                                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove all">
+                                                <button type="button" class="btn btn-outline-danger btn-sm" title="Remove all"
+                                                        onclick="showConfirmModal('Remove Items', 'Remove all <?= $group['Quantity'] ?> items of this type?', 'removeGroupForm_<?= $group['StockItemIds'][0] ?>')">
                                                     <i class="fa-solid fa-trash"></i>
                                                 </button>
                                             </form>
@@ -285,9 +287,10 @@ require_once __DIR__ . '/../../includes/header.php';
                 <a href="catalog.php" class="btn btn-outline-secondary">
                     <i class="fa-solid fa-arrow-left me-1"></i> Continue Shopping
                 </a>
-                <form method="POST" class="d-inline">
+                <form method="POST" class="d-inline" id="clearCartForm">
                     <input type="hidden" name="action" value="clear">
-                    <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Clear all items from cart?')">
+                    <button type="button" class="btn btn-outline-danger"
+                            onclick="showConfirmModal('Clear Cart', 'Are you sure you want to clear all items from your cart?', 'clearCartForm')">
                         <i class="fa-solid fa-trash me-1"></i> Clear Cart
                     </button>
                 </form>
@@ -344,5 +347,42 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 <?php endif; ?>
+
+<!-- Custom Confirm Modal -->
+<div class="modal fade custom-confirm-modal" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmModalTitle">Confirm Action</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="confirmModalBody">
+                Are you sure?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmModalBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let confirmFormId = null;
+
+function showConfirmModal(title, message, formId) {
+    confirmFormId = formId;
+    document.getElementById('confirmModalTitle').textContent = title;
+    document.getElementById('confirmModalBody').textContent = message;
+    const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+    modal.show();
+}
+
+document.getElementById('confirmModalBtn').addEventListener('click', function() {
+    if (confirmFormId) {
+        document.getElementById(confirmFormId).submit();
+    }
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

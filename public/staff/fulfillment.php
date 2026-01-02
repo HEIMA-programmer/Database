@@ -216,11 +216,11 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<!-- 【新增】主标签页切换：顾客订单 / 待发货调货 / 待接收调货 -->
+<!-- Tab Navigation: Customer Orders / Pending Shipments / Incoming Transfers -->
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
         <a class="nav-link <?= $currentTab == 'orders' ? 'active bg-dark text-warning' : 'text-light' ?>" href="?tab=orders">
-            <i class="fa-solid fa-shopping-cart me-1"></i>顾客订单
+            <i class="fa-solid fa-shopping-cart me-1"></i>Customer Orders
             <?php if (($statusCounts['Pending'] ?? 0) + ($statusCounts['Paid'] ?? 0) > 0): ?>
                 <span class="badge bg-warning text-dark"><?= ($statusCounts['Pending'] ?? 0) + ($statusCounts['Paid'] ?? 0) ?></span>
             <?php endif; ?>
@@ -228,7 +228,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $currentTab == 'transfers' ? 'active bg-dark text-info' : 'text-light' ?>" href="?tab=transfers">
-            <i class="fa-solid fa-truck-arrow-right me-1"></i>待发货
+            <i class="fa-solid fa-truck-arrow-right me-1"></i>Pending Shipments
             <?php if ($pendingTransferCount > 0): ?>
                 <span class="badge bg-info"><?= $pendingTransferCount ?></span>
             <?php endif; ?>
@@ -236,7 +236,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </li>
     <li class="nav-item">
         <a class="nav-link <?= $currentTab == 'receiving' ? 'active bg-dark text-success' : 'text-light' ?>" href="?tab=receiving">
-            <i class="fa-solid fa-box-open me-1"></i>待接收
+            <i class="fa-solid fa-box-open me-1"></i>Incoming Transfers
             <?php if ($incomingTransferCount > 0): ?>
                 <span class="badge bg-success"><?= $incomingTransferCount ?></span>
             <?php endif; ?>
@@ -245,34 +245,36 @@ require_once __DIR__ . '/../../includes/header.php';
 </ul>
 
 <?php if ($currentTab == 'orders'): ?>
-<!-- 顾客订单部分 -->
+<!-- Customer Orders Section -->
 
-<!-- 状态过滤器 -->
-<div class="card bg-dark border-secondary mb-4">
-    <div class="card-body py-2">
-        <div class="d-flex gap-2 flex-wrap">
-            <a href="?tab=orders&status=pending" class="btn btn-sm <?= $statusFilter == 'pending' ? 'btn-warning' : 'btn-outline-warning' ?>">
-                <i class="fa-solid fa-clock me-1"></i>Pending
-                <?php if (($statusCounts['Pending'] ?? 0) + ($statusCounts['Paid'] ?? 0) > 0): ?>
-                    <span class="badge bg-dark"><?= ($statusCounts['Pending'] ?? 0) + ($statusCounts['Paid'] ?? 0) ?></span>
-                <?php endif; ?>
-            </a>
-            <a href="?tab=orders&status=shipping" class="btn btn-sm <?= $statusFilter == 'shipping' ? 'btn-primary' : 'btn-outline-primary' ?>">
-                <i class="fa-solid fa-truck me-1"></i>Shipped
-                <?php if (($statusCounts['Shipped'] ?? 0) > 0): ?>
-                    <span class="badge bg-dark"><?= $statusCounts['Shipped'] ?></span>
-                <?php endif; ?>
-            </a>
-            <a href="?tab=orders&status=completed" class="btn btn-sm <?= $statusFilter == 'completed' ? 'btn-success' : 'btn-outline-success' ?>">
-                <i class="fa-solid fa-check me-1"></i>Completed
-            </a>
-            <a href="?tab=orders&status=cancelled" class="btn btn-sm <?= $statusFilter == 'cancelled' ? 'btn-secondary' : 'btn-outline-secondary' ?>">
-                <i class="fa-solid fa-ban me-1"></i>Cancelled
-            </a>
-            <a href="?tab=orders&status=all" class="btn btn-sm <?= $statusFilter == 'all' ? 'btn-light' : 'btn-outline-light' ?>">
-                All Orders
-            </a>
-        </div>
+<!-- Status Filter - Optimized UI -->
+<div class="order-status-filter mb-4">
+    <div class="status-flow">
+        <a href="?tab=orders&status=pending" class="btn status-btn <?= $statusFilter == 'pending' ? 'btn-warning active' : 'btn-outline-warning' ?>">
+            <i class="fa-solid fa-clock me-1"></i>Pending
+            <?php if (($statusCounts['Pending'] ?? 0) + ($statusCounts['Paid'] ?? 0) > 0): ?>
+                <span class="badge bg-dark ms-1"><?= ($statusCounts['Pending'] ?? 0) + ($statusCounts['Paid'] ?? 0) ?></span>
+            <?php endif; ?>
+        </a>
+        <span class="arrow"><i class="fa-solid fa-chevron-right"></i></span>
+        <a href="?tab=orders&status=shipping" class="btn status-btn <?= $statusFilter == 'shipping' ? 'btn-primary active' : 'btn-outline-primary' ?>">
+            <i class="fa-solid fa-truck me-1"></i>Shipped
+            <?php if (($statusCounts['Shipped'] ?? 0) > 0): ?>
+                <span class="badge bg-dark ms-1"><?= $statusCounts['Shipped'] ?></span>
+            <?php endif; ?>
+        </a>
+        <span class="arrow"><i class="fa-solid fa-chevron-right"></i></span>
+        <a href="?tab=orders&status=completed" class="btn status-btn <?= $statusFilter == 'completed' ? 'btn-success active' : 'btn-outline-success' ?>">
+            <i class="fa-solid fa-check me-1"></i>Completed
+        </a>
+    </div>
+    <div class="mt-2">
+        <a href="?tab=orders&status=cancelled" class="btn status-btn <?= $statusFilter == 'cancelled' ? 'btn-secondary active' : 'btn-outline-secondary' ?>">
+            <i class="fa-solid fa-ban me-1"></i>Cancelled
+        </a>
+        <a href="?tab=orders&status=all" class="btn status-btn <?= $statusFilter == 'all' ? 'btn-light active' : 'btn-outline-light' ?>">
+            All Orders
+        </a>
     </div>
 </div>
 
@@ -280,7 +282,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <div class="text-center py-5">
         <div class="display-1 text-secondary mb-3"><i class="fa-solid fa-inbox"></i></div>
         <h3 class="text-white">No orders found</h3>
-        <p class="text-muted">No orders matching the selected filter.</p>
+        <p class="no-orders-message">No orders matching the selected filter.</p>
     </div>
 <?php else: ?>
     <div class="row row-cols-1 row-cols-lg-2 g-4">
@@ -337,18 +339,21 @@ require_once __DIR__ . '/../../includes/header.php';
                             <?php endif; ?>
                             <?php if (($order['ShippingCost'] ?? 0) > 0): ?>
                                 <div class="text-warning small mt-1">
-                                    <i class="fa-solid fa-truck me-1"></i>运费: <?= formatPrice($order['ShippingCost']) ?>
+                                    <i class="fa-solid fa-truck me-1"></i>Shipping: <?= formatPrice($order['ShippingCost']) ?>
                                 </div>
                             <?php endif; ?>
                         </div>
                         
                         <div class="mb-3">
                             <small class="text-muted d-block">Items</small>
-                            <small class="text-white"><?= h($order['ItemTitles']) ?></small>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-info"><?= $order['ItemCount'] ?> item<?= $order['ItemCount'] > 1 ? 's' : '' ?></span>
+                                <small class="text-white"><?= h($order['ItemTitles']) ?></small>
+                            </div>
                         </div>
                     </div>
                     
-                    <?php if (!in_array($order['OrderStatus'], ['Completed', 'Cancelled'])): ?>
+                    <?php if (!in_array($order['OrderStatus'], ['Completed', 'Cancelled', 'Shipped'])): ?>
                     <div class="card-footer bg-dark border-secondary">
                         <div class="d-flex gap-2 flex-wrap">
                             <?php if ($order['OrderStatus'] == 'Pending'): ?>
@@ -360,8 +365,8 @@ require_once __DIR__ . '/../../includes/header.php';
                                     </button>
                                 </form>
                             <?php endif; ?>
-                            
-                            <?php // 【修复】只有Paid状态才显示Ship按钮，Pending（未支付）状态不能发货 ?>
+
+                            <?php // Only Paid status can ship ?>
                             <?php if ($fulfillmentType == 'Shipping' && $order['OrderStatus'] == 'Paid'): ?>
                                 <form method="POST" class="d-inline">
                                     <input type="hidden" name="order_id" value="<?= $order['OrderID'] ?>">
@@ -371,8 +376,9 @@ require_once __DIR__ . '/../../includes/header.php';
                                     </button>
                                 </form>
                             <?php endif; ?>
-                            
-                            <?php if (in_array($order['OrderStatus'], ['Shipped', 'ReadyForPickup'])): ?>
+
+                            <?php // ReadyForPickup orders can be completed by staff ?>
+                            <?php if ($order['OrderStatus'] == 'ReadyForPickup'): ?>
                                 <form method="POST" class="d-inline">
                                     <input type="hidden" name="order_id" value="<?= $order['OrderID'] ?>">
                                     <input type="hidden" name="action" value="complete">
@@ -381,15 +387,26 @@ require_once __DIR__ . '/../../includes/header.php';
                                     </button>
                                 </form>
                             <?php endif; ?>
-                            
-                            <form method="POST" class="d-inline ms-auto">
+
+                            <?php // Cancel only for Pending and Paid (not shipped) ?>
+                            <?php if (in_array($order['OrderStatus'], ['Pending', 'Paid'])): ?>
+                            <form method="POST" class="d-inline ms-auto" id="cancelOrderForm_<?= $order['OrderID'] ?>">
                                 <input type="hidden" name="order_id" value="<?= $order['OrderID'] ?>">
                                 <input type="hidden" name="action" value="cancel">
-                                <button type="submit" class="btn btn-outline-danger btn-sm" 
-                                        onclick="return confirm('Cancel this order?')">
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        onclick="showCancelModal(<?= $order['OrderID'] ?>)">
                                     <i class="fa-solid fa-ban me-1"></i>Cancel
                                 </button>
                             </form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php elseif ($order['OrderStatus'] == 'Shipped'): ?>
+                    <div class="card-footer bg-dark border-secondary">
+                        <div class="text-center">
+                            <small class="text-visible">
+                                <i class="fa-solid fa-clock me-1"></i>Waiting for customer to confirm receipt
+                            </small>
                         </div>
                     </div>
                     <?php endif; ?>
@@ -400,17 +417,17 @@ require_once __DIR__ . '/../../includes/header.php';
 <?php endif; ?>
 
 <?php elseif ($currentTab == 'transfers'): ?>
-<!-- 店铺间调货部分 -->
+<!-- Inter-store Transfer Shipments Section -->
 <div class="alert alert-info mb-4">
     <i class="fa-solid fa-info-circle me-2"></i>
-    这里显示需要您发货的店铺间调货请求。当其他店铺申请从您的店铺调货并获得Admin批准后，您需要在此确认发货。
+    This shows transfer requests that need to be shipped from your store. When other stores request stock from your inventory and it's approved by Admin, you need to confirm the shipment here.
 </div>
 
 <?php if (empty($pendingTransfers)): ?>
     <div class="text-center py-5">
         <div class="display-1 text-secondary mb-3"><i class="fa-solid fa-truck"></i></div>
-        <h3 class="text-white">没有待发货的调货请求</h3>
-        <p class="text-muted">当有新的调货请求时会显示在这里。</p>
+        <h3 class="text-white">No pending transfer shipments</h3>
+        <p class="no-orders-message">New transfer requests will appear here when approved.</p>
     </div>
 <?php else: ?>
     <div class="row row-cols-1 row-cols-lg-2 g-4">
@@ -419,23 +436,23 @@ require_once __DIR__ . '/../../includes/header.php';
                 <div class="card bg-dark border-info h-100">
                     <div class="card-header bg-dark border-info d-flex justify-content-between align-items-center">
                         <div>
-                            <strong class="text-info">调货批次</strong>
-                            <span class="badge bg-warning text-dark ms-2">待发货</span>
-                            <span class="badge bg-info ms-1"><?= $transfer['Quantity'] ?> 张</span>
+                            <strong class="text-info">Transfer Batch</strong>
+                            <span class="badge bg-warning text-dark ms-2">Pending Shipment</span>
+                            <span class="badge bg-info ms-1"><?= $transfer['Quantity'] ?> items</span>
                         </div>
                         <small class="text-muted"><?= date('M d, H:i', strtotime($transfer['TransferDate'])) ?></small>
                     </div>
                     <div class="card-body">
                         <div class="row mb-3">
                             <div class="col-6">
-                                <small class="text-muted">调出店铺</small>
+                                <small class="text-muted">From Store</small>
                                 <div class="text-white">
                                     <i class="fa-solid fa-store me-1 text-warning"></i>
                                     <?= h($transfer['FromShopName']) ?>
                                 </div>
                             </div>
                             <div class="col-6 text-end">
-                                <small class="text-muted">目标店铺</small>
+                                <small class="text-muted">To Store</small>
                                 <div class="text-info">
                                     <i class="fa-solid fa-arrow-right me-1"></i>
                                     <?= h($transfer['ToShopName']) ?>
@@ -444,45 +461,35 @@ require_once __DIR__ . '/../../includes/header.php';
                         </div>
 
                         <div class="mb-3">
-                            <small class="text-muted d-block">专辑信息</small>
+                            <small class="text-muted d-block">Album</small>
                             <div class="text-white fw-bold"><?= h($transfer['ReleaseTitle']) ?></div>
-                            <small class="text-muted"><?= h($transfer['ArtistName']) ?></small>
+                            <small class="text-warning"><?= h($transfer['ArtistName']) ?></small>
                         </div>
 
                         <div class="row">
                             <div class="col-4">
-                                <small class="text-muted">成色</small>
+                                <small class="text-muted">Condition</small>
                                 <div><span class="badge bg-secondary"><?= h($transfer['ConditionGrade']) ?></span></div>
                             </div>
                             <div class="col-4 text-center">
-                                <small class="text-muted">数量</small>
+                                <small class="text-muted">Quantity</small>
                                 <div class="text-warning fw-bold fs-5"><?= $transfer['Quantity'] ?></div>
                             </div>
                             <div class="col-4 text-end">
-                                <small class="text-muted">单价</small>
+                                <small class="text-muted">Unit Price</small>
                                 <div class="text-success fw-bold"><?= formatPrice($transfer['UnitPrice']) ?></div>
                             </div>
                         </div>
                     </div>
 
                     <div class="card-footer bg-dark border-info">
-                        <div class="d-flex gap-2">
-                            <form method="POST" class="flex-grow-1">
-                                <input type="hidden" name="transfer_ids" value="<?= h($transfer['TransferIDs']) ?>">
-                                <input type="hidden" name="action" value="confirm_transfer">
-                                <button type="submit" class="btn btn-info btn-sm w-100">
-                                    <i class="fa-solid fa-truck me-1"></i>确认发货 (<?= $transfer['Quantity'] ?> 张)
-                                </button>
-                            </form>
-                            <form method="POST">
-                                <input type="hidden" name="transfer_ids" value="<?= h($transfer['TransferIDs']) ?>">
-                                <input type="hidden" name="action" value="cancel_transfer">
-                                <button type="submit" class="btn btn-outline-danger btn-sm"
-                                        onclick="return confirm('确定要取消这 <?= $transfer['Quantity'] ?> 张的调货请求吗？')">
-                                    <i class="fa-solid fa-ban me-1"></i>取消
-                                </button>
-                            </form>
-                        </div>
+                        <form method="POST" class="d-grid">
+                            <input type="hidden" name="transfer_ids" value="<?= h($transfer['TransferIDs']) ?>">
+                            <input type="hidden" name="action" value="confirm_transfer">
+                            <button type="submit" class="btn btn-info">
+                                <i class="fa-solid fa-truck me-1"></i>Confirm Shipment (<?= $transfer['Quantity'] ?> items)
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -491,17 +498,17 @@ require_once __DIR__ . '/../../includes/header.php';
 <?php endif; ?>
 
 <?php elseif ($currentTab == 'receiving'): ?>
-<!-- 【新增】待接收调货部分 -->
+<!-- Incoming Transfers Section -->
 <div class="alert alert-success mb-4">
     <i class="fa-solid fa-info-circle me-2"></i>
-    这里显示从其他店铺调拨过来、等待您确认收货的库存。确认收货后，库存将正式入库到您的店铺。
+    This shows incoming stock transfers from other stores that are waiting for you to confirm receipt. Once confirmed, the stock will be added to your store's inventory.
 </div>
 
 <?php if (empty($incomingTransfers)): ?>
     <div class="text-center py-5">
         <div class="display-1 text-secondary mb-3"><i class="fa-solid fa-box-open"></i></div>
-        <h3 class="text-white">没有待接收的调货</h3>
-        <p class="text-muted">当有从其他店铺调拨过来的货物时会显示在这里。</p>
+        <h3 class="text-white">No incoming transfers</h3>
+        <p class="no-orders-message">Incoming transfers from other stores will appear here.</p>
     </div>
 <?php else: ?>
     <div class="row row-cols-1 row-cols-lg-2 g-4">
@@ -510,23 +517,23 @@ require_once __DIR__ . '/../../includes/header.php';
                 <div class="card bg-dark border-success h-100">
                     <div class="card-header bg-dark border-success d-flex justify-content-between align-items-center">
                         <div>
-                            <strong class="text-success">调货批次</strong>
-                            <span class="badge bg-primary ms-2">运输中</span>
-                            <span class="badge bg-success ms-1"><?= $transfer['Quantity'] ?> 张</span>
+                            <strong class="text-success">Transfer Batch</strong>
+                            <span class="badge bg-primary ms-2">In Transit</span>
+                            <span class="badge bg-success ms-1"><?= $transfer['Quantity'] ?> items</span>
                         </div>
                         <small class="text-muted"><?= date('M d, H:i', strtotime($transfer['TransferDate'])) ?></small>
                     </div>
                     <div class="card-body">
                         <div class="row mb-3">
                             <div class="col-6">
-                                <small class="text-muted">来源店铺</small>
+                                <small class="text-muted">From Store</small>
                                 <div class="text-white">
                                     <i class="fa-solid fa-store me-1 text-info"></i>
                                     <?= h($transfer['FromShopName']) ?>
                                 </div>
                             </div>
                             <div class="col-6 text-end">
-                                <small class="text-muted">目标店铺</small>
+                                <small class="text-muted">To Store</small>
                                 <div class="text-success">
                                     <i class="fa-solid fa-arrow-right me-1"></i>
                                     <?= h($transfer['ToShopName']) ?>
@@ -535,22 +542,22 @@ require_once __DIR__ . '/../../includes/header.php';
                         </div>
 
                         <div class="mb-3">
-                            <small class="text-muted d-block">专辑信息</small>
+                            <small class="text-muted d-block">Album</small>
                             <div class="text-white fw-bold"><?= h($transfer['ReleaseTitle']) ?></div>
-                            <small class="text-muted"><?= h($transfer['ArtistName']) ?></small>
+                            <small class="text-warning"><?= h($transfer['ArtistName']) ?></small>
                         </div>
 
                         <div class="row">
                             <div class="col-4">
-                                <small class="text-muted">成色</small>
+                                <small class="text-muted">Condition</small>
                                 <div><span class="badge bg-secondary"><?= h($transfer['ConditionGrade']) ?></span></div>
                             </div>
                             <div class="col-4 text-center">
-                                <small class="text-muted">数量</small>
+                                <small class="text-muted">Quantity</small>
                                 <div class="text-warning fw-bold fs-5"><?= $transfer['Quantity'] ?></div>
                             </div>
                             <div class="col-4 text-end">
-                                <small class="text-muted">单价</small>
+                                <small class="text-muted">Unit Price</small>
                                 <div class="text-success fw-bold"><?= formatPrice($transfer['UnitPrice']) ?></div>
                             </div>
                         </div>
@@ -561,7 +568,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             <input type="hidden" name="transfer_ids" value="<?= h($transfer['TransferIDs']) ?>">
                             <input type="hidden" name="action" value="receive_transfer">
                             <button type="submit" class="btn btn-success">
-                                <i class="fa-solid fa-check me-1"></i>确认收货 (<?= $transfer['Quantity'] ?> 张)
+                                <i class="fa-solid fa-check me-1"></i>Confirm Receipt (<?= $transfer['Quantity'] ?> items)
                             </button>
                         </form>
                     </div>
@@ -572,5 +579,44 @@ require_once __DIR__ . '/../../includes/header.php';
 <?php endif; ?>
 
 <?php endif; ?>
+
+<!-- Custom Confirm Modal -->
+<div class="modal fade custom-confirm-modal" id="cancelOrderModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa-solid fa-exclamation-triangle me-2"></i>Cancel Order</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to cancel this order?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Order</button>
+                <button type="button" class="btn btn-danger" id="confirmCancelBtn">Cancel Order</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let cancelModal;
+let currentOrderId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    cancelModal = new bootstrap.Modal(document.getElementById('cancelOrderModal'));
+
+    document.getElementById('confirmCancelBtn').addEventListener('click', function() {
+        if (currentOrderId) {
+            document.getElementById('cancelOrderForm_' + currentOrderId).submit();
+        }
+    });
+});
+
+function showCancelModal(orderId) {
+    currentOrderId = orderId;
+    cancelModal.show();
+}
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

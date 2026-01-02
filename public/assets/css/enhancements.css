@@ -595,3 +595,239 @@
     color: #888;
     border: 1px solid #888;
 }
+
+/* ================== UI Color Fixes ================== */
+/* Fix text visibility on dark backgrounds */
+
+/* Demo account text on login page */
+.demo-account-text {
+    color: #aaa !important;
+}
+
+.demo-account-text .text-warning {
+    color: var(--primary-gold) !important;
+}
+
+/* Welcome box text visibility */
+.welcome-box {
+    color: #e0e0e0 !important;
+}
+
+/* Out of stock album visibility */
+.catalog-card.out-of-stock .card-title,
+.catalog-card.out-of-stock .card-text {
+    color: #999 !important;
+}
+
+.catalog-card.out-of-stock .badge {
+    color: #ccc !important;
+}
+
+/* Description text color */
+.text-muted-light {
+    color: #b0b0b0 !important;
+}
+
+/* Dropdown role and shop text visibility */
+.dropdown-header.text-muted,
+.dropdown-header.text-muted.small {
+    color: #aaa !important;
+}
+
+/* Staff POS store name visibility */
+.store-name-display {
+    color: #b0b0b0 !important;
+}
+
+/* Pickup success message */
+.alert.pickup-success {
+    background-color: rgba(3, 218, 198, 0.15) !important;
+    border-color: var(--accent-green) !important;
+    color: #e0e0e0 !important;
+}
+
+/* Fulfillment empty message */
+.no-orders-message {
+    color: #b0b0b0 !important;
+}
+
+/* Cart empty message */
+.cart-empty-message {
+    color: #b0b0b0 !important;
+}
+
+/* Cart badge number */
+.navbar .badge.bg-danger {
+    color: #fff !important;
+    z-index: 10;
+}
+
+/* Request summary details */
+.request-summary-detail {
+    color: #aaa !important;
+}
+
+/* Alert success custom */
+.alert-success-custom {
+    background-color: rgba(3, 218, 198, 0.15) !important;
+    border: 1px solid var(--accent-green) !important;
+    color: #e0e0e0 !important;
+}
+
+/* Manager dashboard top spender tier */
+.tier-badge {
+    color: #aaa !important;
+}
+
+/* Report section headers */
+.report-section-subtitle {
+    color: #b0b0b0 !important;
+}
+
+/* Fix gray/black text visibility */
+.text-visible {
+    color: #ccc !important;
+}
+
+.text-visible-light {
+    color: #e0e0e0 !important;
+}
+
+/* Order detail modal text */
+.order-detail-text {
+    color: #ccc !important;
+}
+
+.order-detail-artist {
+    color: var(--primary-gold) !important;
+}
+
+/* Custom confirmation modal */
+.custom-confirm-modal .modal-content {
+    background: var(--secondary-dark);
+    border: 1px solid var(--primary-gold);
+}
+
+.custom-confirm-modal .modal-header {
+    border-bottom: 1px solid #444;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), transparent);
+}
+
+.custom-confirm-modal .modal-title {
+    color: var(--primary-gold);
+}
+
+.custom-confirm-modal .modal-body {
+    color: #e0e0e0;
+}
+
+.custom-confirm-modal .modal-footer {
+    border-top: 1px solid #444;
+}
+
+/* Notification red dot */
+.nav-notification-dot {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    background-color: #dc3545;
+    border-radius: 50%;
+    border: 2px solid #000;
+}
+
+.nav-item.position-relative .nav-link {
+    position: relative;
+}
+
+/* Order status filter pills */
+.order-status-filter {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, rgba(30, 30, 30, 0.8), rgba(42, 42, 42, 0.8));
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+
+.order-status-filter .status-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+}
+
+.order-status-filter .status-btn.active {
+    box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+}
+
+.order-status-filter .status-btn:hover:not(.active) {
+    transform: translateY(-2px);
+}
+
+/* Status flow indicator */
+.status-flow {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.status-flow .arrow {
+    color: #666;
+    font-size: 0.75rem;
+}
+
+/* Buyback expense date color */
+.buyback-date,
+.buyback-processor {
+    color: #ccc !important;
+}
+
+/* POS detail modal colors */
+.pos-detail-date,
+.pos-detail-type {
+    color: #ccc !important;
+}
+
+.pos-detail-artist {
+    color: var(--primary-gold) !important;
+}
+
+/* Pagination container */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.pagination-info {
+    color: #aaa;
+    font-size: 0.875rem;
+}
+
+/* Admin welcome text */
+.admin-welcome-text {
+    color: #e0e0e0 !important;
+}
+
+/* Fix checkbox/radio in dark theme */
+.form-check-input:checked {
+    background-color: var(--primary-gold);
+    border-color: var(--primary-gold);
+}
+
+/* Reference price text */
+.reference-price-text {
+    color: #999 !important;
+}
+
+/* Shipping cost in Chinese to English */
+.shipping-cost-label {
+    color: #ccc !important;
+}

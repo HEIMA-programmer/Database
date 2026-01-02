@@ -65,11 +65,13 @@ foreach ($shops as $shop) {
 // ========== 数据准备 ==========
 $search = $_GET['q'] ?? '';
 $genre  = $_GET['genre'] ?? '';
+$artist = $_GET['artist'] ?? '';
 
 // 使用修改后的函数，传入店铺ID
-$pageData = prepareCatalogPageDataByShop($pdo, $selectedShopId, $search, $genre);
+$pageData = prepareCatalogPageDataByShop($pdo, $selectedShopId, $search, $genre, $artist);
 $items = $pageData['items'];
 $genres = $pageData['genres'];
+$artists = $pageData['artists'];
 
 require_once __DIR__ . '/../../includes/header.php';
 ?>
@@ -96,7 +98,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         : 'btn-dark text-secondary border-secondary';
                     $icon = $shop['Type'] == 'Warehouse' ? 'fa-warehouse' : 'fa-store';
                     ?>
-                    <a href="?shop_id=<?= $shop['ShopID'] ?><?= $search ? '&q='.urlencode($search) : '' ?><?= $genre ? '&genre='.urlencode($genre) : '' ?>" 
+                    <a href="?shop_id=<?= $shop['ShopID'] ?><?= $search ? '&q='.urlencode($search) : '' ?><?= $genre ? '&genre='.urlencode($genre) : '' ?><?= $artist ? '&artist='.urlencode($artist) : '' ?>"
                        class="btn btn-sm <?= $btnClass ?> py-2"
                        style="min-width: 120px;"> <i class="fa-solid <?= $icon ?> me-2"></i><?= h($shop['Name']) ?>
                     </a>
@@ -123,22 +125,37 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <div class="row mb-4">
     <div class="col-12">
-        <form class="d-flex gap-2 justify-content-end" method="GET">
+        <form class="d-flex gap-2 justify-content-end flex-wrap" method="GET" id="catalogFilterForm">
             <input type="hidden" name="shop_id" value="<?= $selectedShopId ?>">
-            <select name="genre" class="form-select w-auto">
+            <select name="genre" class="form-select w-auto filter-auto-submit">
                 <option value="">All Genres</option>
                 <?php foreach($genres as $g): ?>
                     <option value="<?= h($g) ?>" <?= $genre === $g ? 'selected' : '' ?>><?= h($g) ?></option>
                 <?php endforeach; ?>
             </select>
-            <input class="form-control w-auto" type="search" name="q" placeholder="Artist or Title..." value="<?= h($search) ?>">
+            <select name="artist" class="form-select w-auto filter-auto-submit">
+                <option value="">All Artists</option>
+                <?php foreach($artists as $a): ?>
+                    <option value="<?= h($a) ?>" <?= $artist === $a ? 'selected' : '' ?>><?= h($a) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <input class="form-control w-auto" type="search" name="q" placeholder="Search Title..." value="<?= h($search) ?>">
             <button class="btn btn-outline-warning" type="submit"><i class="fa-solid fa-magnifying-glass"></i></button>
-            <?php if($search || $genre): ?>
+            <?php if($search || $genre || $artist): ?>
                 <a href="catalog.php?shop_id=<?= $selectedShopId ?>" class="btn btn-outline-secondary" title="Reset Filters"><i class="fa-solid fa-xmark"></i></a>
             <?php endif; ?>
         </form>
     </div>
 </div>
+
+<script>
+// Auto-submit form when filter dropdowns change
+document.querySelectorAll('.filter-auto-submit').forEach(function(select) {
+    select.addEventListener('change', function() {
+        document.getElementById('catalogFilterForm').submit();
+    });
+});
+</script>
 
 <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4">
     <?php if (empty($items)): ?>

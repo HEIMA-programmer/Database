@@ -43,6 +43,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     if ($result['success']) {
                         flash("Welcome back, {$_SESSION['username']}!", 'success');
+
+                        // Get login alerts for pending tasks
+                        $shopId = $_SESSION['shop_id'] ?? $_SESSION['user']['ShopID'] ?? null;
+                        $employeeId = $_SESSION['user_id'];
+                        $alerts = getLoginAlerts($pdo, $result['role'], $shopId, $employeeId);
+                        foreach ($alerts as $alert) {
+                            flash('<i class="fa-solid ' . $alert['icon'] . ' me-2"></i>' . $alert['message'], $alert['type']);
+                        }
+
                         $redirect = $_SESSION['redirect_url'] ?? getLoginRedirectUrl($result['role']);
                         unset($_SESSION['redirect_url']);
                         header("Location: " . $redirect);
@@ -137,7 +146,7 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
         <div class="text-center mt-4">
-            <p class="text-muted small">
+            <p class="small demo-account-text">
                 Demo Accounts:<br>
                 <span class="text-warning">admin</span> / password123<br>
                 <span class="text-warning">alice@test.com</span> / password123

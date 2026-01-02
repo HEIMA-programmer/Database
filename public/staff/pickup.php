@@ -54,9 +54,9 @@ require_once __DIR__ . '/../../includes/header.php';
 <h2 class="text-warning mb-4"><i class="fa-solid fa-box-open me-2"></i>In-Store Pickup Queue</h2>
 
 <?php if (empty($orders)): ?>
-    <div class="alert alert-success text-center py-5">
-        <h4>No pending pickups.</h4>
-        <p>All online orders for this location have been fulfilled.</p>
+    <div class="alert pickup-success text-center py-5">
+        <h4 class="text-visible-light">No pending pickups.</h4>
+        <p class="no-orders-message">All online orders for this location have been fulfilled.</p>
     </div>
 <?php else: ?>
     <div class="row">

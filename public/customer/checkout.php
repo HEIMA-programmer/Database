@@ -256,6 +256,25 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
             
             <!-- 订单商品 -->
+            <?php
+            // Group items by Release + Condition
+            $groupedItems = [];
+            foreach ($cartItems as $item) {
+                $key = $item['ReleaseID'] . '-' . $item['ConditionGrade'] . '-' . $item['UnitPrice'];
+                if (!isset($groupedItems[$key])) {
+                    $groupedItems[$key] = [
+                        'Title' => $item['Title'],
+                        'ArtistName' => $item['ArtistName'],
+                        'ConditionGrade' => $item['ConditionGrade'],
+                        'UnitPrice' => $item['UnitPrice'],
+                        'Quantity' => 0,
+                        'Subtotal' => 0
+                    ];
+                }
+                $groupedItems[$key]['Quantity']++;
+                $groupedItems[$key]['Subtotal'] += $item['UnitPrice'];
+            }
+            ?>
             <div class="card bg-dark border-secondary">
                 <div class="card-header bg-dark border-secondary">
                     <h5 class="mb-0 text-warning">
@@ -265,14 +284,22 @@ require_once __DIR__ . '/../../includes/header.php';
                 <div class="card-body p-0">
                     <table class="table table-dark mb-0">
                         <tbody>
-                            <?php foreach ($cartItems as $item): ?>
+                            <?php foreach ($groupedItems as $item): ?>
                             <tr>
                                 <td>
                                     <strong class="text-white"><?= h($item['Title']) ?></strong><br>
                                     <small class="text-warning"><?= h($item['ArtistName']) ?></small>
                                     <span class="badge bg-secondary ms-2"><?= h($item['ConditionGrade']) ?></span>
+                                    <?php if ($item['Quantity'] > 1): ?>
+                                        <span class="badge bg-info ms-1">×<?= $item['Quantity'] ?></span>
+                                    <?php endif; ?>
                                 </td>
-                                <td class="text-end text-white"><?= formatPrice($item['UnitPrice']) ?></td>
+                                <td class="text-end">
+                                    <?php if ($item['Quantity'] > 1): ?>
+                                        <small class="text-muted"><?= formatPrice($item['UnitPrice']) ?> each</small><br>
+                                    <?php endif; ?>
+                                    <span class="text-white fw-bold"><?= formatPrice($item['Subtotal']) ?></span>
+                                </td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>

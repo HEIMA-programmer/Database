@@ -12,10 +12,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ========== Genre Detail Modal ==========
-    const genreModalEl = document.getElementById('genreDetailModal');
-    // 【修复】保存最近点击的按钮元素
-    let lastClickedGenreBtn = null;
-
     function renderGenreDetail(genre) {
         if (!genre) {
             console.error('Genre is empty');
@@ -61,58 +57,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用事件委托捕获 mousedown，保存按钮元素
-    document.addEventListener('mousedown', function(e) {
-        const btn = e.target.closest('.btn-genre-detail');
-        if (btn) {
-            lastClickedGenreBtn = btn;
-        }
-    });
-
-    if (genreModalEl) {
-        genreModalEl.addEventListener('show.bs.modal', function(event) {
-            // 获取触发按钮：优先使用 relatedTarget，否则使用保存的按钮
-            const button = event.relatedTarget || lastClickedGenreBtn;
-
-            // 从按钮获取数据
-            let genre = null;
-            if (button && button.dataset) {
-                genre = button.dataset.genre || button.getAttribute('data-genre');
-            }
-
+    // 【修复】使用 click 事件（和其他正常工作的按钮一样的处理方式）
+    document.querySelectorAll('.btn-genre-detail').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const genre = this.dataset.genre;
             if (genre) {
                 renderGenreDetail(genre);
-            } else {
-                const emptyEl = document.getElementById('genreDetailEmpty');
-                const loadingEl = document.getElementById('genreDetailLoading');
-                const contentEl = document.getElementById('genreDetailContent');
-                if (loadingEl) loadingEl.classList.add('d-none');
-                if (contentEl) contentEl.classList.add('d-none');
-                if (emptyEl) {
-                    emptyEl.textContent = 'Unable to load genre details.';
-                    emptyEl.classList.remove('d-none');
-                }
             }
         });
-
-        genreModalEl.addEventListener('hidden.bs.modal', function() {
-            const titleEl = document.getElementById('genreTitle');
-            const contentEl = document.getElementById('genreDetailContent');
-            const emptyEl = document.getElementById('genreDetailEmpty');
-            const bodyEl = document.getElementById('genreDetailBody');
-
-            if (titleEl) titleEl.textContent = '';
-            if (contentEl) contentEl.classList.add('d-none');
-            if (emptyEl) emptyEl.classList.add('d-none');
-            if (bodyEl) bodyEl.innerHTML = '';
-        });
-    }
+    });
 
     // ========== Month Detail Modal ==========
-    const monthModalEl = document.getElementById('monthDetailModal');
-    // 【修复】保存最近点击的按钮元素
-    let lastClickedMonthBtn = null;
-
     const typeBadges = {
         'POS': '<span class="badge bg-warning text-dark">POS</span>',
         'OnlinePickup': '<span class="badge bg-info">Pickup</span>',
@@ -167,50 +122,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 【修复】使用事件委托捕获 mousedown，保存按钮元素
-    document.addEventListener('mousedown', function(e) {
-        const btn = e.target.closest('.btn-month-detail');
-        if (btn) {
-            lastClickedMonthBtn = btn;
-        }
-    });
-
-    if (monthModalEl) {
-        monthModalEl.addEventListener('show.bs.modal', function(event) {
-            // 获取触发按钮：优先使用 relatedTarget，否则使用保存的按钮
-            const button = event.relatedTarget || lastClickedMonthBtn;
-
-            // 从按钮获取数据
-            let month = null;
-            if (button && button.dataset) {
-                month = button.dataset.month || button.getAttribute('data-month');
-            }
-
+    // 【修复】使用 click 事件（和其他正常工作的按钮一样的处理方式）
+    document.querySelectorAll('.btn-month-detail').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const month = this.dataset.month;
             if (month) {
                 renderMonthDetail(month);
-            } else {
-                const emptyEl = document.getElementById('monthDetailEmpty');
-                const loadingEl = document.getElementById('monthDetailLoading');
-                const contentEl = document.getElementById('monthDetailContent');
-                if (loadingEl) loadingEl.classList.add('d-none');
-                if (contentEl) contentEl.classList.add('d-none');
-                if (emptyEl) {
-                    emptyEl.textContent = 'Unable to load month details.';
-                    emptyEl.classList.remove('d-none');
-                }
             }
         });
-
-        monthModalEl.addEventListener('hidden.bs.modal', function() {
-            const titleEl = document.getElementById('monthTitle');
-            const contentEl = document.getElementById('monthDetailContent');
-            const emptyEl = document.getElementById('monthDetailEmpty');
-            const bodyEl = document.getElementById('monthDetailBody');
-
-            if (titleEl) titleEl.textContent = '';
-            if (contentEl) contentEl.classList.add('d-none');
-            if (emptyEl) emptyEl.classList.add('d-none');
-            if (bodyEl) bodyEl.innerHTML = '';
-        });
-    }
+    });
 });

@@ -19,6 +19,9 @@ CREATE INDEX idx_release_year ON ReleaseAlbum(ReleaseYear);
 -- 组合索引：流派+年份（用于分类浏览）
 CREATE INDEX idx_release_genre_year ON ReleaseAlbum(Genre, ReleaseYear);
 
+-- 按标题搜索/排序（专辑列表、POS搜索等）
+CREATE INDEX idx_release_title ON ReleaseAlbum(Title);
+
 -- ================================================
 -- 2. StockItem 表索引（核心业务表）
 -- ================================================
@@ -47,6 +50,12 @@ CREATE INDEX idx_stock_batch ON StockItem(BatchNo);
 -- 按售出日期查找（用于周转率分析）
 CREATE INDEX idx_stock_datesold ON StockItem(DateSold);
 
+-- 按入库日期查找（用于死库存分析）
+CREATE INDEX idx_stock_acquired_date ON StockItem(AcquiredDate);
+
+-- 组合索引：状态+入库日期（死库存预警查询优化）
+CREATE INDEX idx_stock_status_acquired ON StockItem(Status, AcquiredDate);
+
 -- ================================================
 -- 3. CustomerOrder 表索引
 -- ================================================
@@ -71,6 +80,9 @@ CREATE INDEX idx_order_date ON CustomerOrder(OrderDate DESC);
 
 -- 按订单类型查找
 CREATE INDEX idx_order_type ON CustomerOrder(OrderType);
+
+-- 按处理员工查找（POS历史记录等）
+CREATE INDEX idx_order_employee ON CustomerOrder(ProcessedByEmployeeID);
 
 -- ================================================
 -- 4. Customer 表索引
@@ -198,6 +210,28 @@ CREATE INDEX idx_supplier_line_release ON SupplierOrderLine(ReleaseID);
 
 -- 按Release查找（查看某个专辑的回购记录）
 CREATE INDEX idx_buyback_line_release ON BuybackOrderLine(ReleaseID);
+
+-- ================================================
+-- 13. ManagerRequest 表索引（Manager申请系统）
+-- ================================================
+
+-- 按申请员工查找（Manager查看自己的申请）
+CREATE INDEX idx_request_employee ON ManagerRequest(RequestedByEmployeeID);
+
+-- 按审批员工查找
+CREATE INDEX idx_request_responded_by ON ManagerRequest(RespondedByEmployeeID);
+
+-- 按状态查找
+CREATE INDEX idx_request_status ON ManagerRequest(Status);
+
+-- 按目标店铺查找（调货申请）
+CREATE INDEX idx_request_to_shop ON ManagerRequest(ToShopID);
+
+-- 组合索引：申请类型+状态（快速筛选待处理的特定类型申请）
+CREATE INDEX idx_request_type_status ON ManagerRequest(RequestType, Status);
+
+-- 组合索引：员工+状态（Manager查看自己待处理/已处理的申请）
+CREATE INDEX idx_request_employee_status ON ManagerRequest(RequestedByEmployeeID, Status);
 
 -- ================================================
 -- 性能优化说明

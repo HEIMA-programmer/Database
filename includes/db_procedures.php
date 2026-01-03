@@ -1188,10 +1188,27 @@ class DBProcedures {
 
     /**
      * 获取店铺收入明细（按类型分组）
+     * 【修复】使用vw_shop_order_details视图进行聚合计算，避免依赖可能不存在的vw_shop_revenue_by_type视图
      */
     public static function getShopRevenueByType($pdo, $shopId) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_shop_revenue_by_type WHERE ShopID = ?");
+            // 使用子查询先按订单去重，再按类型汇总
+            // vw_shop_order_details每个订单可能有多行（每个订单项一行），需要先去重
+            $sql = "
+                SELECT
+                    ShopID,
+                    OrderCategory AS RevenueType,
+                    COUNT(*) AS OrderCount,
+                    SUM(TotalAmount) AS Revenue,
+                    SUM(COALESCE(ShippingCost, 0)) AS TotalShipping
+                FROM (
+                    SELECT DISTINCT OrderID, ShopID, OrderCategory, TotalAmount, ShippingCost
+                    FROM vw_shop_order_details
+                    WHERE ShopID = ?
+                ) AS distinct_orders
+                GROUP BY ShopID, OrderCategory
+            ";
+            $stmt = $pdo->prepare($sql);
             $stmt->execute([$shopId]);
             return $stmt->fetchAll();
         } catch (PDOException $e) {

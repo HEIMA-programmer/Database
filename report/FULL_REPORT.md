@@ -66,6 +66,8 @@
    - 4.5 Triggers
    - 4.6 Event Scheduler
    - 4.7 Security Implementation
+   - 4.8 PHP Application Architecture
+   - 4.9 Frontend Implementation
 
 5. [Advanced SQL Queries](#5-advanced-sql-queries)
    - 5.1 Inventory Turnover Analysis
@@ -349,6 +351,49 @@ CREATE EVENT evt_release_expired_reservations
 ON SCHEDULE EVERY 5 MINUTE
 DO CALL sp_release_expired_reservations();
 ```
+
+## 4.7 Security Implementation
+
+- **Password Security:** BCrypt hashing (cost factor 10)
+- **Session Management:** PHP session-based authentication with role validation
+- **SQL Injection Prevention:** PDO prepared statements throughout
+- **CSRF Protection:** Token-based form validation
+- **XSS Prevention:** `htmlspecialchars()` wrapper function `h()`
+
+## 4.8 PHP Application Architecture
+
+The web application follows a **modular architecture** with 45+ PHP pages:
+
+**Directory Structure:**
+```
+/includes/           - Core components (auth, functions, db_procedures)
+/public/customer/    - Customer pages (catalog, cart, checkout, orders)
+/public/staff/       - Staff operations (pos, buyback, fulfillment)
+/public/manager/     - Manager dashboard and reports
+/public/admin/       - System administration
+/public/api/         - RESTful API endpoints
+```
+
+**Key Implementation Patterns:**
+- `DBProcedures` class: Database abstraction layer querying views only
+- `requireRole()`: Centralized role-based access control
+- `ApiResponse` class: Standardized JSON API responses
+- Page data preparation functions for clean separation
+- Transaction management with `beginTransaction()/commit()/rollBack()`
+
+## 4.9 Frontend Implementation
+
+- Bootstrap 5 dark theme with responsive design
+- jQuery for AJAX operations
+- Bootstrap modals for inline editing
+- Real-time cart updates without page refresh
+
+| Role | Pages | Key Features |
+|------|-------|--------------|
+| Customer | 8 | Catalog, cart, checkout, orders, profile |
+| Staff | 5 | POS, buyback, fulfillment, inventory |
+| Manager | 7 | Dashboard, reports, requests, users |
+| Admin | 7 | Products, procurement, suppliers, users, requests |
 
 ---
 

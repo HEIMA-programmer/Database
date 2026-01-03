@@ -90,18 +90,26 @@ Staff members handle day-to-day operations including point-of-sale transactions,
 
 **Processing In-Store Sales:**
 1. Navigate to **Staff → POS**
-2. Search for products by title, artist, or scan barcode
-3. Select condition grade and quantity
-4. Add items to the transaction cart
-5. **Customer Lookup (Optional):** Search by email to apply membership discount
-6. Review total and applied discounts
-7. Click **"Complete Sale"** to finalize
+2. Search for products by title, artist using the search bar
+3. Select condition grade and quantity from available inventory
+4. Click **"Add to Cart"** to add items to the transaction
+5. **Customer Lookup (Optional):** Enter customer email to apply membership discount
+6. Review grouped cart display showing items by album
+7. Click **"Complete Sale"** to finalize the transaction
 
 **POS Features:**
-- Real-time inventory lookup
-- Automatic price calculation with condition-based pricing
-- Membership discount auto-application
-- Walk-in customer support (no account required)
+- Real-time inventory search with shop-level filtering
+- Batch add multiple items by condition and quantity
+- Grouped cart display by album for easy review
+- Walk-in customer support (CustomerID optional)
+- Sales history display for current session
+- Automatic membership discount application when customer provided
+
+**Technical Implementation:**
+- `pos.php` - Main POS interface with inventory search
+- `pos_checkout.php` - Transaction completion with atomic database operations
+- Stock items are marked as 'Sold' immediately upon transaction completion
+- Points are awarded automatically via database trigger
 
 ### 3.2.2 Inventory Management
 
@@ -120,39 +128,60 @@ Staff members handle day-to-day operations including point-of-sale transactions,
 
 **Processing Customer Buybacks:**
 1. Navigate to **Staff → Buyback**
-2. Select or search for the album title
-3. Grade the condition of the vinyl
-4. System suggests buyback price based on:
-   - Current selling prices
-   - Market conditions
-   - Condition grade
-5. Enter quantity and confirm price with customer
-6. Click **"Process Buyback"** to complete
-7. Stock is automatically added to inventory
+2. Select album from dropdown or search by title
+3. Grade the vinyl condition (New, Mint, NM, VG+, VG)
+4. System calculates suggested buyback price via server-side API:
+   - Based on base unit cost and condition multiplier
+   - Protected pricing logic not exposed to frontend
+5. Enter quantity and confirm resale price
+6. Click **"Process Buyback"** to complete transaction
+7. Stock items are automatically created with 'Buyback' source type
 
-**Walk-in Buybacks:**
-- Customer account is optional
-- If customer provides email, points are awarded
+**Points Award System:**
+- Customers earn 0.5 points per ¥1 received
+- Walk-in buybacks supported (CustomerID optional)
+- Points credited via stored procedure `sp_process_buyback`
+
+**Technical Implementation:**
+- `buyback.php` - Buyback interface with condition grading
+- `/api/staff/calculate_price.php` - Server-side price calculation
+- BuybackOrder and BuybackOrderLine records created
+- StockItem records generated with polymorphic FK to BuybackOrder
 
 ### 3.2.4 Order Fulfillment
 
-**Pickup Orders:**
-1. Navigate to **Staff → Pickups**
-2. View all orders marked "Ready for Pickup" at your location
-3. When customer arrives, verify order details
-4. Click **"Complete Pickup"** to finalize
+The fulfillment page (`fulfillment.php`) provides a multi-tab interface for comprehensive order management:
 
-**Shipping Orders (Warehouse Staff):**
-1. Navigate to **Staff → Fulfillment**
-2. View pending shipping orders
-3. Pick items from inventory
-4. Click **"Mark as Shipped"** and enter tracking info
-5. Order status updates to "Shipped"
+**Tab 1: Customer Orders**
+- View all orders for your shop by status (Pending/Paid/Shipped)
+- Filter by order type and date range
+- Complete pickup orders when customer arrives
+- Access order details via modal popup
 
-**Transfer Receiving:**
-1. View incoming transfers from other locations
+**Tab 2: Pending Shipments (Shipping Orders)**
+1. View orders marked for shipping
+2. Pick items from warehouse inventory
+3. Enter tracking information
+4. Click **"Mark as Shipped"** to update status
+5. Order status triggers customer notification
+
+**Tab 3: Incoming Transfers**
+1. View transfer requests destined for your shop
 2. Verify received items match transfer record
-3. Click **"Confirm Receipt"** to complete transfer
+3. Click **"Confirm Receipt"** to complete
+4. Trigger moves stock from source shop to destination
+
+**Tab 4: Supplier Receipts (Warehouse Only)**
+1. View pending supplier orders awaiting receipt
+2. Confirm delivery and verify quantities
+3. Click **"Receive Order"** to generate inventory
+4. StockItems created automatically via `sp_receive_supplier_order`
+
+**Technical Implementation:**
+- `fulfillment.php` - Multi-tab fulfillment interface
+- `/api/staff/order_detail.php` - AJAX order detail retrieval
+- Order status changes trigger inventory status updates via triggers
+- Transfer completion moves StockItem to destination ShopID
 
 ---
 
@@ -162,30 +191,49 @@ Managers oversee shop operations, access analytics, manage customer orders, and 
 
 ### 3.3.1 Dashboard Overview
 
-**Key Performance Indicators (KPIs):**
-- **Daily Revenue:** Today's total sales at your location
-- **Pending Orders:** Orders awaiting fulfillment
-- **Low Stock Items:** Products requiring reorder
-- **Monthly Trend:** Revenue comparison with previous month
+The manager dashboard (`dashboard.php`) provides real-time shop-level business intelligence with strict shop isolation.
 
-**Dashboard Navigation:**
-- Access from **Manager → Dashboard**
-- Click any KPI card for detailed breakdown
+**KPI Cards (Top Row):**
+| Metric | Description |
+|--------|-------------|
+| **Total Revenue** | All-time sales revenue for your shop |
+| **Most Popular Item** | Top-selling album with quantity sold |
+| **Top Spender** | Highest spending registered customer |
+| **Total Inventory Cost** | Historical cost of all inventory acquired |
+
+**Analysis Panels (Bottom Row):**
+- **Top Spenders:** Ranked customer list with tier badges, includes walk-in revenue summary
+- **Stagnant Inventory:** Items unsold for 60+ days with "Request Price Adjustment" shortcut
+- **Low Stock Alert:** Items with <3 units, with "Request Transfer" shortcut
+- **Revenue Breakdown:** By channel (Online/Pickup/POS) with detail links
+
+**Security Implementation:**
+- Shop affiliation verified from database, not session
+- `DBProcedures::getEmployeeShopInfo()` validates employee-shop relationship
+- Managers can only view data for their assigned shop
 
 ### 3.3.2 Sales Reports
 
-**Available Reports:**
-1. **Sales by Genre:** Performance analysis by music genre
-2. **Sales by Artist:** Artist-level revenue and volume
-3. **Monthly Trends:** Month-over-month sales comparison
-4. **Batch Analysis:** Sell-through rate by procurement batch
+The reports page (`reports.php`) provides four analytical sections with drill-down modals:
 
-**Generating Reports:**
-1. Navigate to **Manager → Reports**
-2. Select report type
-3. Choose date range and filters
-4. View interactive charts and data tables
-5. Export to CSV if needed
+**Report Sections:**
+| Report | Metrics | Insight |
+|--------|---------|---------|
+| **Genre Turnover** | Items sold, avg days to sell, revenue | How fast different genres sell |
+| **Artist Profit** | Revenue, cost, gross profit, margin % | Which artists are most profitable |
+| **Batch Analysis** | Total items, sold/available, sell-through % | Procurement batch performance |
+| **Monthly Trends** | Order count, revenue, visual bar chart | Revenue trends over time |
+
+**Interactive Features:**
+- Click any row's "Details" button to open modal
+- Modal displays individual order/item breakdown
+- Data preloaded via PHP for instant display
+- `/api/manager/report_details.php` provides AJAX fallback
+
+**Technical Implementation:**
+- `prepareReportsPageData()` aggregates all report data
+- Genre/artist/batch details preloaded as JSON
+- Speed indicators: Fast (<30 days), Moderate (30-90), Slow (>90)
 
 ### 3.3.3 Inventory Cost Analysis
 
@@ -212,25 +260,36 @@ Managers oversee shop operations, access analytics, manage customer orders, and 
 
 ### 3.3.5 Request System
 
+The request page (`requests.php`) implements an email-like inbox interface for managing requests:
+
 **Submitting Price Adjustment Requests:**
-1. Navigate to **Manager → Requests**
-2. Click **"New Price Request"**
-3. Select album, condition grade, and shop
-4. Enter current and requested prices
-5. Provide business justification
+1. Navigate to **Manager → Requests → New Price Request**
+2. Select album from your shop's current inventory
+3. Conditions dynamically loaded via `/api/manager/inventory_price.php`
+4. Current price and quantity auto-populated from database
+5. Enter requested new price with justification
 6. Submit for admin approval
 
 **Submitting Transfer Requests:**
 1. Click **"New Transfer Request"**
-2. Select source shop (or warehouse)
-3. Choose destination (your shop)
-4. Select album and quantity
-5. Submit for admin approval
+2. Select desired album and condition grade
+3. Enter quantity needed for your shop
+4. Source shop is determined by Admin upon approval
+5. Submit request with justification
 
-**Tracking Requests:**
-- View pending, approved, and rejected requests
-- Receive notifications when admin responds
-- View admin response notes
+**Request Workflow:**
+```
+Manager Submits → Pending → Admin Reviews → Approved/Rejected
+                                              ↓
+                           Approved: System executes change
+                           - Price: Updates all matching StockItems
+                           - Transfer: Creates InventoryTransfer record
+```
+
+**Notification System:**
+- "New Response" badge when admin replies
+- `DBProcedures::markRequestsAsViewed()` clears badge on page visit
+- Full audit trail with timestamps
 
 ---
 
@@ -263,22 +322,33 @@ Administrators have global system access for managing products, suppliers, users
 
 ### 3.4.3 Procurement
 
+The procurement page (`procurement.php`) manages the complete supplier order lifecycle:
+
 **Creating Supplier Orders:**
 1. Navigate to **Admin → Procurement**
-2. Click **"New Supplier Order"**
-3. Select supplier and destination shop
-4. Add items: Album, Quantity, Unit Cost, Condition
-5. Review order total
-6. Submit order
+2. Click **"New Purchase Order"**
+3. Select supplier from registered vendors
+4. Select album and condition grade
+5. System calculates unit cost using condition multipliers:
+   | Condition | Cost Multiplier |
+   |-----------|-----------------|
+   | New | 100% of base cost |
+   | Mint | 95% |
+   | NM | 85% |
+   | VG+ | 70% |
+   | VG | 55% |
+6. Set sale price and quantity
+7. View expected profit margin preview
+8. Submit order (status: Pending)
 
-**Receiving Supplier Orders:**
-1. View pending orders
-2. When shipment arrives, click **"Receive Order"**
-3. Verify quantities and conditions
-4. System automatically:
-   - Creates StockItems in inventory
-   - Assigns batch numbers
-   - Calculates sale prices (cost + markup)
+**Order Receipt (Warehouse Staff):**
+1. View pending orders in **Staff → Fulfillment → Procurement**
+2. Confirm shipment receipt
+3. `sp_receive_supplier_order` procedure:
+   - Updates order status to 'Received'
+   - Generates StockItem records for each unit
+   - Assigns batch number (BATCH-YYYYMMDD-ID format)
+   - Sets SourceType = 'Supplier' with polymorphic FK
 
 ### 3.4.4 User Management
 
@@ -295,17 +365,34 @@ Administrators have global system access for managing products, suppliers, users
 
 ### 3.4.5 Request Approval
 
-**Processing Manager Requests:**
-1. Navigate to **Admin → Requests**
-2. View pending requests queue
-3. Review request details and justification
-4. **Approve:** Executes the requested change
-5. **Reject:** Denies with response note
-6. Requester is notified of decision
+The admin request page (`admin/requests.php`) provides an accordion-style approval interface:
 
-**Request Types:**
-- **Price Adjustment:** Updates stock pricing
-- **Transfer Request:** Creates inventory transfer (Pending → InTransit upon dispatch)
+**Request Dashboard:**
+- Statistics cards: Pending / Approved / Rejected / Total
+- Filter by status with URL parameters
+- Expandable request cards with full details
+
+**Processing Price Adjustment Requests:**
+1. Expand request card to view details
+2. Review current vs. requested price
+3. Add response note (optional)
+4. Click **Approve** or **Reject**
+5. On approval: `sp_respond_to_request` updates all matching StockItems
+
+**Processing Transfer Requests:**
+1. Expand request card
+2. System loads real-time inventory from other shops via AJAX
+3. `/api/admin/requests.php` returns available stock counts
+4. Select source shop with sufficient inventory
+5. On approval:
+   - Validates source shop has enough stock
+   - Creates InventoryTransfer records
+   - Stock items marked 'InTransit'
+
+**Validation Features:**
+- Source shop stock count validated before approval
+- Cannot approve if insufficient inventory
+- Boundary check: "Source shop only has X available items"
 
 ### 3.4.6 Warehouse Dispatch
 

@@ -29,8 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_received'])) 
     // 验证订单归属和状态
     $orderCheck = DBProcedures::getOrderBasicInfo($pdo, $confirmOrderId);
     if ($orderCheck && $orderCheck['CustomerID'] == $customerId && $orderCheck['OrderStatus'] === 'Shipped') {
-        // 更新订单状态为Completed
-        $result = DBProcedures::updateOrderStatus($pdo, $confirmOrderId, 'Completed');
+        // 使用 completeOrder 而非 updateOrderStatus
+        // completeOrder 会同时更新订单状态为 Completed 和库存状态为 Sold
+        $result = DBProcedures::completeOrder($pdo, $confirmOrderId);
         if ($result) {
             flash('Thank you! Your order has been marked as received.', 'success');
         } else {

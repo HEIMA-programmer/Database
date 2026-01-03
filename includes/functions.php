@@ -456,6 +456,14 @@ function authenticateCustomer($pdo, $email, $password) {
 
         if ($customer['Birthday']) {
             $_SESSION['birth_month'] = (int)date('m', strtotime($customer['Birthday']));
+
+            // Check if today is the customer's birthday
+            $today = date('m-d');
+            $birthday = date('m-d', strtotime($customer['Birthday']));
+            if ($today === $birthday) {
+                $_SESSION['birthday_greeting'] = true;
+                $_SESSION['birthday_name'] = $customer['Name'];
+            }
         }
 
         // 【修复】设置 user 数组，保持与员工登录一致的结构

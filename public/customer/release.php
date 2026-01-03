@@ -63,19 +63,30 @@ require_once __DIR__ . '/../../includes/header.php';
 
         <?php if (!empty($tracks)): ?>
         <div class="mb-4">
-            <h5 class="text-white mb-3"><i class="fa-solid fa-music me-2"></i>Track List</h5>
-            <div class="list-group list-group-flush">
-                <?php foreach ($tracks as $track): ?>
-                <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center py-2 px-3">
-                    <div>
-                        <span class="badge bg-secondary me-2"><?= $track['TrackNumber'] ?></span>
-                        <span class="text-light"><?= h($track['Title']) ?></span>
+            <?php $trackCount = count($tracks); ?>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="text-white mb-0">
+                    <a class="text-decoration-none track-list-toggle" data-bs-toggle="collapse" href="#trackListCollapse" role="button" aria-expanded="false" aria-controls="trackListCollapse">
+                        <i class="fa-solid fa-music me-2"></i>Track List
+                        <span class="badge bg-secondary ms-2"><?= $trackCount ?> tracks</span>
+                        <i class="fa-solid fa-chevron-down ms-2 toggle-icon"></i>
+                    </a>
+                </h5>
+            </div>
+            <div class="collapse" id="trackListCollapse">
+                <div class="list-group list-group-flush">
+                    <?php foreach ($tracks as $track): ?>
+                    <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center py-2 px-3">
+                        <div>
+                            <span class="badge bg-secondary me-2"><?= $track['TrackNumber'] ?></span>
+                            <span class="text-light"><?= h($track['Title']) ?></span>
+                        </div>
+                        <?php if ($track['Duration']): ?>
+                        <span class="text-muted small"><?= h($track['Duration']) ?></span>
+                        <?php endif; ?>
                     </div>
-                    <?php if ($track['Duration']): ?>
-                    <span class="text-muted small"><?= h($track['Duration']) ?></span>
-                    <?php endif; ?>
+                    <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
             </div>
         </div>
         <?php endif; ?>

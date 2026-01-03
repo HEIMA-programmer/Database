@@ -1852,7 +1852,7 @@ ORDER BY co.OrderDate DESC;
 -- 108. Shop Batch Sales Analysis View
 -- Used for manager reports to analyze batch sell-through rates
 -- Fixed: Join CustomerOrder to ensure only completed orders are counted
--- 【修复】精确计算商品折后收入（不含运费）
+-- 【修复】商品收入包含按比例分摊的运费（针对店铺整体表现）
 CREATE OR REPLACE VIEW vw_shop_batch_sales_analysis AS
 SELECT
     si.ShopID,
@@ -1860,9 +1860,9 @@ SELECT
     COUNT(DISTINCT si.StockItemID) AS TotalItems,
     SUM(CASE WHEN si.Status = 'Sold' THEN 1 ELSE 0 END) AS SoldItems,
     SUM(CASE WHEN si.Status = 'Available' THEN 1 ELSE 0 END) AS AvailableItems,
-    -- 【精确计算】商品折后收入（不含运费）
+    -- 【修复】商品收入（含按比例分摊的运费）= 原价 * 订单总金额 / 原价总额
     SUM(CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
-        THEN ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
+        THEN ROUND(ol.PriceAtSale * (co.TotalAmount / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
         ELSE 0 END) AS TotalRevenue,
     MIN(si.AcquiredDate) AS AcquiredDate
 FROM StockItem si
@@ -1934,15 +1934,17 @@ ORDER BY TotalRevenue DESC;
 
 -- 111. 店铺月度销售汇总视图
 -- 用于 getShopMonthlySalesTrend 函数
+-- 【修复】Monthly Sales Trend 收入应包含运费（针对店铺整体）
+-- 直接基于CustomerOrder表汇总，使用TotalAmount（包含运费）
 CREATE OR REPLACE VIEW vw_shop_monthly_sales_summary AS
 SELECT
-    ShopID,
-    SalesMonth,
-    COUNT(DISTINCT OrderID) AS OrderCount,
-    SUM(ItemRevenue) AS MonthlyRevenue,
-    SUM(ShippingCost) / COUNT(DISTINCT OrderID) AS AvgShippingPerOrder
-FROM vw_monthly_sales_detail
-GROUP BY ShopID, SalesMonth
+    co.FulfilledByShopID AS ShopID,
+    DATE_FORMAT(co.OrderDate, '%Y-%m') AS SalesMonth,
+    COUNT(DISTINCT co.OrderID) AS OrderCount,
+    SUM(co.TotalAmount) AS MonthlyRevenue
+FROM CustomerOrder co
+WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
+GROUP BY co.FulfilledByShopID, DATE_FORMAT(co.OrderDate, '%Y-%m')
 ORDER BY SalesMonth DESC;
 
 -- 112. 订单实际收入汇总视图

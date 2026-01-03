@@ -1461,12 +1461,25 @@ class DBProcedures {
 
     /**
      * 获取店铺月度销售趋势
-     * 【重构】使用汇总视图 vw_shop_monthly_sales_summary
-     * 收入计算已在视图中完成：商品折后收入（不含运费）
+     * 【修复】Monthly Sales Trend 收入应包含运费（针对店铺整体）
+     * 直接基于CustomerOrder表汇总，使用TotalAmount（包含运费）
      */
     public static function getShopMonthlySalesTrend($pdo, $shopId, $limit = 12) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_shop_monthly_sales_summary WHERE ShopID = ? LIMIT ?");
+            $sql = "
+                SELECT
+                    co.FulfilledByShopID AS ShopID,
+                    DATE_FORMAT(co.OrderDate, '%Y-%m') AS SalesMonth,
+                    COUNT(DISTINCT co.OrderID) AS OrderCount,
+                    SUM(co.TotalAmount) AS MonthlyRevenue
+                FROM CustomerOrder co
+                WHERE co.FulfilledByShopID = ?
+                  AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
+                GROUP BY co.FulfilledByShopID, DATE_FORMAT(co.OrderDate, '%Y-%m')
+                ORDER BY SalesMonth DESC
+                LIMIT ?
+            ";
+            $stmt = $pdo->prepare($sql);
             $stmt->execute([$shopId, $limit]);
             return $stmt->fetchAll();
         } catch (PDOException $e) {
@@ -1514,14 +1527,36 @@ class DBProcedures {
 
     /**
      * 获取店铺批次售卖分析
-     * Uses vw_shop_batch_sales_analysis view
+     * 【修复】Batch Sales 收入应包含按比例分摊的运费（针对店铺整体）
      */
     public static function getShopBatchSalesAnalysis($pdo, $shopId) {
         try {
-            $stmt = $pdo->prepare("
-                SELECT * FROM vw_shop_batch_sales_analysis
-                WHERE ShopID = ?
-            ");
+            $sql = "
+                SELECT
+                    si.ShopID,
+                    si.BatchNo,
+                    COUNT(DISTINCT si.StockItemID) AS TotalItems,
+                    SUM(CASE WHEN si.Status = 'Sold' THEN 1 ELSE 0 END) AS SoldItems,
+                    SUM(CASE WHEN si.Status = 'Available' THEN 1 ELSE 0 END) AS AvailableItems,
+                    -- 商品收入（含按比例分摊的运费）= 原价 * 订单总金额 / 原价总额
+                    SUM(CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
+                        THEN ROUND(ol.PriceAtSale * (co.TotalAmount / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
+                        ELSE 0 END) AS TotalRevenue,
+                    MIN(si.AcquiredDate) AS AcquiredDate
+                FROM StockItem si
+                LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
+                LEFT JOIN CustomerOrder co ON ol.OrderID = co.OrderID
+                LEFT JOIN (
+                    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
+                    FROM OrderLine
+                    GROUP BY OrderID
+                ) order_subtotals ON co.OrderID = order_subtotals.OrderID
+                WHERE si.ShopID = ?
+                  AND si.BatchNo IS NOT NULL AND si.BatchNo != ''
+                GROUP BY si.ShopID, si.BatchNo
+                ORDER BY AcquiredDate DESC
+            ";
+            $stmt = $pdo->prepare($sql);
             $stmt->execute([$shopId]);
             return $stmt->fetchAll();
         } catch (PDOException $e) {

@@ -1,47 +1,36 @@
 <?php
-$scriptPath = dirname($_SERVER['SCRIPT_NAME']); // 获取当前执行脚本的目录
-$scriptPath = str_replace('\\', '/', $scriptPath); // 兼容 Windows 反斜杠
+$scriptPath = dirname($_SERVER['SCRIPT_NAME']);
+$scriptPath = str_replace('\\', '/', $scriptPath);
 
-// 自动定位到 /public 目录
 if (strpos($scriptPath, '/public') !== false) {
-    // 截取到 /public 结束
     $baseUrl = substr($scriptPath, 0, strpos($scriptPath, '/public') + 7);
 } else {
-    // 如果还没进入 public 目录（备用）
     $baseUrl = $scriptPath . '/public';
 }
 
-// 移除末尾的斜杠（如果有多余的话）
 $baseUrl = rtrim($baseUrl, '/');
 
-// 确保BASE_URL是绝对路径，避免跳转问题
 if (!defined('BASE_URL')) {
     define('BASE_URL', $baseUrl);
 }
 
-// ========== 应用常量 ==========
-// 支付超时时间（分钟）
 if (!defined('PAYMENT_TIMEOUT_MINUTES')) {
     define('PAYMENT_TIMEOUT_MINUTES', 15);
 }
 
-// 运费（元）
 if (!defined('SHIPPING_FEE')) {
     define('SHIPPING_FEE', 15.00);
 }
 
-// 调试信息（生产环境应注释掉）
-// error_log("BASE_URL: " . BASE_URL);
-
-// 本地开发环境配置
 date_default_timezone_set('Asia/Shanghai');
 
-// XAMPP 默认设置
-$host     = '127.0.0.1'; // 或 'localhost'
-$dbname   = 'retro_echo';
-$username = 'root';      // XAMPP 默认用户名
-$password = '';          // XAMPP 默认密码为空 (注意这里留空字符串)
-$port     = '3306';
+// ========== 数据库配置 ==========
+// 优先使用环境变量（阿里云 SAE），否则使用本地配置（XAMPP）
+$host     = getenv('DB_HOST') ?: '127.0.0.1';
+$dbname   = getenv('DB_NAME') ?: 'retro_echo';
+$username = getenv('DB_USER') ?: 'root';
+$password = getenv('DB_PASS') ?: '';
+$port     = getenv('DB_PORT') ?: '3306';
 $charset  = 'utf8mb4';
 
 $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=$charset";
@@ -58,7 +47,6 @@ try {
 } catch (\PDOException $e) {
     error_log("Database Connection Error: " . $e->getMessage());
     
-    // 加载友好的错误页面
     $errorMessage = "Could not connect to the database server.";
     include __DIR__ . '/../includes/error.php';
     exit();

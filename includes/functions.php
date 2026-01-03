@@ -515,6 +515,14 @@ function registerNewCustomer($pdo, $name, $email, $password, $birthday = null) {
 
         if ($birthday) {
             $_SESSION['birth_month'] = (int)date('m', strtotime($birthday));
+
+            // 【修复】注册时也检查生日祝福，与authenticateCustomer保持一致
+            $today = date('m-d');
+            $birthdayMd = date('m-d', strtotime($birthday));
+            if ($today === $birthdayMd) {
+                $_SESSION['birthday_greeting'] = true;
+                $_SESSION['birthday_name'] = $name;
+            }
         }
 
         // 【修复】设置 user 数组，保持与员工登录一致的结构

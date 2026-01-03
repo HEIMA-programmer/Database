@@ -1188,10 +1188,27 @@ class DBProcedures {
 
     /**
      * 获取店铺收入明细（按类型分组）
+     * 【修复】使用vw_shop_order_details视图进行聚合计算，避免依赖可能不存在的vw_shop_revenue_by_type视图
      */
     public static function getShopRevenueByType($pdo, $shopId) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_shop_revenue_by_type WHERE ShopID = ?");
+            // 使用子查询先按订单去重，再按类型汇总
+            // vw_shop_order_details每个订单可能有多行（每个订单项一行），需要先去重
+            $sql = "
+                SELECT
+                    ShopID,
+                    OrderCategory AS RevenueType,
+                    COUNT(*) AS OrderCount,
+                    SUM(TotalAmount) AS Revenue,
+                    SUM(COALESCE(ShippingCost, 0)) AS TotalShipping
+                FROM (
+                    SELECT DISTINCT OrderID, ShopID, OrderCategory, TotalAmount, ShippingCost
+                    FROM vw_shop_order_details
+                    WHERE ShopID = ?
+                ) AS distinct_orders
+                GROUP BY ShopID, OrderCategory
+            ";
+            $stmt = $pdo->prepare($sql);
             $stmt->execute([$shopId]);
             return $stmt->fetchAll();
         } catch (PDOException $e) {
@@ -1444,12 +1461,12 @@ class DBProcedures {
 
     /**
      * 获取店铺月度销售趋势
-     * 【重构】使用汇总视图 vw_shop_monthly_sales_summary
-     * 收入计算已在视图中完成：商品折后收入（不含运费）
+     * 【修复】使用视图 vw_shop_monthly_sales_summary
+     * 收入包含运费（针对店铺整体）
      */
     public static function getShopMonthlySalesTrend($pdo, $shopId, $limit = 12) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM vw_shop_monthly_sales_summary WHERE ShopID = ? LIMIT ?");
+            $stmt = $pdo->prepare("SELECT * FROM vw_shop_monthly_sales_summary WHERE ShopID = ? ORDER BY SalesMonth DESC LIMIT ?");
             $stmt->execute([$shopId, $limit]);
             return $stmt->fetchAll();
         } catch (PDOException $e) {
@@ -1497,14 +1514,12 @@ class DBProcedures {
 
     /**
      * 获取店铺批次售卖分析
-     * Uses vw_shop_batch_sales_analysis view
+     * 【修复】使用视图 vw_shop_batch_sales_analysis
+     * 收入包含按比例分摊的运费（针对店铺整体）
      */
     public static function getShopBatchSalesAnalysis($pdo, $shopId) {
         try {
-            $stmt = $pdo->prepare("
-                SELECT * FROM vw_shop_batch_sales_analysis
-                WHERE ShopID = ?
-            ");
+            $stmt = $pdo->prepare("SELECT * FROM vw_shop_batch_sales_analysis WHERE ShopID = ?");
             $stmt->execute([$shopId]);
             return $stmt->fetchAll();
         } catch (PDOException $e) {

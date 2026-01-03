@@ -2656,10 +2656,11 @@ class DBProcedures {
                     UnitCost AS TotalCost,
                     1 AS Quantity,
                     AcquiredDate,
-                    SourceType
+                    SourceType,
+                    Status
                 FROM vw_stock_item_with_cost
-                WHERE ShopID = ? AND Status = 'Available'
-                ORDER BY Title, ConditionGrade
+                WHERE ShopID = ? AND Status IN ('Available', 'Reserved')
+                ORDER BY Status DESC, Title, ConditionGrade
             ");
             $stmt->execute([$shopId]);
             return $stmt->fetchAll();

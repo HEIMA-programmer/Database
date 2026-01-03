@@ -1,0 +1,132 @@
+卷 新加卷 的文件夹 PATH 列表
+卷序列号为 1058-7A78
+D:.
+|   diagram.txt
+|   structure.txt
+|   
++---config
+|       db_connect.php
+|       
++---docs
+|       WEB_TESTING_PLAN.md
+|       WEB_TESTING_PLAN_ADMIN.md
+|       WEB_TESTING_PLAN_ADVANCED.md
+|       WEB_TESTING_PLAN_CUSTOMER.md
+|       WEB_TESTING_PLAN_MANAGER.md
+|       WEB_TESTING_PLAN_STAFF.md
+|       
++---includes
+|       ApiResponse.php
+|       auth_guard.php
+|       db_procedures.php
+|       error.php
+|       footer.php
+|       functions.php
+|       header.php
+|       
++---out
+|   \---diagram
+|           diagram.svg
+|           
++---public
+|   |   .htaccess
+|   |   about.php
+|   |   contact.php
+|   |   faq.php
+|   |   index.php
+|   |   login.php
+|   |   logout.php
+|   |   register.php
+|   |   
+|   +---admin
+|   |       inventory.php
+|   |       procurement.php
+|   |       products.php
+|   |       requests.php
+|   |       suppliers.php
+|   |       users.php
+|   |       warehouse_dispatch.php
+|   |       
+|   +---api
+|   |   +---admin
+|   |   |       price_config.php
+|   |   |       requests.php
+|   |   |       stock_prices.php
+|   |   |       
+|   |   +---customer
+|   |   |       cart.php
+|   |   |       
+|   |   +---manager
+|   |   |       inventory_price.php
+|   |   |       report_details.php
+|   |   |       
+|   |   \---staff
+|   |           calculate_price.php
+|   |           order_detail.php
+|   |           
+|   +---assets
+|   |   +---css
+|   |   |       enhancements.css
+|   |   |       style.css
+|   |   |       
+|   |   \---js
+|   |       |   enhancements.js
+|   |       |   
+|   |       \---pages
+|   |               admin-procurement.js
+|   |               admin-products.js
+|   |               admin-requests.js
+|   |               customer-checkout.js
+|   |               manager-reports.js
+|   |               staff-buyback.js
+|   |               staff-pos.js
+|   |               
+|   +---customer
+|   |       cancel_order.php
+|   |       cart.php
+|   |       catalog.php
+|   |       checkout.php
+|   |       orders.php
+|   |       order_detail.php
+|   |       pay.php
+|   |       product.php
+|   |       profile.php
+|   |       release.php
+|   |       
+|   +---manager
+|   |       customer_orders.php
+|   |       dashboard.php
+|   |       inventory_cost_details.php
+|   |       order_details.php
+|   |       reports.php
+|   |       requests.php
+|   |       users.php
+|   |       
+|   \---staff
+|           buyback.php
+|           fulfillment.php
+|           inventory.php
+|           pickup.php
+|           pos.php
+|           pos_checkout.php
+|           
++---report
+|       00_cover_page.md
+|       01_connection_info.md
+|       02_executive_summary.md
+|       03_user_guide.md
+|       04_technical_annex.md
+|       05_advanced_queries.md
+|       06_additional_features.md
+|       FULL_REPORT.md
+|       README.md
+|       
+\---sql
+        advanced.sql
+        indexes.sql
+        procedures.sql
+        schema.sql
+        seeds.sql
+        triggers.sql
+        views.sql
+        

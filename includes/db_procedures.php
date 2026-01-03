@@ -341,6 +341,80 @@ class DBProcedures {
     }
 
     // ----------------
+    // 【并发登录控制】Session 管理相关
+    // ----------------
+
+    /**
+     * 更新员工的当前 Session ID
+     * @param PDO $pdo
+     * @param int $employeeId
+     * @param string|null $sessionId 登录时传入 session_id()，登出时传入 null
+     * @return bool
+     */
+    public static function updateEmployeeSessionId($pdo, $employeeId, $sessionId) {
+        try {
+            $stmt = $pdo->prepare("UPDATE Employee SET CurrentSessionID = ? WHERE EmployeeID = ?");
+            return $stmt->execute([$sessionId, $employeeId]);
+        } catch (PDOException $e) {
+            error_log("updateEmployeeSessionId Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 更新客户的当前 Session ID
+     * @param PDO $pdo
+     * @param int $customerId
+     * @param string|null $sessionId 登录时传入 session_id()，登出时传入 null
+     * @return bool
+     */
+    public static function updateCustomerSessionId($pdo, $customerId, $sessionId) {
+        try {
+            $stmt = $pdo->prepare("UPDATE Customer SET CurrentSessionID = ? WHERE CustomerID = ?");
+            return $stmt->execute([$sessionId, $customerId]);
+        } catch (PDOException $e) {
+            error_log("updateCustomerSessionId Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 获取员工的当前 Session ID
+     * @param PDO $pdo
+     * @param int $employeeId
+     * @return string|null
+     */
+    public static function getEmployeeSessionId($pdo, $employeeId) {
+        try {
+            $stmt = $pdo->prepare("SELECT CurrentSessionID FROM Employee WHERE EmployeeID = ?");
+            $stmt->execute([$employeeId]);
+            $result = $stmt->fetch();
+            return $result ? $result['CurrentSessionID'] : null;
+        } catch (PDOException $e) {
+            error_log("getEmployeeSessionId Error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 获取客户的当前 Session ID
+     * @param PDO $pdo
+     * @param int $customerId
+     * @return string|null
+     */
+    public static function getCustomerSessionId($pdo, $customerId) {
+        try {
+            $stmt = $pdo->prepare("SELECT CurrentSessionID FROM Customer WHERE CustomerID = ?");
+            $stmt->execute([$customerId]);
+            $result = $stmt->fetch();
+            return $result ? $result['CurrentSessionID'] : null;
+        } catch (PDOException $e) {
+            error_log("getCustomerSessionId Error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    // ----------------
     // 管理与报表相关
     // ----------------
 

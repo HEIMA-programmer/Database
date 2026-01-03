@@ -961,12 +961,7 @@ SELECT
     ROUND(
         ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)),
         2
-    ) AS ItemRevenue,
-    -- 【新增】商品收入含按比例分摊的运费 - 用于店铺级别分析
-    ROUND(
-        ol.PriceAtSale * (co.TotalAmount / NULLIF(order_subtotals.OrderSubtotal, 0)),
-        2
-    ) AS ItemRevenueWithShipping
+    ) AS ItemRevenue
 FROM CustomerOrder co
 JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
@@ -1886,7 +1881,7 @@ ORDER BY AcquiredDate DESC;
 -- 109. Batch Sales Detail View
 -- Used for manager reports to show individual items in a batch
 -- Fixed: Filter completed orders when showing sold price/date
--- 【修复】添加含运费的收入字段，与汇总视图保持一致
+-- 【修复】添加OrderID和ShippingCost字段，用于底部统计运费
 CREATE OR REPLACE VIEW vw_batch_sales_detail AS
 SELECT
     si.ShopID,
@@ -1899,16 +1894,15 @@ SELECT
     si.Status,
     si.AcquiredDate,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN ol.PriceAtSale ELSE NULL END AS SoldPrice,
-    -- 商品折后售价（不含运费）- 用于专辑级别分析
+    -- 商品折后售价（不含运费）
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
         THEN ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
         ELSE NULL END AS ItemSoldRevenue,
-    -- 【新增】商品收入含按比例分摊的运费 - 用于店铺级别分析，与汇总一致
-    CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
-        THEN ROUND(ol.PriceAtSale * (co.TotalAmount / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
-        ELSE NULL END AS ItemSoldRevenueWithShipping,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN co.OrderDate ELSE NULL END AS SoldDate,
-    CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN COALESCE(c.Name, 'Guest') ELSE NULL END AS CustomerName
+    CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN COALESCE(c.Name, 'Guest') ELSE NULL END AS CustomerName,
+    -- 【新增】订单ID和运费，用于底部统计
+    CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN co.OrderID ELSE NULL END AS OrderID,
+    CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN COALESCE(co.ShippingCost, 0) ELSE NULL END AS ShippingCost
 FROM StockItem si
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID

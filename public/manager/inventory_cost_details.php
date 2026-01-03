@@ -146,6 +146,7 @@ require_once __DIR__ . '/../../includes/header.php';
             <div class="card-header border-secondary bg-transparent">
                 <h5 class="card-title text-info mb-0">
                     <i class="fa-solid fa-warehouse me-2"></i>Current Stock Cost
+                    <small class="text-muted ms-2">(Available + Reserved)</small>
                 </h5>
             </div>
             <div class="card-body p-0">
@@ -161,7 +162,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <th class="text-center">Qty</th>
                                     <th class="text-end">Unit Cost</th>
                                     <th class="text-end">Total</th>
-                                    <th>Source</th>
+                                    <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -176,10 +177,10 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <td class="text-end"><?= formatPrice($item['UnitCost']) ?></td>
                                     <td class="text-end text-info fw-bold"><?= formatPrice($item['TotalCost']) ?></td>
                                     <td>
-                                        <?php if ($item['SourceType'] === 'Buyback'): ?>
-                                            <span class="badge bg-warning text-dark">Buyback</span>
+                                        <?php if (($item['Status'] ?? 'Available') === 'Reserved'): ?>
+                                            <span class="badge bg-warning text-dark">Reserved</span>
                                         <?php else: ?>
-                                            <span class="badge bg-primary">Supplier</span>
+                                            <span class="badge bg-success">Available</span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>

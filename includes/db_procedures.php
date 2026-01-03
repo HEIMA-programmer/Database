@@ -1414,22 +1414,12 @@ class DBProcedures {
 
     /**
      * 获取店铺按流派销售统计
+     * 【重构】使用汇总视图 vw_shop_genre_sales_summary
+     * 收入计算已在视图中完成：商品折后收入（不含运费）
      */
     public static function getShopSalesByGenre($pdo, $shopId) {
         try {
-            $stmt = $pdo->prepare("
-                SELECT
-                    Genre,
-                    COUNT(DISTINCT OrderID) AS TotalOrders,
-                    COUNT(*) AS ItemsSold,
-                    SUM(PriceAtSale) AS TotalRevenue,
-                    AVG(PriceAtSale) AS AvgPrice,
-                    AVG(DaysToSell) AS AvgDaysToSell
-                FROM vw_sales_by_genre_detail
-                WHERE ShopID = ?
-                GROUP BY Genre
-                ORDER BY TotalRevenue DESC
-            ");
+            $stmt = $pdo->prepare("SELECT * FROM vw_shop_genre_sales_summary WHERE ShopID = ?");
             $stmt->execute([$shopId]);
             return $stmt->fetchAll();
         } catch (PDOException $e) {
@@ -1454,20 +1444,12 @@ class DBProcedures {
 
     /**
      * 获取店铺月度销售趋势
+     * 【重构】使用汇总视图 vw_shop_monthly_sales_summary
+     * 收入计算已在视图中完成：商品折后收入（不含运费）
      */
     public static function getShopMonthlySalesTrend($pdo, $shopId, $limit = 12) {
         try {
-            $stmt = $pdo->prepare("
-                SELECT
-                    SalesMonth,
-                    COUNT(DISTINCT OrderID) AS OrderCount,
-                    SUM(PriceAtSale) AS MonthlyRevenue
-                FROM vw_monthly_sales_detail
-                WHERE ShopID = ?
-                GROUP BY SalesMonth
-                ORDER BY SalesMonth DESC
-                LIMIT ?
-            ");
+            $stmt = $pdo->prepare("SELECT * FROM vw_shop_monthly_sales_summary WHERE ShopID = ? LIMIT ?");
             $stmt->execute([$shopId, $limit]);
             return $stmt->fetchAll();
         } catch (PDOException $e) {

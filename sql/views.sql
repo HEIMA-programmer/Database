@@ -237,19 +237,28 @@ GROUP BY so.SupplierOrderID, s.Name, e.Name, sh.Name, so.OrderDate, so.Status, s
 -- ================================================
 
 -- 14. [Report] Sales by Genre (with turnover metrics)
+-- 【修复】精确计算商品折后收入（不含运费）
+-- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_report_sales_by_genre AS
 SELECT
     r.Genre,
     COUNT(DISTINCT ol.OrderID) AS TotalOrders,
     COUNT(ol.StockItemID) AS ItemsSold,
-    SUM(ol.PriceAtSale) AS TotalRevenue,
-    AVG(ol.PriceAtSale) AS AvgPrice,
+    -- 【精确计算】商品折后收入（不含运费）
+    SUM(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) AS TotalRevenue,
+    AVG(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) AS AvgPrice,
     AVG(DATEDIFF(COALESCE(s.DateSold, NOW()), s.AcquiredDate)) AS AvgDaysToSell
 FROM OrderLine ol
 JOIN StockItem s ON ol.StockItemID = s.StockItemID
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 JOIN CustomerOrder co ON ol.OrderID = co.OrderID
-WHERE co.OrderStatus IN ('Paid', 'Completed')
+-- 子查询计算每个订单的商品小计（原价总和）
+LEFT JOIN (
+    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
+    FROM OrderLine
+    GROUP BY OrderID
+) order_subtotals ON co.OrderID = order_subtotals.OrderID
+WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
 GROUP BY r.Genre
 ORDER BY TotalRevenue DESC;
 
@@ -657,6 +666,8 @@ LEFT JOIN Employee e2 ON mr.RespondedByEmployeeID = e2.EmployeeID
 ORDER BY mr.CreatedAt DESC;
 
 -- 40. 最受欢迎单品视图 - 统计销量最高的专辑
+-- 【修复】精确计算商品折后收入（不含运费）
+-- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_popular_items AS
 SELECT
     r.ReleaseID,
@@ -664,12 +675,19 @@ SELECT
     r.ArtistName,
     r.Genre,
     COUNT(ol.StockItemID) AS TotalSold,
-    SUM(ol.PriceAtSale) AS TotalRevenue
+    -- 【精确计算】商品折后收入（不含运费）
+    SUM(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) AS TotalRevenue
 FROM OrderLine ol
 JOIN StockItem s ON ol.StockItemID = s.StockItemID
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 JOIN CustomerOrder co ON ol.OrderID = co.OrderID
-WHERE co.OrderStatus IN ('Paid', 'Completed')
+-- 子查询计算每个订单的商品小计（原价总和）
+LEFT JOIN (
+    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
+    FROM OrderLine
+    GROUP BY OrderID
+) order_subtotals ON co.OrderID = order_subtotals.OrderID
+WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
 GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre
 ORDER BY TotalSold DESC;
 
@@ -688,6 +706,7 @@ GROUP BY bo.ShopID, sh.Name;
 -- 42. 店铺收入明细视图 - 按类型分组（在线售卖/线下取货/POS/Buyback）
 -- 【修复】处理FulfillmentType为NULL的旧订单，默认按OrderType推断
 -- 【修复】添加COLLATE解决字符集排序规则冲突问题
+-- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_shop_revenue_by_type AS
 SELECT
     co.FulfilledByShopID AS ShopID,
@@ -704,7 +723,7 @@ SELECT
     SUM(COALESCE(co.ShippingCost, 0)) AS TotalShipping
 FROM CustomerOrder co
 JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
-WHERE co.OrderStatus IN ('Paid', 'Completed')
+WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
 GROUP BY co.FulfilledByShopID, sh.Name,
     CASE
         WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
@@ -757,6 +776,7 @@ ORDER BY AvailableQuantity ASC;
 -- 45. 客户在特定店铺的消费历史视图
 -- 【修复】处理FulfillmentType为NULL的旧订单
 -- 【修复】添加COLLATE解决字符集排序规则冲突问题
+-- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_customer_shop_orders AS
 SELECT
     co.OrderID,
@@ -781,7 +801,7 @@ SELECT
 FROM CustomerOrder co
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
-WHERE co.OrderStatus IN ('Paid', 'Completed');
+WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');
 
 -- 46. 客户Buyback历史视图
 CREATE OR REPLACE VIEW vw_customer_buyback_history AS
@@ -810,6 +830,7 @@ WHERE bo.Status = 'Completed';
 -- 【修复】处理FulfillmentType为NULL的旧订单
 -- 【修复】使用LEFT JOIN确保即使缺少明细数据也能显示订单
 -- 【修复】添加COLLATE解决字符集排序规则冲突问题
+-- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_shop_order_details AS
 SELECT
     co.OrderID,
@@ -839,9 +860,10 @@ LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 LEFT JOIN OrderLine ol ON co.OrderID = ol.OrderID
 LEFT JOIN StockItem si ON ol.StockItemID = si.StockItemID
 LEFT JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-WHERE co.OrderStatus IN ('Paid', 'Completed');
+WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');
 
 -- 48. 店铺Top消费者视图
+-- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_shop_top_customers AS
 SELECT
     co.FulfilledByShopID AS ShopID,
@@ -856,11 +878,15 @@ SELECT
 FROM CustomerOrder co
 JOIN Customer c ON co.CustomerID = c.CustomerID
 JOIN MembershipTier mt ON c.TierID = mt.TierID
-WHERE co.OrderStatus IN ('Paid', 'Completed')
+WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
 GROUP BY co.FulfilledByShopID, co.CustomerID, c.Name, c.Email, mt.TierName, c.Points
 ORDER BY TotalSpent DESC;
 
 -- 49. 按流派销售明细视图（含店铺信息）
+-- 【修复】精确计算实际收入：
+--   - ItemRevenue: 商品折后收入 = PriceAtSale * ((TotalAmount - ShippingCost) / OrderSubtotal)
+--   - 运费不分摊到商品，作为订单级别收入单独处理
+-- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_sales_by_genre_detail AS
 SELECT
     r.Genre,
@@ -872,11 +898,19 @@ SELECT
     co.OrderDate,
     co.OrderType,
     co.FulfillmentType,
+    co.TotalAmount,
+    co.ShippingCost,
     r.ReleaseID,
     r.Title,
     r.ArtistName,
     si.ConditionGrade,
     ol.PriceAtSale,
+    order_subtotals.OrderSubtotal,
+    -- 【精确计算】商品折后收入（不含运费）= 原价 * 折扣后商品总额 / 原价总额
+    ROUND(
+        ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)),
+        2
+    ) AS ItemRevenue,
     DATEDIFF(COALESCE(si.DateSold, NOW()), si.AcquiredDate) AS DaysToSell
 FROM OrderLine ol
 JOIN StockItem si ON ol.StockItemID = si.StockItemID
@@ -884,11 +918,19 @@ JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 JOIN CustomerOrder co ON ol.OrderID = co.OrderID
 JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-WHERE co.OrderStatus IN ('Paid', 'Completed');
+-- 子查询计算每个订单的商品小计（原价总和）
+LEFT JOIN (
+    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
+    FROM OrderLine
+    GROUP BY OrderID
+) order_subtotals ON co.OrderID = order_subtotals.OrderID
+WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');
 
 -- 50. 月度销售明细视图
 -- 【修复】处理FulfillmentType为NULL的旧订单
 -- 【修复】添加COLLATE解决字符集排序规则冲突问题
+-- 【修复】精确计算商品折后收入（不含运费）
+-- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_monthly_sales_detail AS
 SELECT
     DATE_FORMAT(co.OrderDate, '%Y-%m') AS SalesMonth,
@@ -899,6 +941,7 @@ SELECT
     COALESCE(c.Name, 'Guest') AS CustomerName,
     co.OrderDate,
     co.TotalAmount,
+    co.ShippingCost,
     co.OrderType,
     co.FulfillmentType,
     CASE
@@ -912,14 +955,26 @@ SELECT
     r.Title,
     r.ArtistName,
     si.ConditionGrade,
-    ol.PriceAtSale
+    ol.PriceAtSale,
+    order_subtotals.OrderSubtotal,
+    -- 【精确计算】商品折后收入（不含运费）
+    ROUND(
+        ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)),
+        2
+    ) AS ItemRevenue
 FROM CustomerOrder co
 JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 JOIN OrderLine ol ON co.OrderID = ol.OrderID
 JOIN StockItem si ON ol.StockItemID = si.StockItemID
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
-WHERE co.OrderStatus IN ('Paid', 'Completed');
+-- 子查询计算每个订单的商品小计（原价总和）
+LEFT JOIN (
+    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
+    FROM OrderLine
+    GROUP BY OrderID
+) order_subtotals ON co.OrderID = order_subtotals.OrderID
+WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');
 
 -- 51. 库存售价管理视图（按Release和Condition分组）
 CREATE OR REPLACE VIEW vw_stock_price_by_condition AS
@@ -1735,26 +1790,35 @@ ORDER BY so.OrderDate DESC;
 
 -- 106. Shop Artist Profit Analysis View
 -- Used for manager reports to analyze profit by artist
+-- 【修复】精确计算商品折后收入（不含运费）
 CREATE OR REPLACE VIEW vw_shop_artist_profit_analysis AS
 SELECT
     si.ShopID,
     r.ArtistName,
     COUNT(DISTINCT ol.StockItemID) AS ItemsSold,
-    SUM(ol.PriceAtSale) AS TotalRevenue,
+    -- 【精确计算】商品折后收入 = 原价 * 折扣后商品总额 / 原价总额
+    SUM(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) AS TotalRevenue,
     SUM(COALESCE(sic.UnitCost, si.UnitPrice * 0.6)) AS TotalCost,
-    SUM(ol.PriceAtSale) - SUM(COALESCE(sic.UnitCost, si.UnitPrice * 0.6)) AS GrossProfit,
-    ROUND(((SUM(ol.PriceAtSale) - SUM(COALESCE(sic.UnitCost, si.UnitPrice * 0.6))) / NULLIF(SUM(ol.PriceAtSale), 0)) * 100, 1) AS ProfitMargin
+    SUM(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) - SUM(COALESCE(sic.UnitCost, si.UnitPrice * 0.6)) AS GrossProfit,
+    ROUND(((SUM(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) - SUM(COALESCE(sic.UnitCost, si.UnitPrice * 0.6))) / NULLIF(SUM(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)), 0)) * 100, 1) AS ProfitMargin
 FROM OrderLine ol
 JOIN StockItem si ON ol.StockItemID = si.StockItemID
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 JOIN CustomerOrder co ON ol.OrderID = co.OrderID
 LEFT JOIN vw_stock_item_with_cost sic ON si.StockItemID = sic.StockItemID
+-- 子查询计算每个订单的商品小计（原价总和）
+LEFT JOIN (
+    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
+    FROM OrderLine
+    GROUP BY OrderID
+) order_subtotals ON co.OrderID = order_subtotals.OrderID
 WHERE co.OrderStatus IN ('Paid', 'Completed', 'Shipped')
 GROUP BY si.ShopID, r.ArtistName
 ORDER BY GrossProfit DESC;
 
 -- 107. Artist Sales Detail View
 -- Used for manager reports to show individual sales for an artist
+-- 【修复】精确计算商品折后收入（不含运费）
 CREATE OR REPLACE VIEW vw_artist_sales_detail AS
 SELECT
     si.ShopID,
@@ -1765,20 +1829,30 @@ SELECT
     r.Title,
     si.ConditionGrade,
     ol.PriceAtSale,
+    -- 【精确计算】商品折后收入（不含运费）
+    ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2) AS ItemRevenue,
     COALESCE(sic.UnitCost, si.UnitPrice * 0.6) AS Cost,
-    ol.PriceAtSale - COALESCE(sic.UnitCost, si.UnitPrice * 0.6) AS Profit
+    -- 【精确计算】利润 = 商品折后收入 - 成本
+    ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2) - COALESCE(sic.UnitCost, si.UnitPrice * 0.6) AS Profit
 FROM OrderLine ol
 JOIN StockItem si ON ol.StockItemID = si.StockItemID
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 JOIN CustomerOrder co ON ol.OrderID = co.OrderID
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 LEFT JOIN vw_stock_item_with_cost sic ON si.StockItemID = sic.StockItemID
+-- 子查询计算每个订单的商品小计（原价总和）
+LEFT JOIN (
+    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
+    FROM OrderLine
+    GROUP BY OrderID
+) order_subtotals ON co.OrderID = order_subtotals.OrderID
 WHERE co.OrderStatus IN ('Paid', 'Completed', 'Shipped')
 ORDER BY co.OrderDate DESC;
 
 -- 108. Shop Batch Sales Analysis View
 -- Used for manager reports to analyze batch sell-through rates
 -- Fixed: Join CustomerOrder to ensure only completed orders are counted
+-- 【修复】精确计算商品折后收入（不含运费）
 CREATE OR REPLACE VIEW vw_shop_batch_sales_analysis AS
 SELECT
     si.ShopID,
@@ -1786,11 +1860,20 @@ SELECT
     COUNT(DISTINCT si.StockItemID) AS TotalItems,
     SUM(CASE WHEN si.Status = 'Sold' THEN 1 ELSE 0 END) AS SoldItems,
     SUM(CASE WHEN si.Status = 'Available' THEN 1 ELSE 0 END) AS AvailableItems,
-    SUM(CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN ol.PriceAtSale ELSE 0 END) AS TotalRevenue,
+    -- 【精确计算】商品折后收入（不含运费）
+    SUM(CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
+        THEN ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
+        ELSE 0 END) AS TotalRevenue,
     MIN(si.AcquiredDate) AS AcquiredDate
 FROM StockItem si
 LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
 LEFT JOIN CustomerOrder co ON ol.OrderID = co.OrderID
+-- 子查询计算每个订单的商品小计（原价总和）
+LEFT JOIN (
+    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
+    FROM OrderLine
+    GROUP BY OrderID
+) order_subtotals ON co.OrderID = order_subtotals.OrderID
 WHERE si.BatchNo IS NOT NULL AND si.BatchNo != ''
 GROUP BY si.ShopID, si.BatchNo
 ORDER BY AcquiredDate DESC;
@@ -1798,6 +1881,7 @@ ORDER BY AcquiredDate DESC;
 -- 109. Batch Sales Detail View
 -- Used for manager reports to show individual items in a batch
 -- Fixed: Filter completed orders when showing sold price/date
+-- 【修复】精确计算商品折后收入（不含运费）
 CREATE OR REPLACE VIEW vw_batch_sales_detail AS
 SELECT
     si.ShopID,
@@ -1810,6 +1894,10 @@ SELECT
     si.Status,
     si.AcquiredDate,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN ol.PriceAtSale ELSE NULL END AS SoldPrice,
+    -- 【精确计算】商品折后售价（不含运费）
+    CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
+        THEN ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
+        ELSE NULL END AS ItemSoldRevenue,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN co.OrderDate ELSE NULL END AS SoldDate,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN COALESCE(c.Name, 'Guest') ELSE NULL END AS CustomerName
 FROM StockItem si
@@ -1817,4 +1905,71 @@ JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
 LEFT JOIN CustomerOrder co ON ol.OrderID = co.OrderID
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+-- 子查询计算每个订单的商品小计（原价总和）
+LEFT JOIN (
+    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
+    FROM OrderLine
+    GROUP BY OrderID
+) order_subtotals ON co.OrderID = order_subtotals.OrderID
 ORDER BY si.Status DESC, r.Title;
+
+-- ================================================
+-- 110-112. 汇总视图 - 供PHP函数使用，避免在PHP中直接写SQL
+-- ================================================
+
+-- 110. 店铺按流派销售汇总视图
+-- 用于 getShopSalesByGenre 函数
+CREATE OR REPLACE VIEW vw_shop_genre_sales_summary AS
+SELECT
+    ShopID,
+    Genre,
+    COUNT(DISTINCT OrderID) AS TotalOrders,
+    COUNT(*) AS ItemsSold,
+    SUM(ItemRevenue) AS TotalRevenue,
+    AVG(ItemRevenue) AS AvgPrice,
+    AVG(DaysToSell) AS AvgDaysToSell
+FROM vw_sales_by_genre_detail
+GROUP BY ShopID, Genre
+ORDER BY TotalRevenue DESC;
+
+-- 111. 店铺月度销售汇总视图
+-- 用于 getShopMonthlySalesTrend 函数
+CREATE OR REPLACE VIEW vw_shop_monthly_sales_summary AS
+SELECT
+    ShopID,
+    SalesMonth,
+    COUNT(DISTINCT OrderID) AS OrderCount,
+    SUM(ItemRevenue) AS MonthlyRevenue,
+    SUM(ShippingCost) / COUNT(DISTINCT OrderID) AS AvgShippingPerOrder
+FROM vw_monthly_sales_detail
+GROUP BY ShopID, SalesMonth
+ORDER BY SalesMonth DESC;
+
+-- 112. 订单实际收入汇总视图
+-- 显示每个订单的商品收入、折扣金额、运费和最终总额
+CREATE OR REPLACE VIEW vw_order_revenue_breakdown AS
+SELECT
+    co.OrderID,
+    co.FulfilledByShopID AS ShopID,
+    co.CustomerID,
+    COALESCE(c.Name, 'Guest') AS CustomerName,
+    mt.TierName,
+    mt.DiscountRate,
+    co.OrderDate,
+    co.OrderType,
+    co.FulfillmentType,
+    order_subtotals.OrderSubtotal AS ListPrice,
+    (co.TotalAmount - COALESCE(co.ShippingCost, 0)) AS ItemsAfterDiscount,
+    order_subtotals.OrderSubtotal - (co.TotalAmount - COALESCE(co.ShippingCost, 0)) AS DiscountAmount,
+    co.ShippingCost,
+    co.TotalAmount AS FinalTotal,
+    co.OrderStatus
+FROM CustomerOrder co
+LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
+LEFT JOIN MembershipTier mt ON c.TierID = mt.TierID
+LEFT JOIN (
+    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
+    FROM OrderLine
+    GROUP BY OrderID
+) order_subtotals ON co.OrderID = order_subtotals.OrderID
+WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');

@@ -929,8 +929,8 @@ WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');
 -- 50. 月度销售明细视图
 -- 【修复】处理FulfillmentType为NULL的旧订单
 -- 【修复】添加COLLATE解决字符集排序规则冲突问题
--- 【修复】精确计算商品折后收入（不含运费）
 -- 【修复】添加'Shipped'状态以与其他视图保持一致
+-- 【修复】添加含运费的收入字段，与汇总视图保持一致
 CREATE OR REPLACE VIEW vw_monthly_sales_detail AS
 SELECT
     DATE_FORMAT(co.OrderDate, '%Y-%m') AS SalesMonth,
@@ -957,11 +957,16 @@ SELECT
     si.ConditionGrade,
     ol.PriceAtSale,
     order_subtotals.OrderSubtotal,
-    -- 【精确计算】商品折后收入（不含运费）
+    -- 商品折后收入（不含运费）- 用于专辑级别分析
     ROUND(
         ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)),
         2
-    ) AS ItemRevenue
+    ) AS ItemRevenue,
+    -- 【新增】商品收入含按比例分摊的运费 - 用于店铺级别分析
+    ROUND(
+        ol.PriceAtSale * (co.TotalAmount / NULLIF(order_subtotals.OrderSubtotal, 0)),
+        2
+    ) AS ItemRevenueWithShipping
 FROM CustomerOrder co
 JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
@@ -1881,7 +1886,7 @@ ORDER BY AcquiredDate DESC;
 -- 109. Batch Sales Detail View
 -- Used for manager reports to show individual items in a batch
 -- Fixed: Filter completed orders when showing sold price/date
--- 【修复】精确计算商品折后收入（不含运费）
+-- 【修复】添加含运费的收入字段，与汇总视图保持一致
 CREATE OR REPLACE VIEW vw_batch_sales_detail AS
 SELECT
     si.ShopID,
@@ -1894,10 +1899,14 @@ SELECT
     si.Status,
     si.AcquiredDate,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN ol.PriceAtSale ELSE NULL END AS SoldPrice,
-    -- 【精确计算】商品折后售价（不含运费）
+    -- 商品折后售价（不含运费）- 用于专辑级别分析
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
         THEN ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
         ELSE NULL END AS ItemSoldRevenue,
+    -- 【新增】商品收入含按比例分摊的运费 - 用于店铺级别分析，与汇总一致
+    CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
+        THEN ROUND(ol.PriceAtSale * (co.TotalAmount / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
+        ELSE NULL END AS ItemSoldRevenueWithShipping,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN co.OrderDate ELSE NULL END AS SoldDate,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN COALESCE(c.Name, 'Guest') ELSE NULL END AS CustomerName
 FROM StockItem si

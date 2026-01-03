@@ -93,6 +93,8 @@ function renderMonthDetail(month, modalElement) {
     if (Array.isArray(data) && data.length > 0) {
         const html = data.map(row => {
             const typeBadge = typeBadges[row.OrderCategory] || '<span class="badge bg-secondary">Other</span>';
+            // 【修复】使用含运费的收入字段，与汇总保持一致
+            const revenue = parseFloat(row.ItemRevenueWithShipping || row.PriceAtSale || 0);
             return `<tr>
                 <td><span class="badge bg-info">#${row.OrderID || ''}</span></td>
                 <td>${row.OrderDate || ''}</td>
@@ -100,7 +102,7 @@ function renderMonthDetail(month, modalElement) {
                 <td>${row.CustomerName || 'Guest'}</td>
                 <td>${escapeHtml(row.Title || '')}</td>
                 <td><span class="badge bg-secondary">${row.ConditionGrade || ''}</span></td>
-                <td class="text-end text-success">¥${parseFloat(row.PriceAtSale || 0).toFixed(2)}</td>
+                <td class="text-end text-success">¥${revenue.toFixed(2)}</td>
             </tr>`;
         }).join('');
         bodyEl.innerHTML = html;
@@ -199,8 +201,9 @@ function renderBatchDetail(batch, modalElement) {
             const statusBadge = row.Status === 'Sold'
                 ? '<span class="badge bg-success">Sold</span>'
                 : '<span class="badge bg-warning text-dark">Available</span>';
+            // 【修复】已售商品使用含运费的收入字段，与汇总保持一致
             const price = row.Status === 'Sold'
-                ? `¥${parseFloat(row.SoldPrice || 0).toFixed(2)}`
+                ? `¥${parseFloat(row.ItemSoldRevenueWithShipping || row.SoldPrice || 0).toFixed(2)}`
                 : `¥${parseFloat(row.UnitPrice || 0).toFixed(2)}`;
             const soldDate = row.SoldDate || '-';
             const customer = row.CustomerName || '-';

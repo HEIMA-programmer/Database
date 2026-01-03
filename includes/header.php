@@ -264,3 +264,44 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
 
 <div class="container mt-5 flex-grow-1">
     <?php displayFlash(); ?>
+
+    <?php if (isset($_SESSION['birthday_greeting']) && $_SESSION['birthday_greeting']): ?>
+    <!-- Birthday Greeting Modal -->
+    <div class="modal fade" id="birthdayModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content birthday-modal-content">
+                <div class="modal-body text-center py-5">
+                    <div class="birthday-confetti"></div>
+                    <div class="birthday-icon mb-4">
+                        <i class="fa-solid fa-cake-candles"></i>
+                    </div>
+                    <h2 class="text-warning fw-bold mb-3">Happy Birthday!</h2>
+                    <p class="text-light fs-5 mb-4">
+                        Dear <span class="text-warning fw-bold"><?= h($_SESSION['birthday_name'] ?? $_SESSION['username']) ?></span>,<br>
+                        wishing you a wonderful day filled with joy and great music!
+                    </p>
+                    <div class="birthday-balloons">
+                        <span class="balloon balloon-1">🎈</span>
+                        <span class="balloon balloon-2">🎉</span>
+                        <span class="balloon balloon-3">🎈</span>
+                        <span class="balloon balloon-4">🎂</span>
+                        <span class="balloon balloon-5">🎈</span>
+                    </div>
+                    <button type="button" class="btn btn-warning btn-lg px-5 mt-3" data-bs-dismiss="modal">
+                        <i class="fa-solid fa-music me-2"></i>Let's Celebrate!
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var birthdayModal = new bootstrap.Modal(document.getElementById('birthdayModal'));
+            birthdayModal.show();
+        });
+    </script>
+    <?php
+        // Clear the flag so the modal only shows once per login
+        unset($_SESSION['birthday_greeting']);
+    ?>
+    <?php endif; ?>

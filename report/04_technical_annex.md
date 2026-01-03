@@ -504,4 +504,305 @@ $stmt->execute([$username]);
 
 ---
 
+## 4.8 PHP Application Architecture
+
+The web application follows a **modular MVC-like architecture** with clear separation of concerns across 45+ PHP pages.
+
+### 4.8.1 Directory Structure
+
+```
+/includes/           - Core components shared across all pages
+    auth_guard.php   - Role-based access control
+    functions.php    - Business logic and helper functions
+    db_procedures.php - Database abstraction layer (DBProcedures class)
+    header.php       - Common navigation header
+    footer.php       - Common footer
+    ApiResponse.php  - JSON API response handler
+
+/public/             - Frontend pages organized by role
+    /customer/       - Customer-facing pages (catalog, cart, checkout)
+    /staff/          - Staff operations (POS, buyback, fulfillment)
+    /manager/        - Manager dashboard and reports
+    /admin/          - System administration pages
+    /api/            - RESTful API endpoints
+```
+
+### 4.8.2 Database Abstraction Layer (DBProcedures Class)
+
+All database operations are encapsulated in a static `DBProcedures` class that exclusively queries views, maintaining the View-Based Access Control principle:
+
+```php
+class DBProcedures {
+    // Stock operations use views, not base tables
+    public static function getStockItemInfoWithLock($pdo, $stockId) {
+        // Uses stored procedure for concurrent-safe locking
+        $stmt = $pdo->prepare("CALL sp_get_stock_item_with_lock(?)");
+        $stmt->execute([$stockId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    // Customer order lookup via view
+    public static function getCustomerOrders($pdo, $customerId) {
+        $stmt = $pdo->prepare("SELECT * FROM vw_customer_my_orders_list
+                               WHERE CustomerID = ? ORDER BY OrderDate DESC");
+        $stmt->execute([$customerId]);
+        return $stmt->fetchAll();
+    }
+
+    // Manager request workflow
+    public static function respondToRequest($pdo, $requestId, $employeeId,
+                                            $approved, $responseNote) {
+        // Calls stored procedure for atomic request processing
+        $stmt = $pdo->prepare("CALL sp_respond_to_request(?, ?, ?, ?)");
+        return $stmt->execute([$requestId, $employeeId, $approved, $responseNote]);
+    }
+}
+```
+
+### 4.8.3 Role-Based Access Control (auth_guard.php)
+
+Every protected page includes role verification at the top:
+
+```php
+// auth_guard.php - Central role enforcement
+function requireRole($role) {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+
+    if (!isset($_SESSION['user_role'])) {
+        flash('Please login to continue.', 'warning');
+        header('Location: ' . BASE_URL . '/login.php');
+        exit;
+    }
+
+    if ($_SESSION['user_role'] !== $role) {
+        flash('Access denied. Insufficient permissions.', 'danger');
+        header('Location: ' . BASE_URL . '/login.php');
+        exit;
+    }
+}
+
+// Usage in page headers:
+require_once __DIR__ . '/../../includes/auth_guard.php';
+requireRole('Manager');  // Only managers can access this page
+```
+
+### 4.8.4 Session-Based Shopping Cart
+
+Cart management uses PHP sessions for guest and registered user support:
+
+```php
+// Adding items to cart with shop restriction
+function addToCart($pdo, $stockId) {
+    $stock = DBProcedures::getStockItemInfo($pdo, $stockId);
+
+    // Enforce single-store cart restriction
+    if (isset($_SESSION['selected_shop_id']) &&
+        $_SESSION['selected_shop_id'] != $stock['ShopID']) {
+        return ['success' => false,
+                'message' => 'Cannot add items from different stores'];
+    }
+
+    $_SESSION['selected_shop_id'] = $stock['ShopID'];
+    $_SESSION['cart'][] = $stockId;
+    return ['success' => true, 'message' => 'Item added to cart'];
+}
+```
+
+### 4.8.5 CSRF Protection
+
+All forms include CSRF token validation:
+
+```php
+// Generating token (in header.php)
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// In forms:
+<input type="hidden" name="csrf_token"
+       value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+
+// Validation on POST:
+if (!isset($_POST['csrf_token']) ||
+    !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+    flash('Invalid security token. Please try again.', 'danger');
+    header('Location: ' . $_SERVER['HTTP_REFERER']);
+    exit;
+}
+```
+
+### 4.8.6 XSS Prevention
+
+All user output is sanitized using a helper function:
+
+```php
+// Helper function in functions.php
+function h($string) {
+    return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+}
+
+// Usage throughout templates:
+<td><?= h($customer['Name']) ?></td>
+<div class="alert"><?= h($message) ?></div>
+```
+
+### 4.8.7 Transaction Management
+
+Critical operations use database transactions:
+
+```php
+// Example: Checkout process
+try {
+    $pdo->beginTransaction();
+
+    // Create order
+    $orderId = createOrder($pdo, $customerId, $cartItems);
+
+    // Reserve stock items
+    foreach ($cartItems as $stockId) {
+        DBProcedures::reserveStockItem($pdo, $stockId, $orderId);
+    }
+
+    // Apply membership discount
+    applyMembershipDiscount($pdo, $orderId, $customerId);
+
+    $pdo->commit();
+    clearCart();
+    return ['success' => true, 'order_id' => $orderId];
+
+} catch (Exception $e) {
+    $pdo->rollBack();
+    error_log("Checkout failed: " . $e->getMessage());
+    return ['success' => false, 'message' => 'Checkout failed'];
+}
+```
+
+### 4.8.8 RESTful API Endpoints
+
+API endpoints use the `ApiResponse` class for consistent JSON responses:
+
+```php
+// ApiResponse.php - Standardized API responses
+class ApiResponse {
+    public static function success($data, $message = 'Success') {
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'message' => $message,
+            'data' => $data
+        ]);
+    }
+
+    public static function error($message, $code = 400) {
+        http_response_code($code);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'message' => $message
+        ]);
+    }
+}
+
+// Example API endpoint: /api/customer/cart.php
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    switch ($action) {
+        case 'add':
+            $result = addToCart($pdo, $_POST['stock_id']);
+            ApiResponse::success([
+                'cart_count' => getCartCount()
+            ], $result['message']);
+            break;
+
+        case 'remove':
+            removeFromCart($_POST['stock_id']);
+            ApiResponse::success(['cart_count' => getCartCount()]);
+            break;
+    }
+}
+```
+
+### 4.8.9 Server-Side Price Calculation
+
+Business-critical calculations are performed server-side to protect pricing logic:
+
+```php
+// API: /api/staff/calculate_price.php
+// Condition multipliers (kept server-side, not exposed to frontend)
+$conditionFactors = [
+    'New'  => 1.00,
+    'Mint' => 0.95,
+    'NM'   => 0.85,
+    'VG+'  => 0.70,
+    'VG'   => 0.55
+];
+
+// Profit margin calculation (business logic protected)
+function getProfitMargin($cost) {
+    if ($cost <= 20) return 1.50;
+    if ($cost <= 50) return 1.60;
+    if ($cost <= 100) return 1.70;
+    return 1.80;
+}
+
+// Frontend only receives final calculated price
+ApiResponse::success(['price' => $suggestedPrice, 'source' => 'calculated']);
+```
+
+### 4.8.10 Page Data Preparation Pattern
+
+Each page uses a dedicated data preparation function for clean separation:
+
+```php
+// In functions.php
+function prepareDashboardData($pdo, $shopId) {
+    return [
+        'total_sales' => DBProcedures::getShopTotalSales($pdo, $shopId),
+        'popular_item' => DBProcedures::getPopularItem($pdo, $shopId),
+        'top_customers' => DBProcedures::getTopCustomers($pdo, $shopId, 10),
+        'dead_stock' => DBProcedures::getDeadStock($pdo, $shopId),
+        'low_stock' => DBProcedures::getLowStockItems($pdo, $shopId)
+    ];
+}
+
+// In manager/dashboard.php
+requireRole('Manager');
+$shopId = $_SESSION['shop_id'];
+$dashboardData = prepareDashboardData($pdo, $shopId);
+
+// Extract variables for template
+$totalSales = $dashboardData['total_sales'];
+$popularItem = $dashboardData['popular_item'];
+// ... render HTML template
+```
+
+---
+
+## 4.9 Frontend Implementation
+
+### 4.9.1 Responsive Design
+
+- Bootstrap 5 framework with dark theme customization
+- Mobile-first responsive layout
+- FontAwesome icons for visual consistency
+
+### 4.9.2 JavaScript Enhancements
+
+- jQuery for AJAX operations
+- Bootstrap modals for inline editing
+- Real-time cart updates without page refresh
+- Form validation with immediate feedback
+
+### 4.9.3 Page Organization by Role
+
+| Role | Pages | Key Features |
+|------|-------|--------------|
+| Customer | 8 pages | Catalog, cart, checkout, orders, profile |
+| Staff | 5 pages | POS, buyback, fulfillment, inventory, pickups |
+| Manager | 7 pages | Dashboard, reports, requests, users, orders |
+| Admin | 7 pages | Products, procurement, suppliers, users, requests |
+
+---
+
 *Next section: Advanced SQL Queries*

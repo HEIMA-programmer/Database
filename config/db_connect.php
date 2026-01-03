@@ -1,14 +1,22 @@
 <?php
-$scriptPath = dirname($_SERVER['SCRIPT_NAME']);
-$scriptPath = str_replace('\\', '/', $scriptPath);
-
-if (strpos($scriptPath, '/public') !== false) {
-    $baseUrl = substr($scriptPath, 0, strpos($scriptPath, '/public') + 7);
+// ========== BASE_URL 配置 ==========
+// 云环境（SAE）：DocumentRoot 已经是 public 目录，BASE_URL 为空
+// 本地环境（XAMPP）：需要包含 /public 路径
+if (getenv('DB_HOST')) {
+    // 云环境：DocumentRoot = /var/www/html/public
+    $baseUrl = '';
 } else {
-    $baseUrl = $scriptPath . '/public';
-}
+    // 本地开发环境
+    $scriptPath = dirname($_SERVER['SCRIPT_NAME']);
+    $scriptPath = str_replace('\\', '/', $scriptPath);
 
-$baseUrl = rtrim($baseUrl, '/');
+    if (strpos($scriptPath, '/public') !== false) {
+        $baseUrl = substr($scriptPath, 0, strpos($scriptPath, '/public') + 7);
+    } else {
+        $baseUrl = $scriptPath . '/public';
+    }
+    $baseUrl = rtrim($baseUrl, '/');
+}
 
 if (!defined('BASE_URL')) {
     define('BASE_URL', $baseUrl);

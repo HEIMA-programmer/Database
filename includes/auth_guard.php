@@ -17,16 +17,72 @@ if (!function_exists('flash')) {
 }
 
 /**
+ * 【并发登录控制】验证当前 session 是否有效
+ * 检查数据库中的 CurrentSessionID 是否与当前 session_id() 匹配
+ * 如果不匹配，说明账号在其他地方登录了，踢出当前用户
+ *
+ * @param PDO $pdo 数据库连接
+ * @return bool 返回 session 是否有效
+ */
+function validateSessionConcurrency($pdo) {
+    if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+        return true; // 未登录状态，跳过验证
+    }
+
+    $userId = $_SESSION['user_id'];
+    $role = $_SESSION['role'];
+    $currentSessionId = session_id();
+
+    // 根据角色查询对应表的 CurrentSessionID
+    if ($role === 'Customer') {
+        $storedSessionId = DBProcedures::getCustomerSessionId($pdo, $userId);
+    } else {
+        // Admin, Manager, Staff 都是 Employee
+        $storedSessionId = DBProcedures::getEmployeeSessionId($pdo, $userId);
+    }
+
+    // 如果数据库中的 session_id 与当前不匹配，踢出用户
+    if ($storedSessionId !== null && $storedSessionId !== $currentSessionId) {
+        // 清除 session
+        $_SESSION = [];
+        if (ini_get("session.use_cookies")) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000,
+                $params["path"], $params["domain"],
+                $params["secure"], $params["httponly"]
+            );
+        }
+        session_destroy();
+
+        // 重新启动 session 以便设置 flash 消息
+        session_start();
+        flash('Your account has been logged in from another location. You have been logged out.', 'warning');
+
+        header("Location: " . BASE_URL . "/login.php");
+        exit();
+    }
+
+    return true;
+}
+
+/**
  * 强制要求登录
  */
 function requireLogin() {
+    global $pdo;
+
     if (!isset($_SESSION['user_id'])) {
         // 记录用户想去的页面，登录后跳转回来（优化体验）
         $_SESSION['redirect_url'] = $_SERVER['REQUEST_URI'];
-        
+
         flash('Please login to access this page.', 'warning');
         header("Location: " . BASE_URL . "/login.php");
         exit();
+    }
+
+    // 【并发登录控制】验证 session 是否仍然有效
+    if (isset($pdo)) {
+        validateSessionConcurrency($pdo);
     }
 }
 

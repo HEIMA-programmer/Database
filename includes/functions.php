@@ -429,6 +429,9 @@ function authenticateEmployee($pdo, $username, $password) {
             'Role'       => $employee['Role']
         ];
 
+        // 【并发登录控制】保存当前 session_id 到数据库，踢掉之前的登录
+        DBProcedures::updateEmployeeSessionId($pdo, $employee['EmployeeID'], session_id());
+
         return ['success' => true, 'role' => $employee['Role']];
     }
 
@@ -475,6 +478,9 @@ function authenticateCustomer($pdo, $email, $password) {
             'ShopType'   => null,
             'Role'       => 'Customer'
         ];
+
+        // 【并发登录控制】保存当前 session_id 到数据库，踢掉之前的登录
+        DBProcedures::updateCustomerSessionId($pdo, $customer['CustomerID'], session_id());
 
         return ['success' => true];
     }
@@ -533,6 +539,9 @@ function registerNewCustomer($pdo, $name, $email, $password, $birthday = null) {
             'ShopType'   => null,
             'Role'       => 'Customer'
         ];
+
+        // 【并发登录控制】注册后自动登录，保存 session_id
+        DBProcedures::updateCustomerSessionId($pdo, $result['customer_id'], session_id());
 
         return ['success' => true, 'customer_id' => $result['customer_id']];
     }

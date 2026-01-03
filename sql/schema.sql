@@ -21,6 +21,7 @@ CREATE TABLE Employee (
     Username VARCHAR(50) NOT NULL UNIQUE,
     PasswordHash VARCHAR(255) NOT NULL,
     HireDate DATE DEFAULT (CURRENT_DATE),
+    CurrentSessionID VARCHAR(128) DEFAULT NULL, -- 【并发登录控制】当前有效的Session ID
     FOREIGN KEY (ShopID) REFERENCES Shop(ShopID)
 );
 
@@ -40,6 +41,7 @@ CREATE TABLE Customer (
     PasswordHash VARCHAR(255) NOT NULL,
     Birthday DATE,
     Points INT DEFAULT 0,
+    CurrentSessionID VARCHAR(128) DEFAULT NULL, -- 【并发登录控制】当前有效的Session ID
     FOREIGN KEY (TierID) REFERENCES MembershipTier(TierID)
 );
 

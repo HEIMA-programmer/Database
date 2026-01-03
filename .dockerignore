@@ -1,0 +1,9 @@
+.git
+.gitignore
+*.md
+docs/
+report/
+out/
+node_modules/
+.env.local
+*.log

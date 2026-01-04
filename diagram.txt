@@ -1,20 +1,14 @@
 @startuml
-' E-R Diagram v8 - Retro Echo Records (REFACTORED)
+' E-R Diagram v9 - Retro Echo Records (REFACTORED)
 ' 重构版：PurchaseOrder拆分为SupplierOrder和BuybackOrder
-' 新增：ManagerRequest表、CustomerOrder履约字段、BaseUnitCost定价基础
-' 新增：CurrentSessionID并发登录控制、ViewedByRequesterAt阅读状态
-' 优化了业务流程清晰度和数据一致性
-' 布局优化：减少连线交叉，使用分层布局
+' 布局优化：移除package分层，增大连线间距
 
 ' ==========================================
 ' 全局样式设置
 ' ==========================================
 skinparam linetype ortho
-skinparam nodesep 80
-skinparam ranksep 80
-skinparam packageStyle rectangle
-skinparam packageBorderColor #666666
-skinparam packageFontSize 14
+skinparam nodesep 120
+skinparam ranksep 100
 skinparam classFontSize 11
 skinparam classAttributeFontSize 10
 hide empty members
@@ -23,236 +17,227 @@ hide empty members
 top to bottom direction
 
 ' ==========================================
-' 第一层: 基础数据 (Master Data)
+' 基础数据 (Master Data)
 ' ==========================================
-package "Layer 1: Master Data" as L1 {
 
-    together {
-        class "ReleaseAlbum" as RELEASE {
-            +ReleaseID : int <<PK>>
-            --
-            +Title : varchar(255) {NN}
-            +ArtistName : varchar(255) {NN}
-            +LabelName : varchar(255) {NN}
-            +ReleaseYear : varchar(4)
-            +Genre : varchar(50)
-            +Format : varchar(50)
-            +Description : text
-            +BaseUnitCost : decimal(10,2) {Default 25.00}
-        }
-
-        class "Track" as TRACK {
-            +TrackID : int <<PK>>
-            +ReleaseID : int <<FK>>
-            --
-            +TrackNumber : int
-            +Title : varchar(255) {NN}
-            +Duration : varchar(10)
-        }
-    }
-
-    together {
-        class "Shop" as SHOP {
-            +ShopID : int <<PK>>
-            --
-            +Name : varchar(100) {NN}
-            +Address : text
-            +Type : enum('Retail', 'Warehouse') {NN}
-        }
-
-        class "Employee" as EMPLOYEE {
-            +EmployeeID : int <<PK>>
-            +ShopID : int <<FK>>
-            --
-            +Role : enum('Admin', 'Manager', 'Staff') {NN}
-            +Name : varchar(100) {NN}
-            +Username : varchar(50) {UK}
-            +PasswordHash : varchar(255)
-            +HireDate : date
-            +CurrentSessionID : varchar(128)
-        }
-    }
-
-    together {
-        class "MembershipTier" as TIER {
-            +TierID : int <<PK>>
-            --
-            +TierName : varchar(50)
-            +MinPoints : int
-            +DiscountRate : decimal(3,2)
-        }
-
-        class "Customer" as CUSTOMER {
-            +CustomerID : int <<PK>>
-            +TierID : int <<FK>>
-            --
-            +Name : varchar(255) {NN}
-            +Email : varchar(255) {UK}
-            +PasswordHash : varchar(255)
-            +Birthday : date
-            +Points : int {Default 0}
-            +CurrentSessionID : varchar(128)
-        }
-    }
-
-    class "Supplier" as SUPPLIER {
-        +SupplierID : int <<PK>>
+together {
+    class "ReleaseAlbum" as RELEASE {
+        +ReleaseID : int <<PK>>
         --
-        +Name : varchar(255) {NN}
-        +Email : varchar(255)
-    }
-}
-
-' ==========================================
-' 第二层: 采购进货 (Procurement)
-' ==========================================
-package "Layer 2: Procurement" as L2 {
-
-    together {
-        class "SupplierOrder" as SUPPORDER {
-            +SupplierOrderID : int <<PK>>
-            +SupplierID : int <<FK>>
-            +CreatedByEmployeeID : int <<FK>>
-            +DestinationShopID : int <<FK>>
-            --
-            +OrderDate : datetime
-            +Status : enum('Pending', 'Received', 'Cancelled')
-            +ReceivedDate : datetime
-            +TotalCost : decimal(10,2)
-        }
-
-        class "SupplierOrderLine" as SUPPLINE {
-            +SupplierOrderID : int <<PK, FK>>
-            +ReleaseID : int <<PK, FK>>
-            --
-            +Quantity : int
-            +UnitCost : decimal(10,2)
-            +ConditionGrade : enum('New','Mint','NM','VG+','VG')
-            +SalePrice : decimal(10,2) {Nullable}
-        }
+        +Title : varchar(255) {NN}
+        +ArtistName : varchar(255) {NN}
+        +LabelName : varchar(255) {NN}
+        +ReleaseYear : varchar(4)
+        +Genre : varchar(50)
+        +Format : varchar(50)
+        +Description : text
+        +BaseUnitCost : decimal(10,2) {Default 25.00}
     }
 
-    together {
-        class "BuybackOrder" as BUYORDER {
-            +BuybackOrderID : int <<PK>>
-            +CustomerID : int <<FK, Nullable>>
-            +ProcessedByEmployeeID : int <<FK>>
-            +ShopID : int <<FK>>
-            --
-            +BuybackDate : datetime
-            +Status : enum('Pending', 'Completed', 'Cancelled')
-            +TotalPayment : decimal(10,2)
-            +Notes : text
-        }
-
-        class "BuybackOrderLine" as BUYLINE {
-            +BuybackOrderID : int <<PK, FK>>
-            +ReleaseID : int <<PK, FK>>
-            --
-            +Quantity : int
-            +UnitPrice : decimal(10,2)
-            +ConditionGrade : enum('New','Mint','NM','VG+','VG')
-        }
-    }
-}
-
-' ==========================================
-' 第三层: 库存管理 (Inventory)
-' ==========================================
-package "Layer 3: Inventory" as L3 {
-
-    class "StockItem" as STOCKITEM {
-        +StockItemID : int <<PK>>
+    class "Track" as TRACK {
+        +TrackID : int <<PK>>
         +ReleaseID : int <<FK>>
+        --
+        +TrackNumber : int
+        +Title : varchar(255) {NN}
+        +Duration : varchar(10)
+    }
+}
+
+together {
+    class "Shop" as SHOP {
+        +ShopID : int <<PK>>
+        --
+        +Name : varchar(100) {NN}
+        +Address : text
+        +Type : enum('Retail', 'Warehouse') {NN}
+    }
+
+    class "Employee" as EMPLOYEE {
+        +EmployeeID : int <<PK>>
         +ShopID : int <<FK>>
         --
-        +SourceType : enum('Supplier', 'Buyback')
-        +SourceOrderID : int
-        +BatchNo : varchar(50) {NN}
-        +ConditionGrade : enum('New','Mint','NM','VG+','VG')
-        +Status : enum('Available', 'Sold', 'Reserved', 'InTransit')
-        +UnitPrice : decimal(10,2)
-        +AcquiredDate : datetime
-        +DateSold : datetime
+        +Role : enum('Admin', 'Manager', 'Staff') {NN}
+        +Name : varchar(100) {NN}
+        +Username : varchar(50) {UK}
+        +PasswordHash : varchar(255)
+        +HireDate : date
+        +CurrentSessionID : varchar(128)
+    }
+}
+
+together {
+    class "MembershipTier" as TIER {
+        +TierID : int <<PK>>
+        --
+        +TierName : varchar(50)
+        +MinPoints : int
+        +DiscountRate : decimal(3,2)
     }
 
-    class "InventoryTransfer" as TRANSFER {
-        +TransferID : int <<PK>>
-        +StockItemID : int <<FK>>
-        +FromShopID : int <<FK>>
-        +ToShopID : int <<FK>>
-        +AuthorizedByEmployeeID : int <<FK>>
-        +ReceivedByEmployeeID : int <<FK, Nullable>>
+    class "Customer" as CUSTOMER {
+        +CustomerID : int <<PK>>
+        +TierID : int <<FK>>
         --
-        +TransferDate : datetime
-        +Status : enum('Pending', 'InTransit', 'Completed', 'Cancelled')
+        +Name : varchar(255) {NN}
+        +Email : varchar(255) {UK}
+        +PasswordHash : varchar(255)
+        +Birthday : date
+        +Points : int {Default 0}
+        +CurrentSessionID : varchar(128)
+    }
+}
+
+class "Supplier" as SUPPLIER {
+    +SupplierID : int <<PK>>
+    --
+    +Name : varchar(255) {NN}
+    +Email : varchar(255)
+}
+
+' ==========================================
+' 采购进货 (Procurement)
+' ==========================================
+
+together {
+    class "SupplierOrder" as SUPPORDER {
+        +SupplierOrderID : int <<PK>>
+        +SupplierID : int <<FK>>
+        +CreatedByEmployeeID : int <<FK>>
+        +DestinationShopID : int <<FK>>
+        --
+        +OrderDate : datetime
+        +Status : enum('Pending', 'Received', 'Cancelled')
         +ReceivedDate : datetime
+        +TotalCost : decimal(10,2)
+    }
+
+    class "SupplierOrderLine" as SUPPLINE {
+        +SupplierOrderID : int <<PK, FK>>
+        +ReleaseID : int <<PK, FK>>
+        --
+        +Quantity : int
+        +UnitCost : decimal(10,2)
+        +ConditionGrade : enum('New','Mint','NM','VG+','VG')
+        +SalePrice : decimal(10,2) {Nullable}
+    }
+}
+
+together {
+    class "BuybackOrder" as BUYORDER {
+        +BuybackOrderID : int <<PK>>
+        +CustomerID : int <<FK, Nullable>>
+        +ProcessedByEmployeeID : int <<FK>>
+        +ShopID : int <<FK>>
+        --
+        +BuybackDate : datetime
+        +Status : enum('Pending', 'Completed', 'Cancelled')
+        +TotalPayment : decimal(10,2)
+        +Notes : text
+    }
+
+    class "BuybackOrderLine" as BUYLINE {
+        +BuybackOrderID : int <<PK, FK>>
+        +ReleaseID : int <<PK, FK>>
+        --
+        +Quantity : int
+        +UnitPrice : decimal(10,2)
+        +ConditionGrade : enum('New','Mint','NM','VG+','VG')
     }
 }
 
 ' ==========================================
-' 第四层: 销售 & 申请 (Sales & Requests)
+' 库存管理 (Inventory)
 ' ==========================================
-package "Layer 4: Sales & Requests" as L4 {
 
-    together {
-        class "CustomerOrder" as CUSTORDER {
-            +OrderID : int <<PK>>
-            +CustomerID : int <<FK, Nullable>>
-            +FulfilledByShopID : int <<FK>>
-            +ProcessedByEmployeeID : int <<FK, Nullable>>
-            --
-            +OrderDate : datetime
-            +TotalAmount : decimal(10,2)
-            +OrderStatus : enum('Pending', 'Paid', 'Shipped',
-            .. 'ReadyForPickup', 'Completed', 'Cancelled')
-            +OrderType : enum('InStore', 'Online')
-            +FulfillmentType : enum('Shipping', 'Pickup')
-            +ShippingAddress : text
-            +ShippingCost : decimal(10,2)
-        }
+class "StockItem" as STOCKITEM {
+    +StockItemID : int <<PK>>
+    +ReleaseID : int <<FK>>
+    +ShopID : int <<FK>>
+    --
+    +SourceType : enum('Supplier', 'Buyback')
+    +SourceOrderID : int
+    +BatchNo : varchar(50) {NN}
+    +ConditionGrade : enum('New','Mint','NM','VG+','VG')
+    +Status : enum('Available', 'Sold', 'Reserved', 'InTransit')
+    +UnitPrice : decimal(10,2)
+    +AcquiredDate : datetime
+    +DateSold : datetime
+}
 
-        class "OrderLine" as ORDERLINE {
-            +OrderID : int <<PK, FK>>
-            +StockItemID : int <<PK, FK>>
-            --
-            +PriceAtSale : decimal(10,2)
-        }
-    }
+class "InventoryTransfer" as TRANSFER {
+    +TransferID : int <<PK>>
+    +StockItemID : int <<FK>>
+    +FromShopID : int <<FK>>
+    +ToShopID : int <<FK>>
+    +AuthorizedByEmployeeID : int <<FK>>
+    +ReceivedByEmployeeID : int <<FK, Nullable>>
+    --
+    +TransferDate : datetime
+    +Status : enum('Pending', 'InTransit', 'Completed', 'Cancelled')
+    +ReceivedDate : datetime
+}
 
-    class "ManagerRequest" as MGRREQ {
-        +RequestID : int <<PK>>
-        +RequestedByEmployeeID : int <<FK>>
-        +RespondedByEmployeeID : int <<FK, Nullable>>
-        +FromShopID : int <<FK>>
-        +ToShopID : int <<FK, Nullable>>
-        +ReleaseID : int <<FK>>
+' ==========================================
+' 销售 & 申请 (Sales & Requests)
+' ==========================================
+
+together {
+    class "CustomerOrder" as CUSTORDER {
+        +OrderID : int <<PK>>
+        +CustomerID : int <<FK, Nullable>>
+        +FulfilledByShopID : int <<FK>>
+        +ProcessedByEmployeeID : int <<FK, Nullable>>
         --
-        +RequestType : enum('PriceAdjustment', 'TransferRequest')
-        +ConditionGrade : enum('New','Mint','NM','VG+','VG')
-        +Quantity : int
-        +CurrentPrice : decimal(10,2)
-        +RequestedPrice : decimal(10,2)
-        +Reason : text
-        +Status : enum('Pending', 'Approved', 'Rejected')
-        +AdminResponseNote : text
-        +ViewedByRequesterAt : datetime
-        +CreatedAt : datetime
-        +UpdatedAt : datetime
+        +OrderDate : datetime
+        +TotalAmount : decimal(10,2)
+        +OrderStatus : enum('Pending', 'Paid', 'Shipped',
+        .. 'ReadyForPickup', 'Completed', 'Cancelled')
+        +OrderType : enum('InStore', 'Online')
+        +FulfillmentType : enum('Shipping', 'Pickup')
+        +ShippingAddress : text
+        +ShippingCost : decimal(10,2)
     }
+
+    class "OrderLine" as ORDERLINE {
+        +OrderID : int <<PK, FK>>
+        +StockItemID : int <<PK, FK>>
+        --
+        +PriceAtSale : decimal(10,2)
+    }
+}
+
+class "ManagerRequest" as MGRREQ {
+    +RequestID : int <<PK>>
+    +RequestedByEmployeeID : int <<FK>>
+    +RespondedByEmployeeID : int <<FK, Nullable>>
+    +FromShopID : int <<FK>>
+    +ToShopID : int <<FK, Nullable>>
+    +ReleaseID : int <<FK>>
+    --
+    +RequestType : enum('PriceAdjustment', 'TransferRequest')
+    +ConditionGrade : enum('New','Mint','NM','VG+','VG')
+    +Quantity : int
+    +CurrentPrice : decimal(10,2)
+    +RequestedPrice : decimal(10,2)
+    +Reason : text
+    +Status : enum('Pending', 'Approved', 'Rejected')
+    +AdminResponseNote : text
+    +ViewedByRequesterAt : datetime
+    +CreatedAt : datetime
+    +UpdatedAt : datetime
 }
 
 ' ==========================================
 ' 关系定义 (Relationships)
-' 使用分层连接，减少交叉
 ' ==========================================
 
-' === Layer 1 内部关系 ===
+' === 基础数据内部关系 ===
 RELEASE "1" -r- "0..*" TRACK : contains >
 SHOP "1" -r- "0..*" EMPLOYEE : employs >
 TIER "1" -r- "0..*" CUSTOMER : classifies >
 
-' === Layer 1 -> Layer 2 (向下连接) ===
+' === 基础数据 -> 采购进货 ===
 SUPPLIER "1" -d- "0..*" SUPPORDER : supplies >
 EMPLOYEE "1" -d- "0..*" SUPPORDER : creates >
 SHOP "1" -d- "0..*" SUPPORDER : receives >
@@ -260,26 +245,26 @@ CUSTOMER "1" -d- "0..*" BUYORDER : sells back >
 EMPLOYEE "1" -d- "0..*" BUYORDER : processes >
 SHOP "1" -d- "0..*" BUYORDER : handles >
 
-' === Layer 2 内部关系 ===
+' === 采购内部关系 ===
 SUPPORDER "1" -r- "1..*" SUPPLINE : contains >
 BUYORDER "1" -r- "1..*" BUYLINE : contains >
 RELEASE "1" -d- "0..*" SUPPLINE : ordered in >
 RELEASE "1" -d- "0..*" BUYLINE : bought back >
 
-' === Layer 2 -> Layer 3 (向下连接) ===
+' === 采购 -> 库存 ===
 SUPPORDER "1" .d. "0..*" STOCKITEM : generates >(Supplier)
 BUYORDER "1" .d. "0..*" STOCKITEM : generates >(Buyback)
 
-' === Layer 3 内部关系 ===
+' === 库存内部关系 ===
 RELEASE "1" -d- "0..*" STOCKITEM : instantiates >
 SHOP "1" -d- "0..*" STOCKITEM : stores >
 STOCKITEM "1" -r- "0..*" TRANSFER : moves >
 EMPLOYEE "1" -d- "0..*" TRANSFER : authorizes >
 
-' === Layer 3 -> Layer 4 (向下连接) ===
+' === 库存 -> 销售 ===
 STOCKITEM "1" -d- "0..*" ORDERLINE : sold as >
 
-' === Layer 4 内部关系 ===
+' === 销售内部关系 ===
 CUSTORDER "1" -r- "1..*" ORDERLINE : contains >
 CUSTOMER "1" -d- "0..*" CUSTORDER : places >
 SHOP "1" -d- "0..*" CUSTORDER : fulfills >
@@ -293,58 +278,17 @@ RELEASE "1" -d- "0..*" MGRREQ : references >
 ' ==========================================
 ' 布局辅助 (Hidden Layout Hints)
 ' ==========================================
-L1 -[hidden]d- L2
-L2 -[hidden]d- L3
-L3 -[hidden]d- L4
 
-' 层内水平布局
+' 水平布局提示
 RELEASE -[hidden]r- SHOP
 SHOP -[hidden]r- TIER
 TIER -[hidden]r- SUPPLIER
+
 SUPPORDER -[hidden]r- BUYORDER
+
 STOCKITEM -[hidden]r- TRANSFER
+
 CUSTORDER -[hidden]r- MGRREQ
-
-' ==========================================
-' 说明 (Notes)
-' ==========================================
-note bottom of RELEASE
-  <b>定价基础：</b>
-  BaseUnitCost: 基础采购成本
-  实际成本 = BaseUnitCost × Condition系数
-  Condition系数:
-  New=1.00, Mint=0.95, NM=0.85
-  VG+=0.70, VG=0.55
-end note
-
-note bottom of STOCKITEM
-  <b>库存追溯：</b>
-  SourceType: 'Supplier' 或 'Buyback'
-  SourceOrderID: 对应订单ID
-  支持完整的库存来源追踪
-end note
-
-note bottom of CUSTORDER
-  <b>订单履约：</b>
-  FulfillmentType: 运输或自提
-  ShippingAddress: 送货地址
-  ShippingCost: 运费
-  支持BOPIS业务模式
-end note
-
-note bottom of MGRREQ
-  <b>申请系统：</b>
-  PriceAdjustment: 调价申请
-  TransferRequest: 调货申请
-  Manager发起，Admin审批
-  ViewedByRequesterAt: 已读状态
-end note
-
-note bottom of EMPLOYEE
-  <b>并发控制：</b>
-  CurrentSessionID: 当前有效会话
-  用于单点登录控制
-end note
 
 ' ==========================================
 ' 图例 (Legend)

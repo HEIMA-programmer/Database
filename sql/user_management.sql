@@ -130,6 +130,9 @@ GRANT SELECT ON retro_echo.vw_admin_employee_list TO 'role_manager';
 GRANT SELECT ON retro_echo.vw_admin_customer_list TO 'role_manager';
 GRANT SELECT ON retro_echo.vw_release_simple_list TO 'role_manager';
 GRANT SELECT ON retro_echo.vw_shop_list TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_stock_price_map TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_stock_summary TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_stock_detail TO 'role_manager';
 
 -- 4.2 Manager 公共文件视图权限 (login.php)
 GRANT SELECT ON retro_echo.vw_auth_employee TO 'role_manager';

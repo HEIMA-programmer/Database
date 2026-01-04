@@ -13,16 +13,16 @@
 -- ============================================================
 
 -- Admin - 系统管理员（普通账号，非高权限账号）
-CREATE USER IF NOT EXISTS 'retro_admin'@'%' IDENTIFIED BY 'Admin@SecurePass123!';
+CREATE USER IF NOT EXISTS 'retro_admin'@'%' IDENTIFIED BY '77070912Yan';
 
 -- Manager - 店铺经理
-CREATE USER IF NOT EXISTS 'retro_manager'@'%' IDENTIFIED BY 'Manager@SecurePass456!';
+CREATE USER IF NOT EXISTS 'retro_manager'@'%' IDENTIFIED BY '77070912Yan';
 
 -- Staff - 店员
-CREATE USER IF NOT EXISTS 'retro_staff'@'%' IDENTIFIED BY 'Staff@SecurePass789!';
+CREATE USER IF NOT EXISTS 'retro_staff'@'%' IDENTIFIED BY '77070912Yan';
 
 -- Customer - 客户（前台用户 + 匿名用户默认账户）
-CREATE USER IF NOT EXISTS 'retro_customer'@'%' IDENTIFIED BY 'Customer@SecurePass000!';
+CREATE USER IF NOT EXISTS 'retro_customer'@'%' IDENTIFIED BY '77070912Yan';
 
 
 -- ============================================================
@@ -372,10 +372,6 @@ GRANT SELECT (EmployeeID, CurrentSessionID) ON retro_echo.Employee TO 'role_mana
 GRANT SELECT (EmployeeID, CurrentSessionID) ON retro_echo.Employee TO 'role_staff';
 GRANT SELECT (EmployeeID, CurrentSessionID) ON retro_echo.Employee TO 'role_customer';
 
-GRANT SELECT (CustomerID, CurrentSessionID) ON retro_echo.Customer TO 'role_admin';
-GRANT SELECT (CustomerID, CurrentSessionID) ON retro_echo.Customer TO 'role_manager';
-GRANT SELECT (CustomerID, CurrentSessionID) ON retro_echo.Customer TO 'role_staff';
-GRANT SELECT (CustomerID, CurrentSessionID) ON retro_echo.Customer TO 'role_customer';
 
 -- Manager 需要查询 ManagerRequest 通知计数
 GRANT SELECT (RequestID, RequestedByEmployeeID, Status, ViewedByRequesterAt) 

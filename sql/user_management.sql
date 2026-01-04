@@ -83,7 +83,23 @@ GRANT SELECT ON retro_echo.vw_other_shops_inventory TO 'role_manager';
 -- 4.4 供应商管理视图（采购时需要）
 GRANT SELECT ON retro_echo.vw_supplier_list TO 'role_manager';
 
--- 4.5 Manager 可用的存储过程
+-- 4.5 Manager 报表分析视图（新增）
+GRANT SELECT ON retro_echo.vw_shop_artist_profit_analysis TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_artist_sales_detail TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_shop_batch_sales_analysis TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_batch_sales_detail TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_shop_genre_sales_summary TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_shop_monthly_sales_summary TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_sales_by_genre_detail TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_monthly_sales_detail TO 'role_manager';
+
+-- 4.6 Manager 回购和订单分析视图（新增）
+GRANT SELECT ON retro_echo.vw_recent_buybacks_detail TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_shop_order_details TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_warehouse_pending_receipts TO 'role_manager';
+GRANT SELECT ON retro_echo.vw_stock_price_map TO 'role_manager';
+
+-- 4.8 Manager 可用的存储过程
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_create_supplier_order TO 'role_manager';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_add_supplier_order_line TO 'role_manager';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_receive_supplier_order TO 'role_manager';
@@ -139,7 +155,13 @@ GRANT SELECT ON retro_echo.vw_employee_shop_info TO 'role_staff';
 GRANT SELECT ON retro_echo.vw_release_list_with_cost TO 'role_staff';
 GRANT SELECT ON retro_echo.vw_customer_list_with_points TO 'role_staff';
 
--- 5.7 Staff 可用的存储过程
+-- 5.7 Staff 回购和库存辅助视图（新增）
+GRANT SELECT ON retro_echo.vw_recent_buybacks_detail TO 'role_staff';
+GRANT SELECT ON retro_echo.vw_stock_price_map TO 'role_staff';
+GRANT SELECT ON retro_echo.vw_shop_stock_count TO 'role_staff';
+GRANT SELECT ON retro_echo.vw_order_shop_validation TO 'role_staff';
+
+-- 5.8 Staff 可用的存储过程
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_create_pos_order TO 'role_staff';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_process_buyback TO 'role_staff';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_complete_order TO 'role_staff';
@@ -185,7 +207,12 @@ GRANT SELECT ON retro_echo.vw_shop_list TO 'role_customer';
 GRANT SELECT ON retro_echo.vw_retail_shops TO 'role_customer';
 GRANT SELECT ON retro_echo.vw_membership_tier_rules TO 'role_customer';
 
--- 6.4 Customer 可用的存储过程
+-- 6.4 专辑详情视图（新增）
+GRANT SELECT ON retro_echo.vw_release_info TO 'role_customer';
+GRANT SELECT ON retro_echo.vw_release_tracks TO 'role_customer';
+GRANT SELECT ON retro_echo.vw_release_genres TO 'role_customer';
+
+-- 6.5 Customer 可用的存储过程
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_register_customer TO 'role_customer';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_update_customer_profile TO 'role_customer';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_create_customer_order TO 'role_customer';
@@ -251,21 +278,26 @@ GRANT EXECUTE ON retro_echo.* TO 'retro_app'@'%';
 │  Admin (role_admin)                                         │
 │  └── 完全权限：ALL PRIVILEGES                                │
 │      包含以下所有角色的权限                                    │
+│      + Admin专属视图 (vw_admin_*)                            │
+│      + 管理类存储过程 (sp_respond_to_request等)               │
 ├─────────────────────────────────────────────────────────────┤
 │  Manager (role_manager)                                     │
-│  └── 包含 Staff 的所有权限                                   │
-│  └── + 经理专属视图 (vw_manager_*)                           │
-│  └── + 报表视图 (vw_report_*)                                │
-│  └── + 采购/调拨存储过程                                      │
+│  └── 经理专属视图 (vw_manager_*)                             │
+│  └── 报表视图 (vw_report_*, vw_shop_*_summary)               │
+│  └── 销售分析视图 (vw_*_sales_detail, vw_*_analysis)         │
+│  └── 库存预警视图 (vw_low_stock_*, vw_dead_stock_*)          │
+│  └── 采购/调拨存储过程                                        │
 ├─────────────────────────────────────────────────────────────┤
 │  Staff (role_staff)                                         │
 │  └── POS 销售视图 (vw_staff_*, vw_pos_*)                     │
+│  └── 履约视图 (vw_fulfillment_*)                             │
+│  └── 回购辅助视图 (vw_recent_buybacks_detail等)              │
 │  └── 订单处理存储过程                                         │
-│  └── 库存查询视图                                             │
 ├─────────────────────────────────────────────────────────────┤
 │  Customer (role_customer)                                   │
 │  └── 个人订单/资料视图 (vw_customer_*)                        │
-│  └── 商品目录视图（只读）                                      │
+│  └── 商品目录视图 (vw_catalog_*, vw_product_*)               │
+│  └── 专辑详情视图 (vw_release_info, vw_release_tracks)       │
 │  └── 下单/支付存储过程                                        │
 └─────────────────────────────────────────────────────────────┘
 
@@ -274,6 +306,7 @@ GRANT EXECUTE ON retro_echo.* TO 'retro_app'@'%';
 - 用户只能通过被授权的视图查询数据
 - 用户只能通过被授权的存储过程修改数据
 - 视图内部的WHERE条件可进一步实现行级隔离
+- 内部认证视图 (vw_auth_*) 仅供应用账户使用
 */
 
 

@@ -705,6 +705,11 @@
     z-index: 10;
 }
 
+/* Fix: Cart button overflow to show badge outside button bounds */
+.navbar .nav-link.btn.position-relative {
+    overflow: visible !important;
+}
+
 /* Request summary details */
 .request-summary-detail {
     color: #aaa !important;

@@ -1511,4 +1511,34 @@ BEGIN
       AND ViewedByRequesterAt IS NULL;
 END$$
 
+-- ================================================
+-- 14. Session Management (并发登录控制)
+-- ================================================
+
+-- 更新员工的 Session ID
+-- 用于并发登录控制：登录时设置，登出时清空
+DROP PROCEDURE IF EXISTS sp_update_employee_session$$
+CREATE PROCEDURE sp_update_employee_session(
+    IN p_employee_id INT,
+    IN p_session_id VARCHAR(128)
+)
+BEGIN
+    UPDATE Employee
+    SET CurrentSessionID = p_session_id
+    WHERE EmployeeID = p_employee_id;
+END$$
+
+-- 更新客户的 Session ID
+-- 用于并发登录控制：登录时设置，登出时清空
+DROP PROCEDURE IF EXISTS sp_update_customer_session$$
+CREATE PROCEDURE sp_update_customer_session(
+    IN p_customer_id INT,
+    IN p_session_id VARCHAR(128)
+)
+BEGIN
+    UPDATE Customer
+    SET CurrentSessionID = p_session_id
+    WHERE CustomerID = p_customer_id;
+END$$
+
 DELIMITER ;

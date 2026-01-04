@@ -80,7 +80,10 @@ GRANT SELECT ON retro_echo.vw_dead_stock_by_shop TO 'role_manager';
 GRANT SELECT ON retro_echo.vw_warehouse_stock TO 'role_manager';
 GRANT SELECT ON retro_echo.vw_other_shops_inventory TO 'role_manager';
 
--- 4.4 Manager 可用的存储过程
+-- 4.4 供应商管理视图（采购时需要）
+GRANT SELECT ON retro_echo.vw_supplier_list TO 'role_manager';
+
+-- 4.5 Manager 可用的存储过程
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_create_supplier_order TO 'role_manager';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_add_supplier_order_line TO 'role_manager';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_receive_supplier_order TO 'role_manager';
@@ -90,6 +93,7 @@ GRANT EXECUTE ON PROCEDURE retro_echo.sp_update_transfer_request_source TO 'role
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_cancel_transfer TO 'role_manager';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_add_employee TO 'role_manager';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_update_employee TO 'role_manager';
+GRANT EXECUTE ON PROCEDURE retro_echo.sp_mark_requests_viewed TO 'role_manager';
 
 -- 分配角色
 GRANT 'role_manager' TO 'retro_manager'@'localhost', 'retro_manager'@'%';
@@ -131,7 +135,11 @@ GRANT SELECT ON retro_echo.vw_release_simple_list TO 'role_staff';
 GRANT SELECT ON retro_echo.vw_shop_list TO 'role_staff';
 GRANT SELECT ON retro_echo.vw_employee_shop_info TO 'role_staff';
 
--- 5.6 Staff 可用的存储过程
+-- 5.6 回购业务视图（Buyback 需要查看专辑成本和客户积分）
+GRANT SELECT ON retro_echo.vw_release_list_with_cost TO 'role_staff';
+GRANT SELECT ON retro_echo.vw_customer_list_with_points TO 'role_staff';
+
+-- 5.7 Staff 可用的存储过程
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_create_pos_order TO 'role_staff';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_process_buyback TO 'role_staff';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_complete_order TO 'role_staff';
@@ -157,6 +165,7 @@ GRANT SELECT ON retro_echo.vw_customer_pending_order TO 'role_customer';
 GRANT SELECT ON retro_echo.vw_customer_buyback_history TO 'role_customer';
 GRANT SELECT ON retro_echo.vw_customer_order_detail TO 'role_customer';
 GRANT SELECT ON retro_echo.vw_customer_shop_orders TO 'role_customer';
+GRANT SELECT ON retro_echo.vw_customer_shipped_delivery TO 'role_customer';
 
 -- 6.2 购物车相关
 GRANT SELECT ON retro_echo.vw_cart_item_validation TO 'role_customer';

@@ -7,22 +7,7 @@
 -- Admin 改为普通账号，通过 SQL 精细化授权
 -- ========================================
 
--- ============================================================
--- 第一部分：创建数据库用户（普通账号）
--- 注意：在阿里云 RDS 控制台创建账号，或使用有权限的账号执行
--- ============================================================
 
--- Admin - 系统管理员（普通账号，非高权限账号）
-CREATE USER IF NOT EXISTS 'retro_admin'@'%' IDENTIFIED BY '77070912Yan';
-
--- Manager - 店铺经理
-CREATE USER IF NOT EXISTS 'retro_manager'@'%' IDENTIFIED BY '77070912Yan';
-
--- Staff - 店员
-CREATE USER IF NOT EXISTS 'retro_staff'@'%' IDENTIFIED BY '77070912Yan';
-
--- Customer - 客户（前台用户 + 匿名用户默认账户）
-CREATE USER IF NOT EXISTS 'retro_customer'@'%' IDENTIFIED BY '77070912Yan';
 
 
 -- ============================================================

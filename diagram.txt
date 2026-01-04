@@ -5,7 +5,7 @@
 ' ==========================================
 ' 全局样式设置
 ' ==========================================
-skinparam linetype polyline
+skinparam linetype ortho
 skinparam nodesep 150
 skinparam ranksep 120
 skinparam classFontSize 11

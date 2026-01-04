@@ -297,42 +297,6 @@ BEGIN
     SET p_order_id = LAST_INSERT_ID();
 END$$
 
--- 添加订单商品
--- 【修复】移除内部事务控制，由调用方管理事务
-DROP PROCEDURE IF EXISTS sp_add_order_item$$
-CREATE PROCEDURE sp_add_order_item(
-    IN p_order_id INT,
-    IN p_stock_item_id INT,
-    IN p_price_at_sale DECIMAL(10,2)
-)
-BEGIN
-    DECLARE v_stock_status VARCHAR(20);
-
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        RESIGNAL;
-    END;
-
-    -- 检查库存状态
-    SELECT Status INTO v_stock_status
-    FROM StockItem
-    WHERE StockItemID = p_stock_item_id
-    FOR UPDATE;
-
-    IF v_stock_status != 'Available' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Stock item is not available';
-    END IF;
-
-    -- 添加订单行
-    INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale)
-    VALUES (p_order_id, p_stock_item_id, p_price_at_sale);
-
-    -- 预留库存
-    UPDATE StockItem
-    SET Status = 'Reserved'
-    WHERE StockItemID = p_stock_item_id;
-END$$
-
 
 -- 支付订单（仅更新状态为 Paid，不完成订单）
 -- 【修复】移除TotalAmount重算，避免覆盖包含运费的金额

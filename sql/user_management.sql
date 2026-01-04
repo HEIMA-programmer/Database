@@ -115,6 +115,9 @@ GRANT EXECUTE ON PROCEDURE retro_echo.sp_create_price_adjustment_request TO 'rol
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_create_transfer_request TO 'role_manager';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_mark_requests_viewed TO 'role_manager';
 
+-- 4.11 Session 管理（登出时需要）
+GRANT EXECUTE ON PROCEDURE retro_echo.sp_update_employee_session TO 'role_manager';
+
 -- 分配角色
 GRANT 'role_manager' TO 'retro_manager'@'localhost', 'retro_manager'@'%';
 SET DEFAULT ROLE 'role_manager' TO 'retro_manager'@'localhost', 'retro_manager'@'%';
@@ -184,6 +187,9 @@ GRANT EXECUTE ON PROCEDURE retro_echo.sp_update_order_status TO 'role_staff';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_create_pos_order TO 'role_staff';
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_cancel_transfer TO 'role_staff';
 
+-- 5.12 Session 管理（登出时需要）
+GRANT EXECUTE ON PROCEDURE retro_echo.sp_update_employee_session TO 'role_staff';
+
 -- 分配角色
 GRANT 'role_staff' TO 'retro_staff'@'localhost', 'retro_staff'@'%';
 SET DEFAULT ROLE 'role_staff' TO 'retro_staff'@'localhost', 'retro_staff'@'%';
@@ -248,8 +254,9 @@ GRANT EXECUTE ON PROCEDURE retro_echo.sp_get_stock_item_with_lock TO 'role_custo
 -- 6.11 匿名用户注册所需存储过程
 GRANT EXECUTE ON PROCEDURE retro_echo.sp_register_customer TO 'role_customer';
 
--- 6.12 登录后更新 session（匿名用户登录员工账户时需要）
-GRANT EXECUTE ON PROCEDURE retro_echo.sp_update_employee TO 'role_customer';
+-- 6.12 Session 管理（登录/登出时需要）
+GRANT EXECUTE ON PROCEDURE retro_echo.sp_update_customer_session TO 'role_customer';
+GRANT EXECUTE ON PROCEDURE retro_echo.sp_update_employee_session TO 'role_customer';
 
 -- 分配角色
 GRANT 'role_customer' TO 'retro_customer'@'localhost', 'retro_customer'@'%';

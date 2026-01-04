@@ -353,8 +353,8 @@ class DBProcedures {
      */
     public static function updateEmployeeSessionId($pdo, $employeeId, $sessionId) {
         try {
-            $stmt = $pdo->prepare("UPDATE Employee SET CurrentSessionID = ? WHERE EmployeeID = ?");
-            return $stmt->execute([$sessionId, $employeeId]);
+            $stmt = $pdo->prepare("CALL sp_update_employee_session(?, ?)");
+            return $stmt->execute([$employeeId, $sessionId]);
         } catch (PDOException $e) {
             error_log("updateEmployeeSessionId Error: " . $e->getMessage());
             return false;
@@ -370,8 +370,8 @@ class DBProcedures {
      */
     public static function updateCustomerSessionId($pdo, $customerId, $sessionId) {
         try {
-            $stmt = $pdo->prepare("UPDATE Customer SET CurrentSessionID = ? WHERE CustomerID = ?");
-            return $stmt->execute([$sessionId, $customerId]);
+            $stmt = $pdo->prepare("CALL sp_update_customer_session(?, ?)");
+            return $stmt->execute([$customerId, $sessionId]);
         } catch (PDOException $e) {
             error_log("updateCustomerSessionId Error: " . $e->getMessage());
             return false;

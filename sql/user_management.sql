@@ -335,6 +335,27 @@ SET DEFAULT ROLE 'role_customer' TO 'retro_customer'@'localhost', 'retro_custome
 */
 
 
+
+-- ============================================================
+-- 第九部分：Session 列级权限（补充）
+-- ============================================================
+
+-- 所有角色都需要访问 Session 信息（登录/登出验证）
+GRANT SELECT (EmployeeID, CurrentSessionID) ON retro_echo.Employee TO 'role_admin';
+GRANT SELECT (EmployeeID, CurrentSessionID) ON retro_echo.Employee TO 'role_manager';
+GRANT SELECT (EmployeeID, CurrentSessionID) ON retro_echo.Employee TO 'role_staff';
+GRANT SELECT (EmployeeID, CurrentSessionID) ON retro_echo.Employee TO 'role_customer';
+
+GRANT SELECT (CustomerID, CurrentSessionID) ON retro_echo.Customer TO 'role_admin';
+GRANT SELECT (CustomerID, CurrentSessionID) ON retro_echo.Customer TO 'role_manager';
+GRANT SELECT (CustomerID, CurrentSessionID) ON retro_echo.Customer TO 'role_staff';
+GRANT SELECT (CustomerID, CurrentSessionID) ON retro_echo.Customer TO 'role_customer';
+
+-- Manager 需要查询 ManagerRequest 通知计数
+GRANT SELECT (RequestID, RequestedByEmployeeID, Status, ViewedByRequesterAt) 
+    ON retro_echo.ManagerRequest TO 'role_manager';
+
+
 -- ============================================================
 -- 应用权限更改
 -- ============================================================

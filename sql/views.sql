@@ -703,36 +703,6 @@ JOIN Shop sh ON bo.ShopID = sh.ShopID
 WHERE bo.Status = 'Completed'
 GROUP BY bo.ShopID, sh.Name;
 
--- 42. 店铺收入明细视图 - 按类型分组（在线售卖/线下取货/POS/Buyback）
--- 【修复】处理FulfillmentType为NULL的旧订单，默认按OrderType推断
--- 【修复】添加COLLATE解决字符集排序规则冲突问题
--- 【修复】添加'Shipped'状态以与其他视图保持一致
-CREATE OR REPLACE VIEW vw_shop_revenue_by_type AS
-SELECT
-    co.FulfilledByShopID AS ShopID,
-    sh.Name AS ShopName,
-    CASE
-        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
-        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
-        WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
-        WHEN co.OrderType = 'InStore' THEN 'POS'
-        ELSE 'Other'
-    END COLLATE utf8mb4_unicode_ci AS RevenueType,
-    COUNT(co.OrderID) AS OrderCount,
-    SUM(co.TotalAmount) AS Revenue,
-    SUM(COALESCE(co.ShippingCost, 0)) AS TotalShipping
-FROM CustomerOrder co
-JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
-WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
-GROUP BY co.FulfilledByShopID, sh.Name,
-    CASE
-        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Shipping' THEN 'OnlineSales'
-        WHEN co.OrderType = 'Online' AND co.FulfillmentType = 'Pickup' THEN 'OnlinePickup'
-        WHEN co.OrderType = 'Online' AND (co.FulfillmentType IS NULL OR co.FulfillmentType = '') THEN 'OnlineSales'
-        WHEN co.OrderType = 'InStore' THEN 'POS'
-        ELSE 'Other'
-    END;
-
 -- 43. 按店铺的死库存视图（带condition和数量合并）
 CREATE OR REPLACE VIEW vw_dead_stock_by_shop AS
 SELECT
@@ -1949,32 +1919,3 @@ FROM CustomerOrder co
 WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
 GROUP BY co.FulfilledByShopID, DATE_FORMAT(co.OrderDate, '%Y-%m')
 ORDER BY SalesMonth DESC;
-
--- 112. 订单实际收入汇总视图
--- 显示每个订单的商品收入、折扣金额、运费和最终总额
-CREATE OR REPLACE VIEW vw_order_revenue_breakdown AS
-SELECT
-    co.OrderID,
-    co.FulfilledByShopID AS ShopID,
-    co.CustomerID,
-    COALESCE(c.Name, 'Guest') AS CustomerName,
-    mt.TierName,
-    mt.DiscountRate,
-    co.OrderDate,
-    co.OrderType,
-    co.FulfillmentType,
-    order_subtotals.OrderSubtotal AS ListPrice,
-    (co.TotalAmount - COALESCE(co.ShippingCost, 0)) AS ItemsAfterDiscount,
-    order_subtotals.OrderSubtotal - (co.TotalAmount - COALESCE(co.ShippingCost, 0)) AS DiscountAmount,
-    co.ShippingCost,
-    co.TotalAmount AS FinalTotal,
-    co.OrderStatus
-FROM CustomerOrder co
-LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
-LEFT JOIN MembershipTier mt ON c.TierID = mt.TierID
-LEFT JOIN (
-    SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
-    FROM OrderLine
-    GROUP BY OrderID
-) order_subtotals ON co.OrderID = order_subtotals.OrderID
-WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');

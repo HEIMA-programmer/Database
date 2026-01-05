@@ -178,10 +178,12 @@ BEGIN
     END;
 
     -- 【新增】检查是否有现有库存的价格，优先使用现有价格确保一致性
+    -- 【修复】添加ShopID条件，确保只查询当前店铺的库存价格，与前端API逻辑一致
     SELECT MAX(UnitPrice) INTO v_existing_price
     FROM StockItem
     WHERE ReleaseID = p_release_id
       AND ConditionGrade = p_condition_grade
+      AND ShopID = p_shop_id
       AND Status = 'Available';
 
     -- 如果有现有价格则使用现有价格，否则使用传入的resale价格

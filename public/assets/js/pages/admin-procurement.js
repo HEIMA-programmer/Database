@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updateCosts();
     }
 
-    // Receive modal - 【修复】确保绑定能正确执行
+    // Receive modal - 确保绑定能正确执行
     document.querySelectorAll('.receive-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const poId = this.dataset.poId;

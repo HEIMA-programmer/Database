@@ -1,6 +1,6 @@
 <?php
 /**
- * 【架构重构】供应商管理页面
+ * 供应商管理页面
  * 表现层 - 仅负责数据展示和用户交互
  */
 require_once __DIR__ . '/../../config/db_connect.php';
@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'email'       => trim($_POST['email'] ?? '')
     ];
 
-    // 【安全检查】验证必填参数
+    // 验证必填参数
     $validationError = null;
     if ($action === 'add' || $action === 'edit') {
         if (empty($data['name'])) {

@@ -9,7 +9,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole(['Staff', 'Manager']);
 
-// 【安全修复】从数据库验证员工店铺归属
+// 从数据库验证员工店铺归属
 $employeeId = $_SESSION['user_id'] ?? null;
 if (!$employeeId) {
     flash('Session expired. Please re-login.', 'warning');
@@ -24,7 +24,7 @@ if (!$employee) {
     exit;
 }
 
-// 【安全修复】使用数据库验证后的店铺ID
+// 使用数据库验证后的店铺ID
 $shopId = $employee['ShopID'];
 $_SESSION['shop_id'] = $shopId; // 同步session
 
@@ -43,11 +43,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'])) {
 $pageData = preparePickupPageData($pdo, $shopId);
 $orders = $pageData['orders'];
 
-// 【新增】获取历史取货记录
+// 获取历史取货记录
 $pickupHistory = DBProcedures::getPickupHistory($pdo, $shopId, 10);
 
 require_once __DIR__ . '/../../includes/header.php';
-// 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单
+// 移除staff_nav.php，因为header.php已包含员工导航菜单
 ?>
 
 <!-- ========== 表现层 ========== -->
@@ -84,7 +84,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 <?php endif; ?>
 
-<!-- 【新增】历史取货记录 -->
+<!-- 历史取货记录 -->
 <div class="mt-5">
     <h4 class="text-warning mb-3">
         <i class="fa-solid fa-history me-2"></i>Pickup History

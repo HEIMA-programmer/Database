@@ -32,7 +32,7 @@ $CONDITION_COST_MULTIPLIERS = [
     'VG'   => 0.55,
 ];
 
-// 【重构】getSuggestedSalePrice 函数已移至 includes/functions.php，避免重复定义
+// getSuggestedSalePrice 函数已移至 includes/functions.php，避免重复定义
 
 ApiResponse::handle(function() use ($pdo, $releaseId, $condition, $CONDITION_COST_MULTIPLIERS) {
     // 获取专辑基础成本

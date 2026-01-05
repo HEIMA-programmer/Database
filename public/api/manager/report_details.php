@@ -2,13 +2,13 @@
 /**
  * 报表详情API
  * 仅Manager可访问，按需返回特定类型和值的销售详情
- * 【修复】使用ApiResponse::requireRole()返回JSON错误而非重定向
+ * 使用ApiResponse::requireRole()返回JSON错误而非重定向
  */
 require_once __DIR__ . '/../../../config/db_connect.php';
 require_once __DIR__ . '/../../../includes/db_procedures.php';
 require_once __DIR__ . '/../../../includes/ApiResponse.php';
 
-// 【修复】使用API专用的角色验证，返回JSON错误而非重定向
+// 使用API专用的角色验证，返回JSON错误而非重定向
 if (!ApiResponse::requireRole('Manager')) {
     exit;
 }

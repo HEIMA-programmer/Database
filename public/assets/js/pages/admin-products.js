@@ -1,7 +1,7 @@
 /**
  * Admin Products Page JavaScript
- * 【修复】使用预加载数据替代AJAX，解决loading一直显示的问题
- * 【修复】使用onclick直接调用渲染函数，与pos.php的Detail按钮处理方式完全一致
+ * 使用预加载数据替代AJAX，解决loading一直显示的问题
+ * 使用onclick直接调用渲染函数，与pos.php的Detail按钮处理方式完全一致
  */
 
 // 辅助函数 - 全局可用

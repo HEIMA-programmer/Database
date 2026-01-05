@@ -9,7 +9,7 @@ require_once __DIR__ . '/../../includes/db_procedures.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Manager');
 
-// 【修复】兼容多种session结构
+// 兼容多种session结构
 $shopId = $_SESSION['user']['ShopID'] ?? $_SESSION['shop_id'] ?? null;
 $shopType = $_SESSION['user']['ShopType'] ?? 'Retail';
 $isWarehouse = ($shopType === 'Warehouse');
@@ -118,11 +118,11 @@ require_once __DIR__ . '/../../includes/header.php';
 </div>
 
 <?php if ($type === 'buyback'): ?>
-    <!-- Buyback明细 - 【优化】增加更详细的信息显示 -->
+    <!-- Buyback明细 - 增加更详细的信息显示 -->
     <?php if (empty($buybacks)): ?>
         <div class="alert alert-info">No buyback records found.</div>
     <?php else: ?>
-    <!-- 【新增】统计摘要 -->
+    <!-- 统计摘要 -->
     <?php
     $buybackGrouped = [];
     $totalBuybackAmount = 0;
@@ -230,11 +230,11 @@ require_once __DIR__ . '/../../includes/header.php';
     <?php endif; ?>
 
 <?php else: ?>
-    <!-- 订单明细 - 【优化】增加更详细的信息显示 -->
+    <!-- 订单明细 - 增加更详细的信息显示 -->
     <?php if (empty($groupedOrders)): ?>
         <div class="alert alert-info">No orders found for this category.</div>
     <?php else: ?>
-    <!-- 【新增】统计摘要 -->
+    <!-- 统计摘要 -->
     <?php
     $totalRevenue = array_sum(array_column($groupedOrders, 'TotalAmount'));
     $totalShipping = array_sum(array_column($groupedOrders, 'ShippingCost'));
@@ -314,7 +314,7 @@ require_once __DIR__ . '/../../includes/header.php';
             </h2>
             <div id="order<?= $orderId ?>" class="accordion-collapse collapse" data-bs-parent="#orderAccordion">
                 <div class="accordion-body">
-                    <!-- 【新增】订单详细信息 -->
+                    <!-- 订单详细信息 -->
                     <div class="mb-3 p-2 bg-secondary bg-opacity-25 rounded">
                         <div class="row">
                             <div class="col-md-6">

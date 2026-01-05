@@ -2,9 +2,6 @@
 
 class DBProcedures {
 
-    // =============================================
-    // 【视图查询方法】读操作
-    // =============================================
 
     // ----------------
     // 购物车相关
@@ -12,10 +9,10 @@ class DBProcedures {
 
 
     /**
-     * 【并发安全修复】使用行锁获取并验证库存状态
+     * 用行锁获取并验证库存状态
      * 调用存储过程 sp_get_stock_item_with_lock，在事务中锁定行防止并发超卖
      *
-     * 【架构说明】虽然FOR UPDATE必须用于基表而非视图，
+     * 虽然FOR UPDATE必须用于基表而非视图，
      * 但通过存储过程封装保持了分层架构的一致性
      *
      * @param PDO $pdo
@@ -39,10 +36,9 @@ class DBProcedures {
     // ----------------
 
 
-    // 【清理】getCatalogItemsGrouped 和 getCatalogGenresGrouped 已被 getCatalogByShop 和 getReleaseGenres 替代，已删除
 
     /**
-     * 【新增】获取专辑按条件分组的库存详情
+     * 获取专辑按条件分组的库存详情
      */
     public static function getReleaseStockByCondition($pdo, $releaseId) {
         try {
@@ -214,7 +210,7 @@ class DBProcedures {
     }
 
     /**
-     * 【新增】获取POS历史交易记录
+     * 获取POS历史交易记录
      */
     public static function getPosHistory($pdo, $shopId, $limit = 20) {
         try {
@@ -228,7 +224,7 @@ class DBProcedures {
     }
 
     /**
-     * 【新增】获取Pickup历史记录
+     * 获取Pickup历史记录
      */
     public static function getPickupHistory($pdo, $shopId, $limit = 20) {
         try {
@@ -339,10 +335,6 @@ class DBProcedures {
             return false;
         }
     }
-
-    // ----------------
-    // 【并发登录控制】Session 管理相关
-    // ----------------
 
     /**
      * 更新员工的当前 Session ID
@@ -567,13 +559,6 @@ class DBProcedures {
         }
     }
 
-    // 【清理】getCustomerSimpleList 已删除 - 功能由 getCustomerListSimple 替代
-    // 【清理】getBuybackOrders 已删除 - 功能由其他方法替代
-
-    // =============================================
-    // 【存储过程调用】写操作
-    // =============================================
-
     // ----------------
     // 供应商订单流程
     // ----------------
@@ -595,7 +580,7 @@ class DBProcedures {
 
     /**
      * 添加供应商订单行
-     * 【修复】添加ConditionGrade和SalePrice参数
+     * 添加ConditionGrade和SalePrice参数
      */
     public static function addSupplierOrderLine($pdo, $orderId, $releaseId, $quantity, $unitCost, $conditionGrade = 'New', $salePrice = null) {
         try {
@@ -609,12 +594,12 @@ class DBProcedures {
 
     /**
      * 接收供应商订单并生成库存
-     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
+     * 智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function receiveSupplierOrder($pdo, $orderId, $batchNo, $conditionGrade = 'New', $markupRate = 0.50) {
         $ownTransaction = false;
         try {
-            // 【修复】检查是否已在事务中，避免嵌套事务
+            // 检查是否已在事务中，避免嵌套事务
             if (!$pdo->inTransaction()) {
                 $pdo->beginTransaction();
                 $ownTransaction = true;
@@ -642,12 +627,12 @@ class DBProcedures {
 
     /**
      * 处理客户回购
-     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
+     * 智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function processBuyback($pdo, $customerId, $employeeId, $shopId, $releaseId, $quantity, $unitPrice, $conditionGrade, $resalePrice) {
         $ownTransaction = false;
         try {
-            // 【修复】检查是否已在事务中，避免嵌套事务
+            // 检查是否已在事务中，避免嵌套事务
             if (!$pdo->inTransaction()) {
                 $pdo->beginTransaction();
                 $ownTransaction = true;
@@ -683,12 +668,12 @@ class DBProcedures {
 
     /**
      * 完成库存调拨
-     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
+     * 智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function completeTransfer($pdo, $transferId, $receivedByEmployeeId) {
         $ownTransaction = false;
         try {
-            // 【修复】检查是否已在事务中，避免嵌套事务
+            // 检查是否已在事务中，避免嵌套事务
             if (!$pdo->inTransaction()) {
                 $pdo->beginTransaction();
                 $ownTransaction = true;
@@ -757,8 +742,8 @@ class DBProcedures {
     
     /**
      * 完成订单
-     * 【修复】执行存储过程后验证订单状态是否真正更新为Completed
-     * 【调试增强】增加详细日志输出
+     * 执行存储过程后验证订单状态是否真正更新为Completed
+     * 增加详细日志输出
      */
     public static function completeOrder($pdo, $orderId) {
         try {
@@ -905,7 +890,7 @@ class DBProcedures {
 
     /**
      * 获取供应商列表
-     * 【架构重构】改用视图替换直接表访问
+     * 改用视图替换直接表访问
      */
     public static function getSupplierList($pdo) {
         try {
@@ -1073,12 +1058,9 @@ class DBProcedures {
     // ----------------
     // 订单履约相关 (Staff)
     // ----------------
-
-    // 【清理】getOnlineOrdersAwaitingShipment 和 getOnlineOrdersShipped 已删除 - 功能由 getWarehouseOnlineOrders 替代
-
     /**
      * 获取订单用于取货验证
-     * 【架构重构】使用视图替换直接表访问
+     * 使用视图替换直接表访问
      */
     public static function getOrderForPickupValidation($pdo, $orderId, $shopId) {
         try {
@@ -1127,7 +1109,7 @@ class DBProcedures {
 
     /**
      * 获取订单详情（客户端）
-     * 【架构重构】使用视图替换直接表访问
+     * 使用视图替换直接表访问
      */
     public static function getCustomerOrderDetail($pdo, $orderId, $customerId) {
         try {
@@ -1158,13 +1140,8 @@ class DBProcedures {
     // 辅助函数
     // ----------------
 
-
-    // =============================================
-    // 【Manager/Admin重构】新增数据获取方法
-    // =============================================
-
     /**
-     * 【架构重构Phase3】获取店铺的KPI统计（限定店铺）
+     * 获取店铺的KPI统计（限定店铺）
      * 改用 vw_shop_kpi_stats 视图
      * 营业额只统计已确认收入（Paid/Completed状态的订单）
      */
@@ -1424,12 +1401,12 @@ class DBProcedures {
 
     /**
      * Admin审批申请
-     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
+     * 智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function respondToRequest($pdo, $requestId, $adminId, $approved, $responseNote) {
         $ownTransaction = false;
         try {
-            // 【修复】检查是否已在事务中，避免嵌套事务
+            // 检查是否已在事务中，避免嵌套事务
             if (!$pdo->inTransaction()) {
                 $pdo->beginTransaction();
                 $ownTransaction = true;
@@ -1505,7 +1482,7 @@ class DBProcedures {
 
     /**
      * 获取店铺按流派销售统计
-     * 【重构】使用汇总视图 vw_shop_genre_sales_summary
+     * 使用汇总视图 vw_shop_genre_sales_summary
      * 收入计算已在视图中完成：商品折后收入（不含运费）
      */
     public static function getShopSalesByGenre($pdo, $shopId) {
@@ -1535,7 +1512,7 @@ class DBProcedures {
 
     /**
      * 获取店铺月度销售趋势
-     * 【修复】使用视图 vw_shop_monthly_sales_summary
+     * 使用视图 vw_shop_monthly_sales_summary
      * 收入包含运费（针对店铺整体）
      */
     public static function getShopMonthlySalesTrend($pdo, $shopId, $limit = 12) {
@@ -1588,7 +1565,7 @@ class DBProcedures {
 
     /**
      * 获取店铺批次售卖分析
-     * 【修复】使用视图 vw_shop_batch_sales_analysis
+     * 使用视图 vw_shop_batch_sales_analysis
      * 收入包含按比例分摊的运费（针对店铺整体）
      */
     public static function getShopBatchSalesAnalysis($pdo, $shopId) {
@@ -1619,14 +1596,6 @@ class DBProcedures {
             return [];
         }
     }
-
-    // =============================================
-    // 【架构重构Phase2】新增包装方法
-    // =============================================
-
-    // ----------------
-    // 购物车验证相关
-    // ----------------
 
     /**
      * 验证购物车商品可用性
@@ -1665,7 +1634,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构】获取结账购物车商品详情（含店铺地址）
+     * 获取结账购物车商品详情（含店铺地址）
      * 替换 checkout.php 中的购物车数据获取
      */
     public static function getCheckoutCartItems($pdo, $stockIds) {
@@ -1772,7 +1741,7 @@ class DBProcedures {
                 }
             }
 
-            // 【修复】按库存优先排序：有货的在前面，无货的在后面
+            // 按库存优先排序：有货的在前面，无货的在后面
             usort($stockItems, function($a, $b) {
                 // 首先按是否有库存排序（有库存的在前）
                 $aHasStock = ($a['Quantity'] ?? 0) > 0;
@@ -1807,7 +1776,7 @@ class DBProcedures {
 
     /**
      * 获取订单基础信息（用于API验证和显示）
-     * 【修复】使用 vw_customer_my_orders_list 替代 vw_staff_pos_history
+     * 使用 vw_customer_my_orders_list 替代 vw_staff_pos_history
      * vw_staff_pos_history 只包含 InStore 订单，无法验证 Online 订单
      */
     public static function getOrderBasicInfo($pdo, $orderId) {
@@ -1822,7 +1791,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】验证POS添加商品
+     * 验证POS添加商品
      * 替换 pos.php 中的add_item验证查询
      */
     public static function validatePosCartItem($pdo, $stockItemId, $shopId) {
@@ -1840,7 +1809,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】获取POS可用库存ID（按组过滤）
+     * 获取POS可用库存ID（按组过滤）
      * 替换 pos.php 中的add_multiple库存ID查询
      */
     public static function getPosAvailableStockIds($pdo, $shopId, $releaseId, $conditionGrade, $unitPrice) {
@@ -1858,9 +1827,9 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】获取简单客户列表
+     * 获取简单客户列表
      * 替换 pos.php 中的客户下拉框查询
-     * 【视图优化】改用 vw_customer_simple_list，删除冗余别名视图
+     * 改用 vw_customer_simple_list，删除冗余别名视图
      */
     public static function getCustomerListSimple($pdo, $limit = 100) {
         try {
@@ -1881,12 +1850,12 @@ class DBProcedures {
     /**
      * 确认调拨发货
      * 替换 fulfillment.php 中的调拨发货操作
-     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务，避免嵌套事务问题
+     * 智能事务管理 - 仅在没有活动事务时才开启新事务，避免嵌套事务问题
      */
     public static function confirmTransferDispatch($pdo, $transferId, $employeeId) {
         $ownTransaction = false;
         try {
-            // 【修复】检查是否已在事务中，避免嵌套事务
+            // 检查是否已在事务中，避免嵌套事务
             if (!$pdo->inTransaction()) {
                 $pdo->beginTransaction();
                 $ownTransaction = true;
@@ -1910,14 +1879,14 @@ class DBProcedures {
 
 
     /**
-     * 【架构重构】取消调拨
+     * 取消调拨
      * 替换 fulfillment.php 中的 DELETE FROM InventoryTransfer
-     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
+     * 智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function cancelTransfer($pdo, $transferId, $shopId) {
         $ownTransaction = false;
         try {
-            // 【修复】检查是否已在事务中，避免嵌套事务
+            // 检查是否已在事务中，避免嵌套事务
             if (!$pdo->inTransaction()) {
                 $pdo->beginTransaction();
                 $ownTransaction = true;
@@ -1940,7 +1909,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】获取待发货调拨分组列表（源店铺视角）
+     * 获取待发货调拨分组列表（源店铺视角）
      * 替换 fulfillment.php 中的待发货调拨分组查询
      */
     public static function getFulfillmentPendingTransfersGrouped($pdo, $fromShopId) {
@@ -1955,7 +1924,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】获取待接收调拨分组列表（目标店铺视角）
+     * 获取待接收调拨分组列表（目标店铺视角）
      * 替换 fulfillment.php 中的待接收调拨分组查询
      */
     public static function getFulfillmentIncomingTransfersGrouped($pdo, $toShopId) {
@@ -1970,7 +1939,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】获取订单履行列表（按状态过滤）
+     * 获取订单履行列表（按状态过滤）
      * 替换 fulfillment.php 中的订单列表查询
      */
     public static function getFulfillmentOrders($pdo, $shopId, $statusFilter = '') {
@@ -2003,7 +1972,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】获取订单状态统计
+     * 获取订单状态统计
      * 替换 fulfillment.php 中的状态统计查询
      */
     public static function getFulfillmentOrderStatusCounts($pdo, $shopId) {
@@ -2022,7 +1991,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase3】验证订单属于指定店铺
+     * 验证订单属于指定店铺
      * 改用 vw_order_shop_validation 视图
      * 替换 fulfillment.php 中的订单验证查询
      */
@@ -2042,7 +2011,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase3】验证调拨属于指定店铺（源店铺）
+     * 验证调拨属于指定店铺（源店铺）
      * 改用 vw_transfer_validation 视图
      * 替换 fulfillment.php 中的调拨验证查询
      */
@@ -2058,7 +2027,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase3】验证调拨属于指定店铺（目标店铺）
+     * 验证调拨属于指定店铺（目标店铺）
      * 改用 vw_transfer_validation 视图
      * 替换 fulfillment.php 中的调拨验证查询
      */
@@ -2112,12 +2081,12 @@ class DBProcedures {
     /**
      * 发起仓库库存调配（带确认流程）
      * 创建调拨记录，需要仓库员工确认发货后才能完成
-     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
+     * 智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function initiateWarehouseDispatch($pdo, $warehouseId, $targetShopId, $releaseId, $conditionGrade, $quantity, $employeeId) {
         $ownTransaction = false;
         try {
-            // 【修复】检查是否已在事务中，避免嵌套事务
+            // 检查是否已在事务中，避免嵌套事务
             if (!$pdo->inTransaction()) {
                 $pdo->beginTransaction();
                 $ownTransaction = true;
@@ -2152,7 +2121,7 @@ class DBProcedures {
     // ----------------
 
     /**
-     * 【架构重构Phase2】获取专辑列表（含基础成本）
+     * 获取专辑列表（含基础成本）
      * 替换 buyback.php 中的专辑列表查询
      */
     public static function getReleaseListWithCost($pdo) {
@@ -2165,7 +2134,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】获取客户列表（含积分）
+     * 获取客户列表（含积分）
      * 替换 buyback.php 中的客户下拉框查询
      */
     public static function getCustomerListWithPoints($pdo) {
@@ -2178,9 +2147,9 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】获取库存价格映射
+     * 获取库存价格映射
      * 替换 buyback.php 中的价格映射查询
-     * 【修复】添加 shopId 参数，确保只获取当前店铺的价格
+     * 添加 shopId 参数，确保只获取当前店铺的价格
      */
     public static function getStockPriceMap($pdo, $shopId) {
         try {
@@ -2200,7 +2169,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase2】获取最近回购详情
+     * 获取最近回购详情
      * 替换 buyback.php 中的最近回购详情查询
      */
     public static function getRecentBuybacksDetail($pdo, $shopId, $limit = 15) {
@@ -2219,7 +2188,7 @@ class DBProcedures {
     // ----------------
 
     /**
-     * 【架构重构Phase2】获取调货申请详情
+     * 获取调货申请详情
      * 替换 requests.php 中的申请信息查询
      */
     public static function getTransferRequestInfo($pdo, $requestId) {
@@ -2234,7 +2203,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase3】检查店铺库存数量
+     * 检查店铺库存数量
      * 改用 vw_shop_stock_count 视图
      * 替换 requests.php 中的库存验证查询
      */
@@ -2255,7 +2224,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase3】获取店铺库存分组列表
+     * 获取店铺库存分组列表
      * 改用 vw_shop_inventory_by_release 视图（已包含Title和ArtistName）
      * 替换 manager/requests.php 中的库存查询
      */
@@ -2276,7 +2245,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase3】更新调货申请的源店铺
+     * 更新调货申请的源店铺
      * 改用 sp_update_transfer_request_source 存储过程
      * 替换 requests.php 中的ToShopID更新
      */
@@ -2316,12 +2285,12 @@ class DBProcedures {
     /**
      * 创建完整的在线订单
      * 替换 checkout.php 中的订单创建流程
-     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
+     * 智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function createOnlineOrderComplete($pdo, $customerId, $shopId, $stockItemIds, $fulfillmentType, $shippingAddress, $shippingCost) {
         $ownTransaction = false;
         try {
-            // 【修复】检查是否已在事务中，避免嵌套事务
+            // 检查是否已在事务中，避免嵌套事务
             if (!$pdo->inTransaction()) {
                 $pdo->beginTransaction();
                 $ownTransaction = true;
@@ -2368,12 +2337,12 @@ class DBProcedures {
     /**
      * 创建POS门店订单
      * 替换 pos.php 中的订单创建流程
-     * 【修复】智能事务管理 - 仅在没有活动事务时才开启新事务
+     * 智能事务管理 - 仅在没有活动事务时才开启新事务
      */
     public static function createPosOrder($pdo, $customerId, $employeeId, $shopId, $stockItemIds) {
         $ownTransaction = false;
         try {
-            // 【修复】检查是否已在事务中，避免嵌套事务
+            // 检查是否已在事务中，避免嵌套事务
             if (!$pdo->inTransaction()) {
                 $pdo->beginTransaction();
                 $ownTransaction = true;
@@ -2556,13 +2525,10 @@ class DBProcedures {
         }
     }
 
-    // ================================================
-    // 【架构重构Phase3】新增方法 - 消除 functions.php 直接表访问
-    // ================================================
 
     /**
-     * 【架构重构Phase3】按店铺获取目录数据
-     * 【修复】配合修改后的视图，直接按ShopID查询，每个店铺显示所有15张专辑
+     * 按店铺获取目录数据
+     * 配合修改后的视图，直接按ShopID查询，每个店铺显示所有15张专辑
      * 替换 functions.php:prepareCatalogPageDataByShop 中的直接表访问
      */
     public static function getCatalogByShop($pdo, $shopId, $search = '', $genre = '', $artist = '') {
@@ -2603,7 +2569,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase3】获取所有专辑流派列表
+     * 获取所有专辑流派列表
      * 替换 functions.php:prepareCatalogPageDataByShop 中的流派查询
      */
     public static function getReleaseGenres($pdo) {
@@ -2630,7 +2596,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase3】获取专辑基本信息
+     * 获取专辑基本信息
      * 替换 functions.php:getReleaseDetailsByShop 中的 ReleaseAlbum 查询
      */
     public static function getReleaseInfo($pdo, $releaseId) {
@@ -2645,7 +2611,7 @@ class DBProcedures {
     }
 
     /**
-     * 【新增】获取专辑曲目列表
+     * 获取专辑曲目列表
      * 用于专辑详情页显示曲目信息
      */
     public static function getReleaseTracks($pdo, $releaseId) {
@@ -2660,7 +2626,7 @@ class DBProcedures {
     }
 
     /**
-     * 【架构重构Phase3】验证订单是否可取消
+     * 验证订单是否可取消
      * 替换 cancel_order.php 中的直接 CustomerOrder 查询
      */
     public static function validateOrderForCancel($pdo, $orderId, $customerId) {
@@ -2677,10 +2643,6 @@ class DBProcedures {
             return false;
         }
     }
-
-    // ----------------
-    // 【新增】库存成本明细相关
-    // ----------------
 
     /**
      * 获取店铺已售商品成本明细

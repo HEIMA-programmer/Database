@@ -95,7 +95,7 @@ class ApiResponse
     }
 
     /**
-     * 【新增】验证用户登录状态（API专用，返回JSON而不是重定向）
+     * 验证用户登录状态（API专用，返回JSON而不是重定向）
      *
      * @return bool 如果已登录返回true，否则发送JSON错误响应并终止
      */
@@ -113,7 +113,7 @@ class ApiResponse
     }
 
     /**
-     * 【新增】验证用户角色（API专用，返回JSON而不是重定向）
+     * 验证用户角色（API专用，返回JSON而不是重定向）
      *
      * @param string|array $allowedRoles 允许的角色
      * @return bool 如果角色匹配返回true，否则发送JSON错误响应并终止

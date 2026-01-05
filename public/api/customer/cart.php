@@ -3,10 +3,10 @@
  * 购物车操作处理API
  * 遵循理想化分层架构 - 仅调用 functions.php 中的业务逻辑函数
  *
- * 【API响应格式修复】统一使用 ApiResponse 类返回JSON
+ * 统一使用 ApiResponse 类返回JSON
  * 同时支持AJAX请求（返回JSON）和表单提交（重定向+flash消息）
  */
-// 【修复】防止重复启动session
+// 防止重复启动session
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stockId = $_POST['stock_id'] ?? null;
     $responseData = ['success' => false, 'message' => 'Unknown action'];
 
-    // 【修复】使用try-catch包装所有操作，防止异常泄露敏感信息
+    // 使用try-catch包装所有操作，防止异常泄露敏感信息
     try {
     switch ($action) {
         case 'add':
@@ -122,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $responseData = ['success' => false, 'message' => 'Unknown action: ' . $action];
     }
     } catch (Exception $e) {
-        // 【修复】捕获异常，记录日志但不暴露敏感信息
+        // 捕获异常，记录日志但不暴露敏感信息
         error_log("Cart API error: " . $e->getMessage());
         $responseData = ['success' => false, 'message' => 'An error occurred processing your request.'];
     }
@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 确保session修改立即持久化
     session_write_close();
 
-    // 【API响应格式修复】根据请求类型返回不同格式
+    // 根据请求类型返回不同格式
     if ($isAjax) {
         // AJAX请求：返回JSON
         if ($responseData['success']) {

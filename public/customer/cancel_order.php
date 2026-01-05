@@ -1,7 +1,7 @@
 <?php
 /**
  * 取消订单 API
- * 【新增】用于处理客户手动取消和自动超时取消未支付订单
+ * 用于处理客户手动取消和自动超时取消未支付订单
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
@@ -20,7 +20,7 @@ if (!$orderId) {
 }
 
 try {
-    // 【架构重构Phase3】使用 DBProcedures::validateOrderForCancel 替换直接SQL查询
+    // 使用 DBProcedures::validateOrderForCancel 替换直接SQL查询
     $order = DBProcedures::validateOrderForCancel($pdo, $orderId, $customerId);
 
     if (!$order || $order['OrderStatus'] !== 'Pending') {

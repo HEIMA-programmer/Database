@@ -2,8 +2,8 @@
 /**
  * POS销售点页面
  *
- * 【修复】订单支持从Pending状态直接完成
- * 【限制】只有门店员工可以访问，仓库员工无此功能
+ * 订单支持从Pending状态直接完成
+ * 有门店员工可以访问，仓库员工无此功能
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
@@ -11,7 +11,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Staff');
 
-// 【安全修复】从数据库验证员工店铺归属
+// 从数据库验证员工店铺归属
 $employeeId = $_SESSION['user_id'] ?? null;
 if (!$employeeId) {
     flash('Session expired. Please re-login.', 'warning');
@@ -19,7 +19,7 @@ if (!$employeeId) {
     exit;
 }
 
-// 【架构重构Phase2】使用DBProcedures获取并验证员工信息
+// 使用DBProcedures获取并验证员工信息
 $employee = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
 if (!$employee) {
     flash('Employee information not found. Please contact administrator.', 'danger');
@@ -27,7 +27,7 @@ if (!$employee) {
     exit;
 }
 
-// 【安全修复】使用数据库验证后的店铺ID，而非直接信任session
+// 使用数据库验证后的店铺ID，而非直接信任session
 $shopId = $employee['ShopID'];
 $_SESSION['shop_id'] = $shopId; // 同步session
 
@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             break;
 
-        // 【新增】批量添加 - 按Release和Condition添加多个
+        // 批量添加 - 按Release和Condition添加多个
         case 'add_multiple':
             $releaseId = (int)($_POST['release_id'] ?? 0);
             $condition = $_POST['condition'] ?? '';
@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quantity = (int)($_POST['quantity'] ?? 1);
 
             if ($releaseId > 0 && $condition && $quantity > 0) {
-                // 【架构重构Phase2】使用DBProcedures替换直接SQL
+                // 使用DBProcedures替换直接SQL
                 $allIds = DBProcedures::getPosAvailableStockIds($pdo, $shopId, $releaseId, $condition, $unitPrice);
 
                 // 排除已在购物车中的
@@ -113,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
             }
 
-            // 【架构重构Phase2】使用DBProcedures替换直接SQL
+            // 使用DBProcedures替换直接SQL
             $result = DBProcedures::createPosOrder($pdo, $customerId ?: null, $employeeId, $shopId, $_SESSION['pos_cart']);
 
             if (isset($result['order_id']) && $result['order_id'] > 0) {
@@ -136,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // 获取购物车商品
-// 【架构重构Phase2】使用DBProcedures替换直接SQL
+// 使用DBProcedures替换直接SQL
 $cartItems = [];
 $cartItemsGrouped = []; // 【新增】分组后的购物车商品
 $total = 0;
@@ -147,7 +147,7 @@ if (!empty($_SESSION['pos_cart'])) {
         $total += $item['UnitPrice'];
     }
 
-    // 【新增】按ReleaseID+ConditionGrade分组
+    // 按ReleaseID+ConditionGrade分组
     foreach ($cartItems as $item) {
         $key = $item['ReleaseID'] . '_' . $item['ConditionGrade'];
         if (!isset($cartItemsGrouped[$key])) {
@@ -172,14 +172,14 @@ if (!empty($_SESSION['pos_cart'])) {
     $_SESSION['pos_cart'] = array_values(array_intersect($_SESSION['pos_cart'], $availableIds));
 }
 
-// 【架构重构Phase2】获取店铺库存分组数据
+// 获取店铺库存分组数据
 $search = $_GET['q'] ?? '';
 $availableStockGrouped = DBProcedures::getPosStockGrouped($pdo, $shopId, $search);
 
 // 计算每组中已在购物车的数量
 foreach ($availableStockGrouped as &$group) {
     if ($group['Quantity'] > 0) {
-        // 【架构重构Phase2】使用DBProcedures获取库存ID
+        // 使用DBProcedures获取库存ID
         $allIds = DBProcedures::getPosAvailableStockIds($pdo, $shopId, $group['ReleaseID'], $group['ConditionGrade'], $group['UnitPrice']);
 
         // 计算已在购物车中的数量
@@ -197,17 +197,17 @@ foreach ($availableStockGrouped as &$group) {
 }
 unset($group);
 
-// 【架构重构Phase2】获取客户列表
+// 获取客户列表
 $customers = DBProcedures::getCustomerListSimple($pdo, 100);
 
-// 【新增】获取历史交易记录
+// 获取历史交易记录
 $posHistory = DBProcedures::getPosHistory($pdo, $shopId, 10);
 
 require_once __DIR__ . '/../../includes/header.php';
-// 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单
+// 移除staff_nav.php，因为header.php已包含员工导航菜单
 ?>
 
-<!-- 【修复】无库存商品的样式 -->
+<!-- 无库存商品的样式 -->
 <style>
 .out-of-stock-item {
     opacity: 0.7;
@@ -253,13 +253,13 @@ require_once __DIR__ . '/../../includes/header.php';
                 </form>
 
                 <?php if (!empty($availableStockGrouped)): ?>
-                    <!-- 【重构】分组显示，支持数量选择，默认显示所有 -->
+                    <!-- 分组显示，支持数量选择，默认显示所有 -->
                     <div class="list-group" id="searchResults" style="max-height: 500px; overflow-y: auto;">
                         <?php foreach ($availableStockGrouped as $group): ?>
                             <?php
                             $hasStock = $group['RemainingQuantity'] > 0;
                             $isOutOfStock = ($group['Quantity'] ?? 0) == 0;
-                            // 【修复】无库存商品使用更柔和的样式，保持可见性
+                            // 无库存商品使用更柔和的样式，保持可见性
                             $itemClass = $hasStock ? '' : 'out-of-stock-item';
                             $conditionBadgeClass = ($group['ConditionGrade'] === 'N/A') ? 'bg-dark text-muted border border-secondary' : 'bg-secondary';
                             ?>
@@ -327,7 +327,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
     
     <!-- 右侧：购物车和结账 -->
-    <!-- 【修复】移除sticky-top，改用position-sticky并设置max-height避免遮挡 -->
+    <!-- 移除sticky-top，改用position-sticky并设置max-height避免遮挡 -->
     <div class="col-lg-5">
         <div class="card bg-dark border-warning position-sticky" style="top: 80px; max-height: calc(100vh - 100px); overflow-y: auto;">
             <div class="card-header bg-warning text-dark">
@@ -345,7 +345,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         No items in cart. Search and add items to begin.
                     </p>
                 <?php else: ?>
-                    <!-- 【修改】使用分组后的数据显示，同release同condition合并为一行 -->
+                    <!-- 使用分组后的数据显示，同release同condition合并为一行 -->
                     <div class="list-group mb-3" style="max-height: 300px; overflow-y: auto;">
                         <?php foreach ($cartItemsGrouped as $group): ?>
                             <div class="list-group-item bg-dark border-secondary">
@@ -429,7 +429,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
-<!-- 【新增】历史交易记录 -->
+<!-- 历史交易记录 -->
 <div class="row mt-5">
     <div class="col-12">
         <div class="card bg-dark border-secondary">

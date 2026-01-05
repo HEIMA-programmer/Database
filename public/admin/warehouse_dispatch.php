@@ -12,7 +12,7 @@ requireRole('Admin');
 // 获取Warehouse ID
 $warehouseId = getShopIdByType($pdo, 'Warehouse');
 
-// 【架构重构Phase2】使用DBProcedures替换直接SQL
+// 使用DBProcedures替换直接SQL
 $retailShops = DBProcedures::getRetailShops($pdo);
 
 // ========== POST 请求处理 ==========
@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dispatch_stock'])) {
     } elseif ($quantity < 1) {
         flash("Quantity must be at least 1.", 'danger');
     } else {
-        // 【新增】使用带确认流程的调配方法
+        // 使用带确认流程的调配方法
         // 创建调拨记录，需要仓库员工确认发货后才能完成
         $initiatedCount = DBProcedures::initiateWarehouseDispatch(
             $pdo,
@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dispatch_stock'])) {
 }
 
 // ========== 获取Warehouse库存数据 ==========
-// 【架构重构Phase2】使用DBProcedures替换直接SQL
+// 使用DBProcedures替换直接SQL
 $warehouseStock = $warehouseId ? DBProcedures::getWarehouseStock($pdo, $warehouseId) : [];
 
 // 获取专辑列表用于下拉菜单

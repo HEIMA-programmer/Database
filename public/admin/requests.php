@@ -1,6 +1,6 @@
 <?php
 /**
- * 【架构重构】Admin申请处理页面
+ * Admin申请处理页面
  * 审批Manager提交的调价申请和调货申请
  */
 require_once __DIR__ . '/../../config/db_connect.php';
@@ -21,13 +21,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($requestId && in_array($action, ['approve', 'reject'])) {
         $approved = ($action === 'approve');
 
-        // 【架构重构Phase2】对于调货申请的批准，需要先验证并设置源店铺
+        // 对于调货申请的批准，需要先验证并设置源店铺
         if ($approved && $sourceShopId > 0) {
             // 获取申请的详细信息
             $reqInfo = DBProcedures::getTransferRequestInfo($pdo, $requestId);
 
             if ($reqInfo && $reqInfo['RequestType'] === 'TransferRequest') {
-                // 【边界检查】验证源店铺的可用库存数量是否足够
+                // 验证源店铺的可用库存数量是否足够
                 $stockCount = DBProcedures::getShopStockCount($pdo, $sourceShopId, $reqInfo['ReleaseID'], $reqInfo['ConditionGrade']);
 
                 if ($stockCount < $reqInfo['Quantity']) {
@@ -67,10 +67,10 @@ if (!in_array($filter, $validFilters)) {
 $pendingRequests = DBProcedures::getAdminPendingRequests($pdo);
 $allRequests = DBProcedures::getAdminAllRequests($pdo);
 
-// 【架构重构Phase2】获取所有店铺信息
+// 获取所有店铺信息
 $shops = DBProcedures::getShopList($pdo);
 
-// 【架构重构Phase2】getOtherShopsInventory函数已移至DBProcedures::getOtherShopsInventory()
+// getOtherShopsInventory函数已移至DBProcedures::getOtherShopsInventory()
 
 // 根据过滤条件筛选
 $displayRequests = [];
@@ -271,7 +271,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <h6 class="text-warning">Take Action</h6>
 
                                     <?php
-                                    // 【重构】对于调货申请，显示库存容器（实时AJAX加载）
+                                    // 对于调货申请，显示库存容器（实时AJAX加载）
                                     if (!$isPrice):
                                     ?>
                                     <div class="mb-3">
@@ -279,7 +279,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                             <i class="fa-solid fa-warehouse me-1"></i>Available Stock in Other Shops
                                             <small class="text-muted ms-2">(Real-time)</small>
                                         </label>
-                                        <!-- 【重构】使用data属性存储参数，AJAX动态加载库存 -->
+                                        <!-- 使用data属性存储参数，AJAX动态加载库存 -->
                                         <div class="stock-inventory-container"
                                              data-release-id="<?= $req['ReleaseID'] ?>"
                                              data-condition="<?= h($req['ConditionGrade']) ?>"
@@ -297,7 +297,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                         <input type="hidden" name="request_id" value="<?= $req['RequestID'] ?>">
 
                                         <?php
-                                        // 【重构】调货申请需要选择源店铺（AJAX动态加载）
+                                        // 调货申请需要选择源店铺（AJAX动态加载）
                                         if (!$isPrice):
                                         ?>
                                         <div class="mb-3 source-shop-select-container">
@@ -317,7 +317,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                         <div class="d-grid gap-2">
                                             <?php if (!$isPrice): ?>
-                                                <!-- 【重构】调货申请：初始禁用，等待AJAX加载后启用 -->
+                                                <!-- 调货申请：初始禁用，等待AJAX加载后启用 -->
                                                 <button type="submit" name="action" value="approve" class="btn btn-secondary" disabled>
                                                     <i class="fa-solid fa-spinner fa-spin me-1"></i>Loading inventory...
                                                 </button>

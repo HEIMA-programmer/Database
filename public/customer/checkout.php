@@ -2,7 +2,7 @@
 /**
  * 结账页面
  * 
- * 【修复】根据店铺类型显示履行选项：
+ * 根据店铺类型显示履行选项：
  * - 仓库(Warehouse): 只能选择线上运输
  * - 门店(Retail): 可选线上运输或线下自提
  */
@@ -19,10 +19,10 @@ if (empty($_SESSION['cart'])) {
     exit;
 }
 
-// 【架构重构】使用DBProcedures获取购物车商品和店铺信息
+// 使用DBProcedures获取购物车商品和店铺信息
 $cartItems = DBProcedures::getCheckoutCartItems($pdo, $_SESSION['cart']);
 
-// 【安全检查】验证购物车不为空
+// 验证购物车不为空
 if (empty($cartItems)) {
     flash('Your cart items are no longer available. Please add items again.', 'warning');
     $_SESSION['cart'] = []; // 清空无效的购物车
@@ -30,7 +30,7 @@ if (empty($cartItems)) {
     exit;
 }
 
-// 【修复】验证商品可用性并提供详细信息
+// 验证商品可用性并提供详细信息
 if (count($cartItems) != count($_SESSION['cart'])) {
     // 计算不可用商品数量
     $unavailableCount = count($_SESSION['cart']) - count($cartItems);
@@ -54,18 +54,18 @@ $shopInfo = [
 // 计算总价
 $total = array_sum(array_column($cartItems, 'UnitPrice'));
 
-// 【架构重构】使用DBProcedures获取客户信息
+// 使用DBProcedures获取客户信息
 $customerId = $_SESSION['user_id'];
 $customer = DBProcedures::getCustomerProfile($pdo, $customerId);
 
 // 计算折扣（安全检查：验证客户数据存在）
-// 【修复】DiscountRate 存储为 DECIMAL(3,2)，如 0.10 表示 10%，无需除以100
+// DiscountRate 存储为 DECIMAL(3,2)，如 0.10 表示 10%，无需除以100
 $discount = 0;
 if ($customer && isset($customer['DiscountRate']) && $customer['DiscountRate'] > 0) {
     $discount = $total * $customer['DiscountRate'];
 }
 
-// 【新增】运费（选择Shipping时收取，Pickup免运费）
+// 运费（选择Shipping时收取，Pickup免运费）
 // SHIPPING_FEE 常量已在 config/db_connect.php 中定义
 $shippingCost = 0;
 
@@ -74,7 +74,7 @@ $finalTotal = $total - $discount;
 // ========== 处理订单提交 ==========
 $errors = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // 【安全】验证CSRF令牌
+    // 验证CSRF令牌
     if (!validateCsrfToken($_POST['csrf_token'] ?? null)) {
         $errors[] = 'Invalid security token. Please refresh the page and try again.';
     }
@@ -95,16 +95,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Please enter a shipping address.';
     }
 
-    // 【新增】计算运费
+    // 计算运费
     $shippingCost = ($fulfillmentType == 'Shipping') ? SHIPPING_FEE : 0;
     $finalTotalWithShipping = $finalTotal + $shippingCost;
 
     if (empty($errors)) {
         try {
-            // 【事务安全修复】使用事务确保订单创建的原子性
+            // 使用事务确保订单创建的原子性
             $pdo->beginTransaction();
 
-            // 【架构重构】使用存储过程创建订单
+            // 使用存储过程创建订单
             $stockItemIds = array_column($cartItems, 'StockItemID');
             $result = DBProcedures::createOnlineOrderComplete(
                 $pdo,
@@ -327,7 +327,7 @@ require_once __DIR__ . '/../../includes/header.php';
                     </div>
                     <?php endif; ?>
 
-                    <!-- 【新增】运费显示 -->
+                    <!-- 运费显示 -->
                     <div class="d-flex justify-content-between mb-2" id="shipping-cost-row">
                         <span class="text-muted"><i class="fa-solid fa-truck me-1"></i>Shipping</span>
                         <span class="text-white" id="shipping-cost-display">

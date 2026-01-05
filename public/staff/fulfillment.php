@@ -2,11 +2,11 @@
 /**
  * 员工订单履行页面
  *
- * 【修复】按员工所属店铺过滤订单：
+ * 按员工所属店铺过滤订单：
  * - 每个员工只能看到和处理自己店铺的订单
  * - 仓库员工处理仓库订单，门店员工处理门店订单
  *
- * 【新增】店铺间调货确认功能：
+ * 店铺间调货确认功能：
  * - 显示Admin批准的调货申请，需要源店铺员工确认发货
  * - 与顾客订单运输区分开
  */
@@ -16,7 +16,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Staff');
 
-// 【安全修复】从数据库验证员工店铺归属
+// 从数据库验证员工店铺归属
 $employeeId = $_SESSION['user_id'] ?? null;
 if (!$employeeId) {
     flash('Session expired. Please re-login.', 'warning');
@@ -24,7 +24,7 @@ if (!$employeeId) {
     exit;
 }
 
-// 【架构重构Phase2】使用DBProcedures获取并验证员工信息
+// 使用DBProcedures获取并验证员工信息
 $employee = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
 if (!$employee) {
     flash('Employee information not found. Please contact administrator.', 'danger');
@@ -32,7 +32,7 @@ if (!$employee) {
     exit;
 }
 
-// 【安全修复】使用数据库验证后的店铺ID
+// 使用数据库验证后的店铺ID
 $shopId = $employee['ShopID'];
 $shopType = $employee['ShopType'];
 $_SESSION['shop_id'] = $shopId; // 同步session
@@ -41,8 +41,8 @@ $_SESSION['shop_id'] = $shopId; // 同步session
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    // 【新增】处理店铺间调货确认（源店铺发货）
-    // 【修复】支持批量处理多个TransferID
+    // 处理店铺间调货确认（源店铺发货）
+    // 支持批量处理多个TransferID
     if ($action === 'confirm_transfer' || $action === 'cancel_transfer') {
         $transferIds = $_POST['transfer_ids'] ?? '';
         $transferIdArray = array_filter(array_map('intval', explode(',', $transferIds)));
@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $processedCount = 0;
 
             foreach ($transferIdArray as $transferId) {
-                // 【架构重构Phase2】使用DBProcedures替换直接SQL
+                // 使用DBProcedures替换直接SQL
                 $transfer = DBProcedures::validateTransferFromShop($pdo, $transferId, $shopId);
 
                 if ($transfer && $transfer['Status'] === 'Pending') {
@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // 【新增】处理采购订单收货确认（仓库员工）
+    // 处理采购订单收货确认（仓库员工）
     if ($action === 'receive_supplier_order') {
         $orderId = (int)($_POST['order_id'] ?? 0);
 
@@ -112,8 +112,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // 【新增】处理目标店铺收货确认
-    // 【修复】支持批量处理多个TransferID
+    // 处理目标店铺收货确认
+    // 支持批量处理多个TransferID
     if ($action === 'receive_transfer') {
         $transferIds = $_POST['transfer_ids'] ?? '';
         $transferIdArray = array_filter(array_map('intval', explode(',', $transferIds)));
@@ -153,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 处理顾客订单操作
     $orderId = (int)($_POST['order_id'] ?? 0);
 
-    // 【架构重构Phase2】使用DBProcedures替换直接SQL
+    // 使用DBProcedures替换直接SQL
     $order = DBProcedures::validateOrderBelongsToShop($pdo, $orderId, $shopId);
 
     if ($order) {
@@ -167,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     break;
 
                 case 'ship':
-                    // 【修复】只有Paid状态才能发货，Pending状态（未支付）不能发货
+                    // 只有Paid状态才能发货，Pending状态（未支付）不能发货
                     if ($order['OrderStatus'] == 'Paid') {
                         DBProcedures::updateOrderStatus($pdo, $orderId, 'Shipped', $employeeId);
                         flash("Order #$orderId marked as Shipped.", 'success');
@@ -206,22 +206,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-// 【架构重构Phase2】获取本店铺订单列表
+// 获取本店铺订单列表
 $statusFilter = $_GET['status'] ?? 'pending';
 $orders = DBProcedures::getFulfillmentOrders($pdo, $shopId, $statusFilter);
 
-// 【架构重构Phase2】获取订单状态统计
+// 获取订单状态统计
 $statusCounts = DBProcedures::getFulfillmentOrderStatusCounts($pdo, $shopId);
 
-// 【架构重构Phase2】获取待发货的店铺间调货记录（本店作为源店铺）
+// 获取待发货的店铺间调货记录（本店作为源店铺）
 $pendingTransfers = DBProcedures::getFulfillmentPendingTransfersGrouped($pdo, $shopId);
 $pendingTransferCount = array_sum(array_column($pendingTransfers, 'Quantity'));
 
-// 【架构重构Phase2】获取待接收的店铺间调货记录（本店作为目标店铺）
+// 获取待接收的店铺间调货记录（本店作为目标店铺）
 $incomingTransfers = DBProcedures::getFulfillmentIncomingTransfersGrouped($pdo, $shopId);
 $incomingTransferCount = array_sum(array_column($incomingTransfers, 'Quantity'));
 
-// 【新增】获取仓库待收货的采购订单（仅限仓库员工）
+// 获取仓库待收货的采购订单（仅限仓库员工）
 $pendingSupplierReceipts = [];
 $pendingSupplierReceiptCount = 0;
 if ($shopType === 'Warehouse') {
@@ -338,7 +338,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 'Cancelled' => 'bg-danger',
                 default => 'bg-secondary'
             };
-            // 【修复】使用 null 安全的方式读取 FulfillmentType
+            // 使用 null 安全的方式读取 FulfillmentType
             $fulfillmentType = $order['FulfillmentType'] ?? 'Shipping';
             $fulfillmentIcon = $fulfillmentType == 'Pickup' ? 'fa-store' : 'fa-truck';
             ?>

@@ -2,7 +2,7 @@
 /**
  * 购物车页面
  * 
- * 【修复】强制单店铺购物限制：
+ *   强制单店铺购物限制：
  * - 购物车只能包含同一店铺的商品
  * - 切换店铺时自动清空购物车
  * - 显示当前选择的店铺信息
@@ -37,8 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     header('Location: cart.php');
                     exit;
                 }
-                
-                // 【架构重构Phase2】使用DBProcedures替换直接SQL
+
+                // 使用DBProcedures替换直接SQL
                 $item = DBProcedures::validateCartItem($pdo, $stockItemId, $shopId);
                 
                 if ($item) {
@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($key !== false) {
                 unset($_SESSION['cart'][$key]);
                 $_SESSION['cart'] = array_values($_SESSION['cart']); // 重新索引
-                // 【修复】购物车清空后，同时清理店铺选择
+                // 购物车清空后，同时清理店铺选择
                 if (empty($_SESSION['cart'])) {
                     unset($_SESSION['selected_shop_id']);
                 }
@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             break;
 
-        // 【新增】批量删除同组商品
+        // 批量删除同组商品
         case 'remove_group':
             $stockItemIds = $_POST['stock_item_ids'] ?? '';
             if ($stockItemIds) {
@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 $_SESSION['cart'] = array_values($_SESSION['cart']); // 重新索引
-                // 【修复】购物车清空后，同时清理店铺选择
+                // 购物车清空后，同时清理店铺选择
                 if (empty($_SESSION['cart'])) {
                     unset($_SESSION['selected_shop_id']);
                 }
@@ -93,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         case 'clear':
             $_SESSION['cart'] = [];
-            // 【修复】清空购物车时同时清理店铺选择
+            // 清空购物车时同时清理店铺选择
             unset($_SESSION['selected_shop_id']);
             flash('Cart cleared.', 'info');
             break;
@@ -105,12 +105,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ========== 获取购物车数据 ==========
 $cartItems = [];
-$cartItemsGrouped = []; // 【新增】分组后的购物车数据
+$cartItemsGrouped = []; // 分组后的购物车数据
 $total = 0;
 $shopInfo = null;
 
 if (!empty($_SESSION['cart'])) {
-    // 【架构重构Phase2】使用DBProcedures替换直接SQL
+    // 使用DBProcedures替换直接SQL
     $cartItems = DBProcedures::getCartItemsDetail($pdo, $_SESSION['cart']);
 
     // 验证所有商品属于同一店铺
@@ -135,7 +135,7 @@ if (!empty($_SESSION['cart'])) {
             ];
         }
 
-        // 【新增】按Release+Condition+Price分组
+        // 按Release+Condition+Price分组
         foreach ($cartItems as $item) {
             $key = $item['ReleaseID'] . '_' . $item['ConditionGrade'] . '_' . $item['UnitPrice'];
             if (!isset($cartItemsGrouped[$key])) {
@@ -210,7 +210,7 @@ require_once __DIR__ . '/../../includes/header.php';
                     <h5 class="mb-0 text-warning">Cart Items</h5>
                 </div>
                 <div class="card-body p-0">
-                    <!-- 【重构】使用分组后的数据显示，合并同release同condition的商品 -->
+                    <!-- 重构：使用分组后的数据显示，合并同release同condition的商品 -->
                     <table class="table table-dark mb-0">
                         <thead>
                             <tr>

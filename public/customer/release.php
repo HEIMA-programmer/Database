@@ -1,6 +1,6 @@
 <?php
 /**
- * 【新增】专辑详情页面
+ * 专辑详情页面
  * 显示专辑信息和各条件的库存，支持选择数量加入购物车
  */
 require_once __DIR__ . '/../../config/db_connect.php';
@@ -8,10 +8,9 @@ require_once __DIR__ . '/../../includes/auth_guard.php';
 require_once __DIR__ . '/../../includes/functions.php';
 requireRole('Customer');
 
-// ========== 数据准备 ==========
-// ========== 数据准备 ==========
+
 $releaseId = $_GET['id'] ?? 0;
-// 新增：获取 shop_id
+// 获取 shop_id
 $shopId = $_GET['shop_id'] ?? ($_SESSION['selected_shop_id'] ?? 0);
 
 

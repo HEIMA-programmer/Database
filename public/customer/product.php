@@ -1,6 +1,6 @@
 <?php
 /**
- * 【架构重构】商品详情页面
+ * 商品详情页面
  * 表现层 - 仅负责数据展示和用户交互
  */
 require_once __DIR__ . '/../../config/db_connect.php';

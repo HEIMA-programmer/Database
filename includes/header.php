@@ -75,9 +75,9 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
         <?php endif; ?>
 
         <?php if (hasRole('Staff')):
-            // 【修复】根据店铺类型动态显示菜单
+            // 根据店铺类型动态显示菜单
             // 仓库员工只显示 Fulfillment 和 Inventory
-            // 【Session安全修复】检查 $_SESSION['user'] 存在性
+            // 检查 $_SESSION['user'] 存在性
             $isWarehouseStaff = (isset($_SESSION['user']) && isset($_SESSION['user']['ShopType']))
                 ? ($_SESSION['user']['ShopType'] === 'Warehouse')
                 : false;

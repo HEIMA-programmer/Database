@@ -2,8 +2,8 @@
 /**
  * Buyback回购页面
  *
- * 【修复】回购完成后自动计算并赠送积分
- * 【限制】只有门店员工可以访问，仓库员工无此功能
+ * 回购完成后自动计算并赠送积分
+ * 只有门店员工可以访问，仓库员工无此功能
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
@@ -11,7 +11,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/db_procedures.php';
 requireRole('Staff');
 
-// 【安全修复】从数据库验证员工店铺归属
+// 从数据库验证员工店铺归属
 $employeeId = $_SESSION['user_id'] ?? null;
 if (!$employeeId) {
     flash('Session expired. Please re-login.', 'warning');
@@ -19,7 +19,7 @@ if (!$employeeId) {
     exit;
 }
 
-// 【架构重构Phase2】使用DBProcedures获取并验证员工信息
+// 使用DBProcedures获取并验证员工信息
 $employee = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
 if (!$employee) {
     flash('Employee information not found. Please contact administrator.', 'danger');
@@ -27,7 +27,7 @@ if (!$employee) {
     exit;
 }
 
-// 【安全修复】使用数据库验证后的店铺ID，而非直接信任session
+// 使用数据库验证后的店铺ID，而非直接信任session
 $shopId = $employee['ShopID'];
 $_SESSION['shop_id'] = $shopId; // 同步session
 
@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if (empty($errors)) {
         try {
-            // 【修复】调用修改后的存储过程，会自动计算积分
+            // 调用修改后的存储过程，会自动计算积分
             $buybackId = DBProcedures::processBuyback(
                 $pdo,
                 $customerId ?: null,
@@ -100,25 +100,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// 【架构重构Phase2】获取Release列表
-// 【安全修复】不再传递BaseUnitCost到前端，定价逻辑已移至后端API (api_calculate_price.php)
+// 获取Release列表
+// 不再传递BaseUnitCost到前端，定价逻辑已移至后端API (api_calculate_price.php)
 $releases = DBProcedures::getReleaseListWithCost($pdo);
 
-// 【架构重构Phase2】获取客户列表（含积分）
+// 获取客户列表（含积分）
 $customers = DBProcedures::getCustomerListWithPoints($pdo);
 
-// 条件等级选项 - 【修复】只保留前5个标准条件
+// 条件等级选项 - 只保留前5个标准条件
 $conditions = ['New', 'Mint', 'NM', 'VG+', 'VG'];
 
-// 【架构重构Phase2】获取当前库存价格映射
-// 【修复】传入当前店铺ID，确保只获取本店铺的价格（解决多店铺价格调整后缓存不一致问题）
+// 获取当前库存价格映射
+// 传入当前店铺ID，确保只获取本店铺的价格（解决多店铺价格调整后缓存不一致问题）
 $priceMap = DBProcedures::getStockPriceMap($pdo, $shopId);
 
-// 【架构重构】获取最近回购记录（移至页面顶部，避免在HTML块中执行数据库操作）
+// 获取最近回购记录（移至页面顶部，避免在HTML块中执行数据库操作）
 $recentBuybacks = DBProcedures::getRecentBuybacksDetail($pdo, $shopId, 15);
 
 require_once __DIR__ . '/../../includes/header.php';
-// 【修复】移除staff_nav.php，因为header.php已包含员工导航菜单
+// 移除staff_nav.php，因为header.php已包含员工导航菜单
 ?>
 
 <div class="row mb-4">

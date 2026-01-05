@@ -1,7 +1,7 @@
 <?php
 /**
  * 管理仪表板 - 重构版
- * 【架构重构】Manager只能查看自己店铺的数据
+ * Manager只能查看自己店铺的数据
  * - 四个小框：总收入、最受欢迎单品、消费最多用户、总支出
  * - 四个大框：Top Spenders（带detail）、Stagnant Inventory（带调价申请）、
  *            Low Stock Alert（带调货申请）、Shop Performance（收入支出明细）
@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../includes/db_procedures.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Manager');
 
-// 【修复】从数据库验证员工店铺归属，而非直接信任session
+// 从数据库验证员工店铺归属，而非直接信任session
 $employeeId = $_SESSION['user_id'] ?? null;
 if (!$employeeId) {
     flash('Session expired. Please re-login.', 'warning');
@@ -20,7 +20,7 @@ if (!$employeeId) {
     exit;
 }
 
-// 【安全修复】从数据库获取并验证员工的店铺信息
+// 从数据库获取并验证员工的店铺信息
 $employeeInfo = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
 if (!$employeeInfo) {
     flash('Employee shop information not found. Please contact administrator.', 'danger');
@@ -102,7 +102,7 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
         </div>
     </div>
-    <!-- 4. 【重构】Total Inventory Cost - 历史库存总成本（含已售出） -->
+    <!-- 4. Total Inventory Cost - 历史库存总成本（含已售出） -->
     <div class="col-md-6 col-lg-3">
         <div class="card bg-dark border-danger h-100">
             <div class="card-body">
@@ -155,7 +155,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             <tr><td colspan="5" class="text-center text-muted py-3">No registered customer sales yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
-                    <!-- 【新增】Walk-in Customer单独一行（不参与排名） -->
+                    <!-- Walk-in Customer单独一行（不参与排名） -->
                     <tfoot class="border-top border-secondary">
                         <tr class="table-secondary bg-opacity-25">
                             <td><span class="badge bg-secondary">-</span></td>
@@ -202,7 +202,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             <td><span class="badge bg-secondary"><?= h($d['ConditionGrade']) ?></span></td>
                             <td class="text-center"><span class="badge bg-warning text-dark"><?= $d['Quantity'] ?></span></td>
                             <td class="text-center">
-                                <!-- 【修复】强制调整该condition的全部数量，移除qty参数 -->
+                                <!-- 强制调整该condition的全部数量，移除qty参数 -->
                                 <a href="requests.php?action=price&release_id=<?= $d['ReleaseID'] ?>&condition=<?= urlencode($d['ConditionGrade']) ?>&price=<?= $d['UnitPrice'] ?>"
                                    class="btn btn-sm btn-outline-warning" title="Request Price Adjustment for ALL <?= $d['Quantity'] ?> units">
                                     <i class="fa-solid fa-tag"></i>
@@ -247,7 +247,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             <td><span class="badge bg-secondary"><?= h($ls['ConditionGrade']) ?></span></td>
                             <td class="text-center"><span class="badge bg-danger"><?= $ls['AvailableQuantity'] ?></span></td>
                             <td class="text-center">
-                                <!-- 【修复】移除店铺选择，由Admin决定从哪个店调货 -->
+                                <!-- 移除店铺选择，由Admin决定从哪个店调货 -->
                                 <a href="requests.php?action=transfer&release_id=<?= $ls['ReleaseID'] ?>&condition=<?= urlencode($ls['ConditionGrade']) ?>"
                                    class="btn btn-sm btn-outline-primary" title="Request Stock Transfer (Admin will decide source)">
                                     <i class="fa-solid fa-truck"></i>
@@ -342,7 +342,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         </tr>
                         <?php endif; ?>
 
-                        <!-- 【重构】Total Inventory Cost - 历史库存总成本（含已售出） -->
+                        <!-- Total Inventory Cost - 历史库存总成本（含已售出） -->
                         <tr class="table-warning bg-opacity-25">
                             <td>
                                 <i class="fa-solid fa-boxes-stacked me-2 text-warning"></i>
@@ -353,7 +353,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             </td>
                             <td class="text-end text-warning fw-bold"><?= formatPrice($procurementCost) ?></td>
                             <td class="text-center">
-                                <!-- 【新增】添加detail按钮 -->
+                                <!-- 添加detail按钮 -->
                                 <a href="inventory_cost_details.php" class="btn btn-sm btn-outline-warning">
                                     <i class="fa-solid fa-list"></i>
                                 </a>

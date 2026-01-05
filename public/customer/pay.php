@@ -1,8 +1,8 @@
 <?php
 /**
- * 【架构重构】支付页面
+ * 支付页面
  * 表现层 - 仅负责数据展示和用户交互
- * 【新增】支持15分钟支付倒计时显示
+ * 支持15分钟支付倒计时显示
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
@@ -39,7 +39,7 @@ $remainingSeconds = $expiryTime - time();
 $isExpired = $remainingSeconds <= 0;
 
 // 如果已超时，自动取消订单
-// 【语言一致性修复】使用英文提示，与界面保持一致
+// 使用英文提示，与界面保持一致
 if ($isExpired) {
     DBProcedures::cancelOrder($pdo, $orderId);
     flash("Payment timeout. Order has been automatically cancelled.", 'warning');
@@ -49,7 +49,7 @@ if ($isExpired) {
 
 // ========== POST 请求处理 ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // 【安全】验证CSRF令牌
+    // 验证CSRF令牌
     if (!validateCsrfToken($_POST['csrf_token'] ?? null)) {
         flash('Invalid security token. Please refresh the page and try again.', 'danger');
         header("Location: pay.php?order_id=$orderId");
@@ -83,7 +83,7 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
             <div class="card-body">
                 <!-- 倒计时显示 -->
-                <!-- 【语言一致性修复】使用英文 -->
+                <!-- 使用英文提示，与界面保持一致 -->
                 <div class="alert alert-danger text-center mb-4" id="countdown-alert">
                     <i class="fa-solid fa-clock me-2"></i>
                     <span>Time remaining: </span>
@@ -156,7 +156,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateCountdown() {
         if (remaining <= 0) {
-            // 【语言一致性修复】使用英文
             countdownEl.textContent = 'Expired';
             alertEl.classList.remove('alert-danger');
             alertEl.classList.add('alert-dark');

@@ -1,14 +1,4 @@
--- ========================================
--- Views for Refactored Schema
--- 重构后的视图 - 包含库存汇总视图
--- ========================================
 
--- ================================================
--- 核心业务视图
--- ================================================
-
--- 【新增】库存汇总视图 - 按Release和Shop统计可用库存
--- 用于在业务流程中快速检查库存数量
 CREATE OR REPLACE VIEW vw_inventory_summary AS
 SELECT
     s.ShopID,
@@ -28,7 +18,6 @@ JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 WHERE s.Status = 'Available'
 GROUP BY s.ShopID, sh.Name, s.ReleaseID, r.Title, r.ArtistName, r.Genre, s.ConditionGrade;
 
--- 【新增】低库存预警视图 - 库存少于3件的商品
 CREATE OR REPLACE VIEW vw_low_stock_alert AS
 SELECT
     ShopID,
@@ -42,7 +31,6 @@ FROM vw_inventory_summary
 WHERE AvailableQuantity < 3
 ORDER BY AvailableQuantity ASC, ShopID;
 
--- 【新增】死库存预警视图 - 超过60天未售出的商品
 CREATE OR REPLACE VIEW vw_dead_stock_alert AS
 SELECT
     r.Title,
@@ -59,12 +47,6 @@ WHERE s.Status = 'Available'
   AND s.AcquiredDate < DATE_SUB(NOW(), INTERVAL 60 DAY)
 ORDER BY s.AcquiredDate ASC;
 
--- ================================================
--- 用户访问视图 (View-based Access Control)
--- ================================================
-
-
--- 2. [Customer View] Order History with Details
 CREATE OR REPLACE VIEW vw_customer_order_history AS
 SELECT
     co.OrderID,
@@ -84,9 +66,6 @@ JOIN OrderLine ol ON co.OrderID = ol.OrderID
 JOIN StockItem s ON ol.StockItemID = s.StockItemID
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID;
 
--- 3. [Customer View] My Orders List
--- 【修复】添加 FulfillmentType 字段，用于正确区分 Pickup 和 Delivery 订单
--- 【修复】添加 ShopID 和 CustomerName 字段，用于 Staff API 订单详情验证
 CREATE OR REPLACE VIEW vw_customer_my_orders_list AS
 SELECT
     co.OrderID,
@@ -101,7 +80,6 @@ SELECT
 FROM CustomerOrder co
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID;
 
--- 4. [Customer View] Profile & Membership Info
 CREATE OR REPLACE VIEW vw_customer_profile_info AS
 SELECT
     c.CustomerID,
@@ -116,7 +94,6 @@ SELECT
 FROM Customer c
 JOIN MembershipTier mt ON c.TierID = mt.TierID;
 
--- 5. [Staff View] POS Lookup - 查看本店库存
 CREATE OR REPLACE VIEW vw_staff_pos_lookup AS
 SELECT
     s.StockItemID,
@@ -132,9 +109,6 @@ SELECT
 FROM StockItem s
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID;
 
--- 6. [Staff View] Pending Pickups (BOPIS - Buy Online Pick up In Store)
--- 【修复】BOPIS 是在线下单到店自提，OrderType 应该是 'Online'
--- 同时支持 InStore 订单（店内已付款待提货）
 CREATE OR REPLACE VIEW vw_staff_bopis_pending AS
 SELECT
     co.OrderID,
@@ -149,7 +123,6 @@ FROM CustomerOrder co
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 WHERE co.OrderStatus = 'Paid' AND co.FulfillmentType = 'Pickup';
 
--- 7. [Manager View] Shop Performance
 CREATE OR REPLACE VIEW vw_manager_shop_performance AS
 SELECT
     sh.ShopID,
@@ -165,8 +138,6 @@ LEFT JOIN StockItem s ON sh.ShopID = s.ShopID
     AND s.Status = 'Available'
 GROUP BY sh.ShopID, sh.Name, sh.Type;
 
-
--- 9. [Admin View] Release List
 CREATE OR REPLACE VIEW vw_admin_release_list AS
 SELECT
     r.*,
@@ -177,8 +148,6 @@ FROM ReleaseAlbum r
 LEFT JOIN StockItem s ON r.ReleaseID = s.ReleaseID
 GROUP BY r.ReleaseID;
 
--- 10. [Admin View] Employee List
--- 【修复】使用 LEFT JOIN 支持 ShopID 为 NULL 的员工（如系统管理员）
 CREATE OR REPLACE VIEW vw_admin_employee_list AS
 SELECT
     e.EmployeeID,
@@ -191,7 +160,6 @@ SELECT
 FROM Employee e
 LEFT JOIN Shop s ON e.ShopID = s.ShopID;
 
--- 11. [Admin View] Customer List
 CREATE OR REPLACE VIEW vw_admin_customer_list AS
 SELECT
     c.CustomerID,
@@ -208,8 +176,6 @@ LEFT JOIN CustomerOrder co ON c.CustomerID = co.CustomerID
     AND co.OrderStatus IN ('Paid', 'Completed')
 GROUP BY c.CustomerID, c.Name, c.Email, c.Points, c.Birthday, mt.TierName;
 
--- 12. [Admin View] Supplier Orders
--- Fixed: Added album and condition information for order history display
 CREATE OR REPLACE VIEW vw_admin_supplier_orders AS
 SELECT
     so.SupplierOrderID,
@@ -231,20 +197,12 @@ LEFT JOIN SupplierOrderLine sol ON so.SupplierOrderID = sol.SupplierOrderID
 LEFT JOIN ReleaseAlbum r ON sol.ReleaseID = r.ReleaseID
 GROUP BY so.SupplierOrderID, s.Name, e.Name, sh.Name, so.OrderDate, so.Status, so.ReceivedDate, so.TotalCost;
 
-
--- ================================================
--- 分析报表视图
--- ================================================
-
--- 14. [Report] Sales by Genre (with turnover metrics)
--- 【修复】精确计算商品折后收入（不含运费）
--- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_report_sales_by_genre AS
 SELECT
     r.Genre,
     COUNT(DISTINCT ol.OrderID) AS TotalOrders,
     COUNT(ol.StockItemID) AS ItemsSold,
-    -- 【精确计算】商品折后收入（不含运费）
+
     SUM(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) AS TotalRevenue,
     AVG(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) AS AvgPrice,
     AVG(DATEDIFF(COALESCE(s.DateSold, NOW()), s.AcquiredDate)) AS AvgDaysToSell
@@ -252,7 +210,7 @@ FROM OrderLine ol
 JOIN StockItem s ON ol.StockItemID = s.StockItemID
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 JOIN CustomerOrder co ON ol.OrderID = co.OrderID
--- 子查询计算每个订单的商品小计（原价总和）
+
 LEFT JOIN (
     SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
     FROM OrderLine
@@ -262,7 +220,6 @@ WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
 GROUP BY r.Genre
 ORDER BY TotalRevenue DESC;
 
--- 15. [Report] Top Customers (with RankPosition using window function)
 CREATE OR REPLACE VIEW vw_report_top_customers AS
 SELECT
     CustomerID,
@@ -293,18 +250,9 @@ FROM (
 ORDER BY TotalSpent DESC
 LIMIT 50;
 
--- ================================================
--- 【架构重构】新增视图 - 消除 PHP 直接物理表访问
--- ================================================
-
--- 17. [架构重构] 客户查找视图 - 通过 Email 查找会员
--- 替换 pos_checkout.php 中的直接 Customer 查询
--- 注：此视图需独立定义，不依赖其他视图（避免创建顺序问题）
 CREATE OR REPLACE VIEW vw_customer_lookup AS
 SELECT CustomerID, Name, Email, TierID, Points FROM Customer;
 
--- 18. [架构重构] 商品详情视图 - 包含完整的专辑和店铺信息
--- 替换 product.php 中的多表联接查询
 CREATE OR REPLACE VIEW vw_product_detail AS
 SELECT
     s.StockItemID,
@@ -328,8 +276,6 @@ FROM StockItem s
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 JOIN Shop sh ON s.ShopID = sh.ShopID;
 
--- 19. [架构重构] 同款商品替代库存视图
--- 替换 product.php 中的其他库存查询
 CREATE OR REPLACE VIEW vw_product_alternatives AS
 SELECT
     s.StockItemID,
@@ -342,8 +288,6 @@ FROM StockItem s
 JOIN Shop sh ON s.ShopID = sh.ShopID
 WHERE s.Status = 'Available';
 
--- 20. [架构重构] 员工库存详细列表视图
--- 替换 inventory.php 中的详细查询
 CREATE OR REPLACE VIEW vw_staff_inventory_detail AS
 SELECT
     s.StockItemID,
@@ -360,9 +304,6 @@ SELECT
 FROM StockItem s
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID;
 
--- 21. [架构重构] 取货订单验证视图
--- 替换 pickup.php 中的直接 CustomerOrder 查询
--- 【架构重构】添加 FulfillmentType 字段用于取货验证
 CREATE OR REPLACE VIEW vw_order_for_pickup AS
 SELECT
     OrderID,
@@ -374,9 +315,6 @@ SELECT
     FulfillmentType
 FROM CustomerOrder;
 
--- 22. [架构重构] 专辑简单列表视图 - 用于下拉选择
--- 替换 buyback.php 中的直接 ReleaseAlbum 查询
--- 【视图优化】扩展为包含BaseUnitCost，作为专辑视图的基础视图
 CREATE OR REPLACE VIEW vw_release_simple_list AS
 SELECT
     ReleaseID,
@@ -389,9 +327,6 @@ SELECT
 FROM ReleaseAlbum
 ORDER BY Title;
 
--- 23. [架构重构] 客户简单列表视图 - 用于下拉选择
--- 替换 buyback.php 中的直接 Customer 查询
--- 【视图优化】扩展为包含Points和TierID，作为客户视图的基础视图
 CREATE OR REPLACE VIEW vw_customer_simple_list AS
 SELECT
     CustomerID,
@@ -402,8 +337,6 @@ SELECT
 FROM Customer
 ORDER BY Name;
 
--- 24. [架构重构] 待支付订单视图 - 用于支付页面验证
--- 替换 pay.php 中的直接 CustomerOrder 查询
 CREATE OR REPLACE VIEW vw_customer_pending_order AS
 SELECT
     co.OrderID,
@@ -416,8 +349,6 @@ SELECT
 FROM CustomerOrder co
 WHERE co.OrderStatus = 'Pending';
 
--- 25. [架构重构] 订单预留商品验证视图
--- 替换 pay.php 中的直接 OrderLine + StockItem 查询
 CREATE OR REPLACE VIEW vw_order_reserved_items AS
 SELECT
     ol.OrderID,
@@ -428,10 +359,6 @@ SELECT
 FROM OrderLine ol
 JOIN StockItem s ON ol.StockItemID = s.StockItemID;
 
--- 26. [架构重构] 员工认证视图
--- 替换 login.php 中的直接 Employee + Shop 查询
--- 【修复】添加 ShopType 字段，用于区分仓库和门店员工的菜单显示
--- 【修复】使用 LEFT JOIN 支持 ShopID 为 NULL 的全局管理员（如 Admin）
 CREATE OR REPLACE VIEW vw_auth_employee AS
 SELECT
     e.EmployeeID,
@@ -445,8 +372,6 @@ SELECT
 FROM Employee e
 LEFT JOIN Shop s ON e.ShopID = s.ShopID;
 
--- 27. [架构重构] 客户认证视图
--- 替换 login.php 中的直接 Customer 查询
 CREATE OR REPLACE VIEW vw_auth_customer AS
 SELECT
     CustomerID,
@@ -458,16 +383,12 @@ SELECT
     Points
 FROM Customer;
 
--- 28. [架构重构] KPI 统计视图
--- 替换 dashboard.php 中的直接聚合查询
 CREATE OR REPLACE VIEW vw_kpi_stats AS
 SELECT
     (SELECT COALESCE(SUM(TotalAmount), 0) FROM CustomerOrder WHERE OrderStatus != 'Cancelled') AS TotalSales,
     (SELECT COUNT(*) FROM CustomerOrder WHERE OrderStatus IN ('Pending', 'Paid', 'Shipped')) AS ActiveOrders,
     (SELECT COUNT(*) FROM vw_low_stock_alert) AS LowStockCount;
 
--- 29. [架构重构] 店铺列表视图
--- 通用店铺查询
 CREATE OR REPLACE VIEW vw_shop_list AS
 SELECT
     ShopID,
@@ -476,8 +397,6 @@ SELECT
     Address
 FROM Shop;
 
--- 30. [架构重构] 会员等级规则视图
--- 替换 profile.php 和 register.php 中的直接 MembershipTier 查询
 CREATE OR REPLACE VIEW vw_membership_tier_rules AS
 SELECT
     TierID,
@@ -487,9 +406,6 @@ SELECT
 FROM MembershipTier
 ORDER BY MinPoints ASC;
 
-
--- 32. [架构重构] 月度销售报表视图
--- 替换 reports.php 中的直接聚合查询
 CREATE OR REPLACE VIEW vw_report_monthly_sales AS
 SELECT
     DATE_FORMAT(OrderDate, '%Y-%m') AS SalesMonth,
@@ -500,10 +416,6 @@ WHERE OrderStatus != 'Cancelled'
 GROUP BY SalesMonth
 ORDER BY SalesMonth DESC;
 
--- ================================================
--- 35. [新增] POS历史交易记录视图 - 门店销售历史
--- 用于POS界面显示历史交易记录
--- ================================================
 CREATE OR REPLACE VIEW vw_staff_pos_history AS
 SELECT
     co.OrderID,
@@ -521,10 +433,6 @@ LEFT JOIN Employee e ON co.ProcessedByEmployeeID = e.EmployeeID
 WHERE co.OrderType = 'InStore'
 ORDER BY co.OrderDate DESC;
 
--- ================================================
--- 36. [新增] Pickup历史记录视图 - 已完成的自提订单
--- 用于Pickup界面显示历史记录
--- ================================================
 CREATE OR REPLACE VIEW vw_staff_pickup_history AS
 SELECT
     co.OrderID,
@@ -541,10 +449,6 @@ WHERE co.FulfillmentType = 'Pickup'
   AND co.OrderStatus = 'Completed'
 ORDER BY co.OrderDate DESC;
 
--- ================================================
--- 34. [新增] 专辑库存详情视图 - 按条件分组
--- 用于商品详情页显示各条件的库存数量
--- ================================================
 CREATE OR REPLACE VIEW vw_release_stock_by_condition AS
 SELECT
     r.ReleaseID,
@@ -567,11 +471,6 @@ GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, r.LabelName, r.ReleaseYear
          s.ConditionGrade, sh.Name, sh.ShopID
 ORDER BY FIELD(s.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG', 'G', 'Fair', 'Poor');
 
--- ================================================
--- 【Manager/Admin申请系统视图】
--- ================================================
-
--- 37. Manager申请列表视图 - Manager查看自己发出的申请
 CREATE OR REPLACE VIEW vw_manager_requests_sent AS
 SELECT
     mr.RequestID,
@@ -603,7 +502,6 @@ JOIN Employee e1 ON mr.RequestedByEmployeeID = e1.EmployeeID
 LEFT JOIN Employee e2 ON mr.RespondedByEmployeeID = e2.EmployeeID
 ORDER BY mr.CreatedAt DESC;
 
--- 38. Admin待处理申请视图 - Admin查看所有待审批的申请
 CREATE OR REPLACE VIEW vw_admin_pending_requests AS
 SELECT
     mr.RequestID,
@@ -632,7 +530,6 @@ JOIN Employee e1 ON mr.RequestedByEmployeeID = e1.EmployeeID
 WHERE mr.Status = 'Pending'
 ORDER BY mr.CreatedAt ASC;
 
--- 39. Admin所有申请视图 - Admin查看所有申请（包括已处理的）
 CREATE OR REPLACE VIEW vw_admin_all_requests AS
 SELECT
     mr.RequestID,
@@ -665,9 +562,6 @@ JOIN Employee e1 ON mr.RequestedByEmployeeID = e1.EmployeeID
 LEFT JOIN Employee e2 ON mr.RespondedByEmployeeID = e2.EmployeeID
 ORDER BY mr.CreatedAt DESC;
 
--- 40. 最受欢迎单品视图 - 统计销量最高的专辑
--- 【修复】精确计算商品折后收入（不含运费）
--- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_popular_items AS
 SELECT
     r.ReleaseID,
@@ -675,13 +569,13 @@ SELECT
     r.ArtistName,
     r.Genre,
     COUNT(ol.StockItemID) AS TotalSold,
-    -- 【精确计算】商品折后收入（不含运费）
+
     SUM(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) AS TotalRevenue
 FROM OrderLine ol
 JOIN StockItem s ON ol.StockItemID = s.StockItemID
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 JOIN CustomerOrder co ON ol.OrderID = co.OrderID
--- 子查询计算每个订单的商品小计（原价总和）
+
 LEFT JOIN (
     SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
     FROM OrderLine
@@ -691,7 +585,6 @@ WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
 GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre
 ORDER BY TotalSold DESC;
 
--- 41. 店铺总支出视图（Buyback支出）
 CREATE OR REPLACE VIEW vw_shop_total_expense AS
 SELECT
     bo.ShopID,
@@ -703,7 +596,6 @@ JOIN Shop sh ON bo.ShopID = sh.ShopID
 WHERE bo.Status = 'Completed'
 GROUP BY bo.ShopID, sh.Name;
 
--- 43. 按店铺的死库存视图（带condition和数量合并）
 CREATE OR REPLACE VIEW vw_dead_stock_by_shop AS
 SELECT
     sh.ShopID,
@@ -724,7 +616,6 @@ WHERE s.Status = 'Available'
 GROUP BY sh.ShopID, sh.Name, r.ReleaseID, r.Title, r.ArtistName, s.ConditionGrade
 ORDER BY MaxDaysInStock DESC;
 
--- 44. 按店铺的低库存视图（带condition和数量合并）
 CREATE OR REPLACE VIEW vw_low_stock_by_shop AS
 SELECT
     sh.ShopID,
@@ -743,10 +634,6 @@ GROUP BY sh.ShopID, sh.Name, r.ReleaseID, r.Title, r.ArtistName, s.ConditionGrad
 HAVING COUNT(*) < 3
 ORDER BY AvailableQuantity ASC;
 
--- 45. 客户在特定店铺的消费历史视图
--- 【修复】处理FulfillmentType为NULL的旧订单
--- 【修复】添加COLLATE解决字符集排序规则冲突问题
--- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_customer_shop_orders AS
 SELECT
     co.OrderID,
@@ -773,7 +660,6 @@ LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
 WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');
 
--- 46. 客户Buyback历史视图
 CREATE OR REPLACE VIEW vw_customer_buyback_history AS
 SELECT
     bo.BuybackOrderID,
@@ -796,11 +682,6 @@ JOIN BuybackOrderLine bol ON bo.BuybackOrderID = bol.BuybackOrderID
 JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
 WHERE bo.Status = 'Completed';
 
--- 47. 店铺在特定类型的订单明细视图
--- 【修复】处理FulfillmentType为NULL的旧订单
--- 【修复】使用LEFT JOIN确保即使缺少明细数据也能显示订单
--- 【修复】添加COLLATE解决字符集排序规则冲突问题
--- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_shop_order_details AS
 SELECT
     co.OrderID,
@@ -832,8 +713,6 @@ LEFT JOIN StockItem si ON ol.StockItemID = si.StockItemID
 LEFT JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');
 
--- 48. 店铺Top消费者视图
--- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_shop_top_customers AS
 SELECT
     co.FulfilledByShopID AS ShopID,
@@ -852,11 +731,6 @@ WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
 GROUP BY co.FulfilledByShopID, co.CustomerID, c.Name, c.Email, mt.TierName, c.Points
 ORDER BY TotalSpent DESC;
 
--- 49. 按流派销售明细视图（含店铺信息）
--- 【修复】精确计算实际收入：
---   - ItemRevenue: 商品折后收入 = PriceAtSale * ((TotalAmount - ShippingCost) / OrderSubtotal)
---   - 运费不分摊到商品，作为订单级别收入单独处理
--- 【修复】添加'Shipped'状态以与其他视图保持一致
 CREATE OR REPLACE VIEW vw_sales_by_genre_detail AS
 SELECT
     r.Genre,
@@ -876,7 +750,7 @@ SELECT
     si.ConditionGrade,
     ol.PriceAtSale,
     order_subtotals.OrderSubtotal,
-    -- 【精确计算】商品折后收入（不含运费）= 原价 * 折扣后商品总额 / 原价总额
+
     ROUND(
         ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)),
         2
@@ -888,7 +762,7 @@ JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 JOIN CustomerOrder co ON ol.OrderID = co.OrderID
 JOIN Shop sh ON co.FulfilledByShopID = sh.ShopID
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
--- 子查询计算每个订单的商品小计（原价总和）
+
 LEFT JOIN (
     SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
     FROM OrderLine
@@ -896,11 +770,6 @@ LEFT JOIN (
 ) order_subtotals ON co.OrderID = order_subtotals.OrderID
 WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');
 
--- 50. 月度销售明细视图
--- 【修复】处理FulfillmentType为NULL的旧订单
--- 【修复】添加COLLATE解决字符集排序规则冲突问题
--- 【修复】添加'Shipped'状态以与其他视图保持一致
--- 【修复】添加含运费的收入字段，与汇总视图保持一致
 CREATE OR REPLACE VIEW vw_monthly_sales_detail AS
 SELECT
     DATE_FORMAT(co.OrderDate, '%Y-%m') AS SalesMonth,
@@ -927,7 +796,7 @@ SELECT
     si.ConditionGrade,
     ol.PriceAtSale,
     order_subtotals.OrderSubtotal,
-    -- 商品折后收入（不含运费）- 用于专辑级别分析
+
     ROUND(
         ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)),
         2
@@ -938,7 +807,7 @@ LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 JOIN OrderLine ol ON co.OrderID = ol.OrderID
 JOIN StockItem si ON ol.StockItemID = si.StockItemID
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
--- 子查询计算每个订单的商品小计（原价总和）
+
 LEFT JOIN (
     SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
     FROM OrderLine
@@ -946,7 +815,6 @@ LEFT JOIN (
 ) order_subtotals ON co.OrderID = order_subtotals.OrderID
 WHERE co.OrderStatus IN ('Paid', 'Shipped', 'Completed');
 
--- 51. 库存售价管理视图（按Release和Condition分组）
 CREATE OR REPLACE VIEW vw_stock_price_by_condition AS
 SELECT
     r.ReleaseID,
@@ -967,12 +835,6 @@ WHERE s.Status = 'Available'
 GROUP BY r.ReleaseID, r.Title, r.ArtistName, r.Genre, sh.ShopID, sh.Name, s.ConditionGrade
 ORDER BY r.Title, sh.Name, FIELD(s.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG');
 
--- ================================================
--- 【架构重构Phase2】新增视图 - 消除剩余PHP直接表访问
--- ================================================
-
--- 52. [架构重构] 供应商列表视图
--- 替换 db_procedures.php:getSupplierList() 中的直接表访问
 CREATE OR REPLACE VIEW vw_supplier_list AS
 SELECT
     SupplierID,
@@ -981,8 +843,6 @@ SELECT
 FROM Supplier
 ORDER BY Name;
 
--- 53. [架构重构] 购物车商品验证视图
--- 替换 cart.php 中的直接表访问（验证商品可用性）
 CREATE OR REPLACE VIEW vw_cart_item_validation AS
 SELECT
     si.StockItemID,
@@ -996,8 +856,6 @@ SELECT
 FROM StockItem si
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;
 
--- 54. [架构重构] 购物车商品详情视图
--- 替换 cart.php 中的购物车数据获取
 CREATE OR REPLACE VIEW vw_cart_items_detail AS
 SELECT
     si.StockItemID,
@@ -1014,9 +872,6 @@ FROM StockItem si
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 JOIN Shop s ON si.ShopID = s.ShopID;
 
-
--- 56. [架构重构] 员工店铺信息视图（包含shopId）
--- 替换 pos.php, fulfillment.php, buyback.php 中的员工信息查询
 CREATE OR REPLACE VIEW vw_employee_shop_info AS
 SELECT
     e.EmployeeID,
@@ -1028,8 +883,6 @@ SELECT
 FROM Employee e
 LEFT JOIN Shop s ON e.ShopID = s.ShopID;
 
--- 57. [架构重构] POS库存分组视图
--- 替换 pos.php 中的库存分组查询
 CREATE OR REPLACE VIEW vw_pos_stock_grouped AS
 SELECT
     si.ShopID,
@@ -1046,8 +899,6 @@ WHERE si.Status = 'Available'
 GROUP BY si.ShopID, si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade
 ORDER BY r.Title, FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG');
 
--- 57b. [新增] POS所有Release视图（包括无库存的）
--- 用于在POS界面显示所有release，即使本店没有库存
 CREATE OR REPLACE VIEW vw_pos_all_releases AS
 SELECT
     r.ReleaseID,
@@ -1063,10 +914,6 @@ SELECT
 FROM ReleaseAlbum r
 ORDER BY r.Title;
 
-
-
--- 62. [架构重构] Warehouse库存视图
--- 替换 warehouse_dispatch.php 中的仓库库存查询
 CREATE OR REPLACE VIEW vw_warehouse_stock AS
 SELECT
     si.ReleaseID,
@@ -1084,8 +931,6 @@ WHERE si.Status = 'Available' AND s.Type = 'Warehouse'
 GROUP BY si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade, si.ShopID, s.Name
 ORDER BY r.Title, FIELD(si.ConditionGrade, 'New', 'Mint', 'NM', 'VG+', 'VG');
 
--- 63. [架构重构] 零售店铺列表视图
--- 替换 warehouse_dispatch.php 中的零售店铺查询
 CREATE OR REPLACE VIEW vw_retail_shops AS
 SELECT
     ShopID,
@@ -1095,9 +940,6 @@ FROM Shop
 WHERE Type = 'Retail'
 ORDER BY Name;
 
-
--- 67. [架构重构] 其他店铺同款库存视图
--- 替换 admin/requests.php 中的跨店库存查询
 CREATE OR REPLACE VIEW vw_other_shops_inventory AS
 SELECT
     si.ShopID,
@@ -1114,8 +956,6 @@ JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 WHERE si.Status = 'Available'
 GROUP BY si.ShopID, s.Name, si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade;
 
--- 68. [架构重构] 订单详情视图（包含商品信息）
--- 替换 pos.php 中的订单明细查询
 CREATE OR REPLACE VIEW vw_order_line_detail AS
 SELECT
     ol.OrderID,
@@ -1131,9 +971,6 @@ FROM OrderLine ol
 JOIN StockItem si ON ol.StockItemID = si.StockItemID
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;
 
-
--- 70. [架构重构] 店铺Walk-in顾客收入视图
--- 替换 functions.php:prepareDashboardData 中的walk-in收入查询
 CREATE OR REPLACE VIEW vw_shop_walk_in_revenue AS
 SELECT
     FulfilledByShopID AS ShopID,
@@ -1143,10 +980,6 @@ FROM CustomerOrder
 WHERE CustomerID IS NULL AND OrderStatus IN ('Paid', 'Completed')
 GROUP BY FulfilledByShopID;
 
--- 71. [架构重构] 店铺历史库存总成本视图
--- 替换 functions.php:prepareDashboardData 中的库存成本计算
--- 【修复】包含 Available/Reserved/Sold 三种状态，计算历史上所有的库存成本
--- 【修复】移除对不存在的 si.UnitCost 列的引用，从对应的订单表查询真正的采购成本
 CREATE OR REPLACE VIEW vw_shop_inventory_cost AS
 SELECT
     si.ShopID,
@@ -1183,8 +1016,6 @@ FROM StockItem si
 WHERE si.Status IN ('Available', 'Reserved', 'Sold')
 GROUP BY si.ShopID;
 
--- 72. [架构重构] 店铺采购统计视图
--- 替换 functions.php:prepareDashboardData 中的采购统计查询
 CREATE OR REPLACE VIEW vw_shop_procurement_stats AS
 SELECT
     DestinationShopID AS ShopID,
@@ -1193,8 +1024,6 @@ FROM SupplierOrder
 WHERE Status = 'Received'
 GROUP BY DestinationShopID;
 
--- 73. [架构重构] 专辑店铺库存分组视图
--- 替换 functions.php:prepareReleaseDetailData 中的库存分组查询
 CREATE OR REPLACE VIEW vw_release_shop_stock_grouped AS
 SELECT
     si.ReleaseID,
@@ -1206,8 +1035,6 @@ FROM StockItem si
 WHERE si.Status = 'Available'
 GROUP BY si.ReleaseID, si.ShopID, si.ConditionGrade, si.UnitPrice;
 
--- 74. [架构重构] 可用库存ID列表视图
--- 替换 functions.php:addMultipleToCart 中的库存ID查询
 CREATE OR REPLACE VIEW vw_available_stock_ids AS
 SELECT
     StockItemID,
@@ -1218,8 +1045,6 @@ FROM StockItem
 WHERE Status = 'Available'
 ORDER BY StockItemID;
 
--- 75. [架构重构Phase2] POS可用库存ID视图（含价格）
--- 替换 pos.php 中的 add_multiple 库存ID查询
 CREATE OR REPLACE VIEW vw_pos_available_stock_ids AS
 SELECT
     StockItemID,
@@ -1231,11 +1056,6 @@ FROM StockItem
 WHERE Status = 'Available'
 ORDER BY StockItemID;
 
--- 76. [视图优化] vw_customer_list_simple 已删除
--- 原为 vw_customer_simple_list 的纯别名，PHP代码已更新直接使用 vw_customer_simple_list
-
--- 77. [架构重构Phase2] POS购物车商品验证视图
--- 替换 pos.php 中的添加商品验证查询
 CREATE OR REPLACE VIEW vw_pos_cart_item_validation AS
 SELECT
     si.StockItemID,
@@ -1250,8 +1070,6 @@ FROM StockItem si
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 WHERE si.Status = 'Available';
 
--- 78. [架构重构Phase2] 待发货调拨分组视图（源店铺视角）
--- 替换 fulfillment.php 中的待发货调拨分组查询
 CREATE OR REPLACE VIEW vw_fulfillment_pending_transfers_grouped AS
 SELECT
     MIN(it.TransferID) as FirstTransferID,
@@ -1278,8 +1096,6 @@ GROUP BY it.FromShopID, it.ToShopID, r.ReleaseID, si.ConditionGrade, it.Status,
          from_shop.Name, to_shop.Name, r.Title, r.ArtistName
 ORDER BY MIN(it.TransferDate) DESC;
 
--- 79. [架构重构Phase2] 待接收调拨分组视图（目标店铺视角）
--- 替换 fulfillment.php 中的待接收调拨分组查询
 CREATE OR REPLACE VIEW vw_fulfillment_incoming_transfers_grouped AS
 SELECT
     MIN(it.TransferID) as FirstTransferID,
@@ -1306,8 +1122,6 @@ GROUP BY it.FromShopID, it.ToShopID, r.ReleaseID, si.ConditionGrade, it.Status,
          from_shop.Name, to_shop.Name, r.Title, r.ArtistName
 ORDER BY MIN(it.TransferDate) DESC;
 
--- 80. [架构重构Phase2] 订单履行列表视图
--- 替换 fulfillment.php 中的订单列表查询
 CREATE OR REPLACE VIEW vw_fulfillment_orders AS
 SELECT
     co.OrderID,
@@ -1336,8 +1150,6 @@ WHERE co.FulfillmentType = 'Shipping'
 GROUP BY co.OrderID
 ORDER BY co.OrderDate DESC;
 
--- 81. [架构重构Phase2] 订单状态统计视图
--- 替换 fulfillment.php 中的状态统计查询
 CREATE OR REPLACE VIEW vw_fulfillment_order_status_counts AS
 SELECT
     FulfilledByShopID,
@@ -1347,21 +1159,12 @@ FROM CustomerOrder
 WHERE FulfillmentType = 'Shipping'
 GROUP BY FulfilledByShopID, OrderStatus;
 
--- 82. [架构重构Phase2] 专辑列表视图（含基础成本）
--- 替换 buyback.php 中的专辑列表查询
--- 【视图优化】改为引用 vw_release_simple_list，消除冗余定义
 CREATE OR REPLACE VIEW vw_release_list_with_cost AS
 SELECT ReleaseID, Title, ArtistName, Genre, BaseUnitCost FROM vw_release_simple_list;
 
--- 83. [架构重构Phase2] 客户列表视图（含积分）
--- 替换 buyback.php 中的客户下拉框查询
--- 【视图优化】改为引用 vw_customer_simple_list，消除冗余定义
 CREATE OR REPLACE VIEW vw_customer_list_with_points AS
 SELECT CustomerID, Name, Email, Points FROM vw_customer_simple_list;
 
--- 84. [架构重构Phase2] 库存价格映射视图
--- 替换 buyback.php 中的价格映射查询
--- 【修复】添加 ShopID 字段，确保多店铺场景下价格隔离正确
 CREATE OR REPLACE VIEW vw_stock_price_map AS
 SELECT
     ShopID,
@@ -1372,8 +1175,6 @@ FROM StockItem
 WHERE Status = 'Available'
 GROUP BY ShopID, ReleaseID, ConditionGrade;
 
--- 85. [架构重构Phase2] 最近回购记录详情视图
--- 替换 buyback.php 中的最近回购查询
 CREATE OR REPLACE VIEW vw_recent_buybacks_detail AS
 SELECT
     bo.BuybackOrderID,
@@ -1397,8 +1198,6 @@ JOIN ReleaseAlbum r ON bol.ReleaseID = r.ReleaseID
 JOIN Employee e ON bo.ProcessedByEmployeeID = e.EmployeeID
 ORDER BY bo.BuybackDate DESC;
 
--- 86. [架构重构Phase2] 调货申请详情视图
--- 替换 requests.php 中的申请信息查询
 CREATE OR REPLACE VIEW vw_transfer_request_info AS
 SELECT
     RequestID,
@@ -1412,8 +1211,6 @@ SELECT
 FROM ManagerRequest
 WHERE RequestType = 'TransferRequest';
 
--- 87. [架构重构Phase2] 店铺库存查询视图（按专辑和成色分组）
--- 【架构重构】添加 Title, ArtistName 字段，修复 getShopInventoryGrouped() 的 SQL 错误
 CREATE OR REPLACE VIEW vw_shop_inventory_by_release AS
 SELECT
     si.ShopID,
@@ -1432,8 +1229,6 @@ WHERE si.Status = 'Available'
 GROUP BY si.ShopID, s.Name, s.Type, si.ReleaseID, r.Title, r.ArtistName, si.ConditionGrade
 HAVING AvailableQuantity > 0;
 
--- 88. [架构重构] 结账购物车商品视图（含店铺地址）
--- 替换 checkout.php 中的购物车数据获取
 CREATE OR REPLACE VIEW vw_checkout_cart_items AS
 SELECT
     si.StockItemID,
@@ -1451,8 +1246,6 @@ FROM StockItem si
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 JOIN Shop s ON si.ShopID = s.ShopID;
 
--- 89. [架构重构] 客户订单详情视图
--- 替换 db_procedures.php:getCustomerOrderDetail 中的直接表访问
 CREATE OR REPLACE VIEW vw_customer_order_detail AS
 SELECT
     co.*,
@@ -1460,12 +1253,6 @@ SELECT
 FROM CustomerOrder co
 LEFT JOIN Shop s ON co.FulfilledByShopID = s.ShopID;
 
--- ================================================
--- 【架构重构Phase3】新增视图 - 消除所有剩余PHP直接表访问
--- ================================================
-
--- 90. [架构重构Phase3] 店铺KPI统计视图
--- 替换 db_procedures.php:getShopKpiStats 中的直接表访问
 CREATE OR REPLACE VIEW vw_shop_kpi_stats AS
 SELECT
     FulfilledByShopID AS ShopID,
@@ -1474,8 +1261,6 @@ SELECT
 FROM CustomerOrder
 GROUP BY FulfilledByShopID;
 
--- 91. [架构重构Phase3] 调拨验证视图
--- 替换 db_procedures.php:validateTransferFromShop/ToShop 中的直接表访问
 CREATE OR REPLACE VIEW vw_transfer_validation AS
 SELECT
     TransferID,
@@ -1489,8 +1274,6 @@ SELECT
     ReceivedDate
 FROM InventoryTransfer;
 
--- 92. [架构重构Phase3] 订单验证视图
--- 替换 db_procedures.php:validateOrderBelongsToShop 中的直接表访问
 CREATE OR REPLACE VIEW vw_order_shop_validation AS
 SELECT
     OrderID,
@@ -1501,9 +1284,6 @@ SELECT
     FulfillmentType
 FROM CustomerOrder;
 
--- 93. [架构重构Phase3] 目录按店铺分组视图
--- 【修复】使用 CROSS JOIN 确保每个店铺都显示所有专辑（包括无库存的）
--- 替换 functions.php:prepareCatalogPageDataByShop 中的直接表访问
 CREATE OR REPLACE VIEW vw_catalog_by_shop_grouped AS
 SELECT
     r.ReleaseID,
@@ -1523,8 +1303,6 @@ CROSS JOIN Shop s
 LEFT JOIN StockItem si ON si.ReleaseID = r.ReleaseID AND si.ShopID = s.ShopID
 GROUP BY r.ReleaseID, r.Title, r.Genre, r.ReleaseYear, r.ArtistName, s.ShopID;
 
--- 94. [架构重构Phase3] 专辑基本信息视图
--- 替换 functions.php:getReleaseDetailsByShop 中的直接 ReleaseAlbum 访问
 CREATE OR REPLACE VIEW vw_release_info AS
 SELECT
     ReleaseID,
@@ -1538,16 +1316,12 @@ SELECT
     BaseUnitCost
 FROM ReleaseAlbum;
 
--- 95. [架构重构Phase3] 专辑流派列表视图
--- 替换 functions.php:prepareCatalogPageDataByShop 中的流派查询
 CREATE OR REPLACE VIEW vw_release_genres AS
 SELECT DISTINCT Genre
 FROM ReleaseAlbum
 WHERE Genre IS NOT NULL AND Genre != ''
 ORDER BY Genre;
 
--- 96. [新增] 专辑曲目列表视图
--- 用于专辑详情页显示曲目信息
 CREATE OR REPLACE VIEW vw_release_tracks AS
 SELECT
     TrackID,
@@ -1558,8 +1332,6 @@ SELECT
 FROM Track
 ORDER BY ReleaseID, TrackNumber;
 
--- 97. [架构重构Phase3] 店铺库存数量统计视图
--- 替换 db_procedures.php:getShopStockCount 中的直接表访问
 CREATE OR REPLACE VIEW vw_shop_stock_count AS
 SELECT
     ShopID,
@@ -1570,9 +1342,6 @@ FROM StockItem
 WHERE Status = 'Available'
 GROUP BY ShopID, ReleaseID, ConditionGrade;
 
--- 98. [架构重构] 库存成本明细视图
--- 替换 db_procedures.php:getShopSoldInventoryCost 和 getShopCurrentInventoryCost 中的直接表访问
--- 通过视图封装复杂的成本计算逻辑
 CREATE OR REPLACE VIEW vw_stock_item_with_cost AS
 SELECT
     si.StockItemID,
@@ -1613,8 +1382,6 @@ SELECT
 FROM StockItem si
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID;
 
--- 99. All-shops inventory summary view with shop type
--- Used for admin inventory overview (extends vw_inventory_summary with ShopType)
 CREATE OR REPLACE VIEW vw_all_shops_inventory_summary AS
 SELECT
     inv.ShopID,
@@ -1632,8 +1399,6 @@ SELECT
 FROM vw_inventory_summary inv
 JOIN Shop s ON inv.ShopID = s.ShopID;
 
--- 100. All-shops inventory detail view with shop name and type
--- Used for admin inventory detail view (extends vw_staff_inventory_detail with shop info)
 CREATE OR REPLACE VIEW vw_all_shops_inventory_detail AS
 SELECT
     sd.StockItemID,
@@ -1654,12 +1419,6 @@ FROM vw_staff_inventory_detail sd
 JOIN Shop s ON sd.ShopID = s.ShopID
 JOIN ReleaseAlbum r ON sd.ReleaseID = r.ReleaseID;
 
--- ================================================
--- Missing Views for Inventory and Artist Filter
--- ================================================
-
--- 101. Release Basic Info View
--- Used for artist filter dropdown and basic release info
 CREATE OR REPLACE VIEW vw_release_basic AS
 SELECT
     ReleaseID,
@@ -1672,8 +1431,6 @@ SELECT
     BaseUnitCost
 FROM ReleaseAlbum;
 
--- 102. Stock Summary View (Alias for pagination support)
--- Used by staff/manager/admin inventory pages for summary view
 CREATE OR REPLACE VIEW vw_stock_summary AS
 SELECT
     s.ShopID,
@@ -1693,8 +1450,6 @@ JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 WHERE s.Status = 'Available'
 GROUP BY s.ShopID, sh.Name, s.ReleaseID, r.Title, r.ArtistName, r.Genre, s.ConditionGrade;
 
--- 103. Stock Detail View
--- Used by staff/manager/admin inventory pages for detail view
 CREATE OR REPLACE VIEW vw_stock_detail AS
 SELECT
     s.StockItemID,
@@ -1715,8 +1470,6 @@ JOIN Shop sh ON s.ShopID = sh.ShopID
 JOIN ReleaseAlbum r ON s.ReleaseID = r.ReleaseID
 WHERE s.Status = 'Available';
 
--- 104. Customer Shipped Delivery Orders View
--- Used for customer notification when delivery orders are shipped and need confirmation
 CREATE OR REPLACE VIEW vw_customer_shipped_delivery AS
 SELECT
     co.OrderID,
@@ -1731,12 +1484,6 @@ WHERE co.OrderStatus = 'Shipped'
   AND co.OrderType = 'Online'
   AND co.FulfillmentType = 'Shipping';
 
--- ================================================
--- 【架构重构Phase4】Manager Reports & Warehouse Views
--- ================================================
-
--- 105. Warehouse Pending Receipts View
--- Used for warehouse staff to see pending supplier orders awaiting receipt
 CREATE OR REPLACE VIEW vw_warehouse_pending_receipts AS
 SELECT
     so.SupplierOrderID,
@@ -1758,15 +1505,12 @@ JOIN ReleaseAlbum r ON sol.ReleaseID = r.ReleaseID
 WHERE so.Status = 'Pending'
 ORDER BY so.OrderDate DESC;
 
--- 106. Shop Artist Profit Analysis View
--- Used for manager reports to analyze profit by artist
--- 【修复】精确计算商品折后收入（不含运费）
 CREATE OR REPLACE VIEW vw_shop_artist_profit_analysis AS
 SELECT
     si.ShopID,
     r.ArtistName,
     COUNT(DISTINCT ol.StockItemID) AS ItemsSold,
-    -- 【精确计算】商品折后收入 = 原价 * 折扣后商品总额 / 原价总额
+
     SUM(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) AS TotalRevenue,
     SUM(COALESCE(sic.UnitCost, si.UnitPrice * 0.6)) AS TotalCost,
     SUM(ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)) - SUM(COALESCE(sic.UnitCost, si.UnitPrice * 0.6)) AS GrossProfit,
@@ -1776,7 +1520,7 @@ JOIN StockItem si ON ol.StockItemID = si.StockItemID
 JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 JOIN CustomerOrder co ON ol.OrderID = co.OrderID
 LEFT JOIN vw_stock_item_with_cost sic ON si.StockItemID = sic.StockItemID
--- 子查询计算每个订单的商品小计（原价总和）
+
 LEFT JOIN (
     SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
     FROM OrderLine
@@ -1786,9 +1530,6 @@ WHERE co.OrderStatus IN ('Paid', 'Completed', 'Shipped')
 GROUP BY si.ShopID, r.ArtistName
 ORDER BY GrossProfit DESC;
 
--- 107. Artist Sales Detail View
--- Used for manager reports to show individual sales for an artist
--- 【修复】精确计算商品折后收入（不含运费）
 CREATE OR REPLACE VIEW vw_artist_sales_detail AS
 SELECT
     si.ShopID,
@@ -1799,10 +1540,10 @@ SELECT
     r.Title,
     si.ConditionGrade,
     ol.PriceAtSale,
-    -- 【精确计算】商品折后收入（不含运费）
+
     ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2) AS ItemRevenue,
     COALESCE(sic.UnitCost, si.UnitPrice * 0.6) AS Cost,
-    -- 【精确计算】利润 = 商品折后收入 - 成本
+
     ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2) - COALESCE(sic.UnitCost, si.UnitPrice * 0.6) AS Profit
 FROM OrderLine ol
 JOIN StockItem si ON ol.StockItemID = si.StockItemID
@@ -1810,7 +1551,7 @@ JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 JOIN CustomerOrder co ON ol.OrderID = co.OrderID
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
 LEFT JOIN vw_stock_item_with_cost sic ON si.StockItemID = sic.StockItemID
--- 子查询计算每个订单的商品小计（原价总和）
+
 LEFT JOIN (
     SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
     FROM OrderLine
@@ -1819,10 +1560,6 @@ LEFT JOIN (
 WHERE co.OrderStatus IN ('Paid', 'Completed', 'Shipped')
 ORDER BY co.OrderDate DESC;
 
--- 108. Shop Batch Sales Analysis View
--- Used for manager reports to analyze batch sell-through rates
--- Fixed: Join CustomerOrder to ensure only completed orders are counted
--- 【修复】商品收入包含按比例分摊的运费（针对店铺整体表现）
 CREATE OR REPLACE VIEW vw_shop_batch_sales_analysis AS
 SELECT
     si.ShopID,
@@ -1830,7 +1567,7 @@ SELECT
     COUNT(DISTINCT si.StockItemID) AS TotalItems,
     SUM(CASE WHEN si.Status = 'Sold' THEN 1 ELSE 0 END) AS SoldItems,
     SUM(CASE WHEN si.Status = 'Available' THEN 1 ELSE 0 END) AS AvailableItems,
-    -- 【修复】商品收入（含按比例分摊的运费）= 原价 * 订单总金额 / 原价总额
+
     SUM(CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
         THEN ROUND(ol.PriceAtSale * (co.TotalAmount / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
         ELSE 0 END) AS TotalRevenue,
@@ -1838,7 +1575,7 @@ SELECT
 FROM StockItem si
 LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
 LEFT JOIN CustomerOrder co ON ol.OrderID = co.OrderID
--- 子查询计算每个订单的商品小计（原价总和）
+
 LEFT JOIN (
     SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
     FROM OrderLine
@@ -1848,10 +1585,6 @@ WHERE si.BatchNo IS NOT NULL AND si.BatchNo != ''
 GROUP BY si.ShopID, si.BatchNo
 ORDER BY AcquiredDate DESC;
 
--- 109. Batch Sales Detail View
--- Used for manager reports to show individual items in a batch
--- Fixed: Filter completed orders when showing sold price/date
--- 【修复】添加OrderID和ShippingCost字段，用于底部统计运费
 CREATE OR REPLACE VIEW vw_batch_sales_detail AS
 SELECT
     si.ShopID,
@@ -1864,13 +1597,13 @@ SELECT
     si.Status,
     si.AcquiredDate,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN ol.PriceAtSale ELSE NULL END AS SoldPrice,
-    -- 商品折后售价（不含运费）
+
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed')
         THEN ROUND(ol.PriceAtSale * ((co.TotalAmount - COALESCE(co.ShippingCost, 0)) / NULLIF(order_subtotals.OrderSubtotal, 0)), 2)
         ELSE NULL END AS ItemSoldRevenue,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN co.OrderDate ELSE NULL END AS SoldDate,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN COALESCE(c.Name, 'Guest') ELSE NULL END AS CustomerName,
-    -- 【新增】订单ID和运费，用于底部统计
+
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN co.OrderID ELSE NULL END AS OrderID,
     CASE WHEN si.Status = 'Sold' AND co.OrderStatus IN ('Paid', 'Shipped', 'Completed') THEN COALESCE(co.ShippingCost, 0) ELSE NULL END AS ShippingCost
 FROM StockItem si
@@ -1878,7 +1611,7 @@ JOIN ReleaseAlbum r ON si.ReleaseID = r.ReleaseID
 LEFT JOIN OrderLine ol ON si.StockItemID = ol.StockItemID
 LEFT JOIN CustomerOrder co ON ol.OrderID = co.OrderID
 LEFT JOIN Customer c ON co.CustomerID = c.CustomerID
--- 子查询计算每个订单的商品小计（原价总和）
+
 LEFT JOIN (
     SELECT OrderID, SUM(PriceAtSale) AS OrderSubtotal
     FROM OrderLine
@@ -1886,12 +1619,6 @@ LEFT JOIN (
 ) order_subtotals ON co.OrderID = order_subtotals.OrderID
 ORDER BY si.Status DESC, r.Title;
 
--- ================================================
--- 110-112. 汇总视图 - 供PHP函数使用，避免在PHP中直接写SQL
--- ================================================
-
--- 110. 店铺按流派销售汇总视图
--- 用于 getShopSalesByGenre 函数
 CREATE OR REPLACE VIEW vw_shop_genre_sales_summary AS
 SELECT
     ShopID,
@@ -1905,10 +1632,6 @@ FROM vw_sales_by_genre_detail
 GROUP BY ShopID, Genre
 ORDER BY TotalRevenue DESC;
 
--- 111. 店铺月度销售汇总视图
--- 用于 getShopMonthlySalesTrend 函数
--- 【修复】Monthly Sales Trend 收入应包含运费（针对店铺整体）
--- 直接基于CustomerOrder表汇总，使用TotalAmount（包含运费）
 CREATE OR REPLACE VIEW vw_shop_monthly_sales_summary AS
 SELECT
     co.FulfilledByShopID AS ShopID,

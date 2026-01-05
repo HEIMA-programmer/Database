@@ -1,14 +1,14 @@
 <?php
 /**
  * 注册页面
- * 【架构重构】遵循理想化分层架构
+ * 遵循理想化分层架构
  * - 通过 functions.php 的注册函数处理注册逻辑
  * - 通过 DBProcedures 的存储过程处理数据库操作
  */
 require_once __DIR__ . '/../config/db_connect.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-// 【Session管理修复】使用条件检查，避免重复调用session_start()
+// 使用条件检查，避免重复调用session_start()
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -21,11 +21,8 @@ if (isset($_SESSION['user_id'])) {
 
 $error = '';
 
-// =============================================
-// 【业务逻辑层调用】通过 functions.php 处理注册
-// =============================================
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // 【安全】验证CSRF令牌
     if (!validateCsrfToken($_POST['csrf_token'] ?? null)) {
         $error = 'Invalid security token. Please refresh the page and try again.';
     } else {
@@ -60,9 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<!-- =============================================
-     【表现层】仅负责 HTML 渲染
-     ============================================= -->
+
 
 <div class="row justify-content-center align-items-center" style="min-height: 80vh;">
     <div class="col-md-6 col-lg-5">

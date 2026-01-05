@@ -9,7 +9,7 @@ require_once __DIR__ . '/../../includes/db_procedures.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
 requireRole('Manager');
 
-// 【修复】从数据库验证员工店铺归属
+// 从数据库验证员工店铺归属
 $employeeId = $_SESSION['user_id'] ?? null;
 if (!$employeeId) {
     flash('Session expired. Please re-login.', 'warning');
@@ -17,7 +17,7 @@ if (!$employeeId) {
     exit;
 }
 
-// 【安全修复】从数据库获取并验证员工的店铺信息
+// 从数据库获取并验证员工的店铺信息
 $employeeInfo = DBProcedures::getEmployeeShopInfo($pdo, $employeeId);
 if (!$employeeInfo) {
     flash('Employee shop information not found. Please contact administrator.', 'danger');
@@ -82,7 +82,7 @@ if ($quantity <= 0) {
 
         } else {
 
-            // 【修复】参数顺序：fromShopId 是 Manager 的店铺（请求方），toShopId 是源店铺（由 Admin 决定，传 NULL）
+            // 参数顺序：fromShopId 是 Manager 的店铺（请求方），toShopId 是源店铺（由 Admin 决定，传 NULL）
 
             // 数据库约束：FromShopID NOT NULL, ToShopID 可为 NULL
 
@@ -113,7 +113,7 @@ $otherShops = array_filter($shops, fn($s) => $s['ShopID'] != $shopId);
 // 获取专辑列表（用于新建申请）
 $releases = DBProcedures::getReleaseList($pdo);
 
-// 【安全修复】移除前端暴露的库存数据
+// 移除前端暴露的库存数据
 // 库存价格信息通过AJAX从后端API获取 (api_get_inventory_price.php)
 $shopInventory = DBProcedures::getShopInventoryGrouped($pdo, $shopId);
 
@@ -185,7 +185,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <!-- 右侧内容 -->
     <div class="col-md-9">
         <?php if ($action === 'price'): ?>
-        <!-- 新建调价申请表单 - 【修复】基于当前店铺库存，自动填充价格和数量 -->
+        <!-- 新建调价申请表单 - 基于当前店铺库存，自动填充价格和数量 -->
         <div class="card bg-dark border-info">
             <div class="card-header border-info">
                 <h5 class="mb-0"><i class="fa-solid fa-tag me-2"></i>Submit Price Adjustment Request</h5>
@@ -267,7 +267,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 </form>
 
                 <script>
-                // 【安全修复】移除前端暴露的库存数据
+                // 移除前端暴露的库存数据
                 // 库存价格信息通过AJAX从后端API获取 (api_get_inventory_price.php)
                 const prefillReleaseId = <?= $prefillReleaseId ?>;
                 const prefillCondition = "<?= $prefillCondition ?>";
@@ -278,7 +278,7 @@ require_once __DIR__ . '/../../includes/header.php';
                     const quantityInput = document.getElementById('priceQuantity');
                     const currentPriceInput = document.getElementById('priceCurrentPrice');
 
-                    // 【安全修复】通过AJAX获取条件选项
+                    // 通过AJAX获取条件选项
                     async function updateConditionOptions() {
                         const releaseId = releaseSelect.value;
                         conditionSelect.innerHTML = '<option value="">-- Loading... --</option>';
@@ -324,7 +324,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         }
                     }
 
-                    // 【安全修复】通过AJAX获取价格和数量
+                    // 通过AJAX获取价格和数量
                     async function updatePriceAndQuantity() {
                         const releaseId = releaseSelect.value;
                         const condition = conditionSelect.value;
@@ -368,7 +368,7 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
 
         <?php elseif ($action === 'transfer'): ?>
-        <!-- 新建调货申请表单 - 【修复】移除店铺选择，由Admin决定从哪个店调货 -->
+        <!-- 移除店铺选择，由Admin决定从哪个店调货 -->
         <div class="card bg-dark border-primary">
             <div class="card-header border-primary">
                 <h5 class="mb-0"><i class="fa-solid fa-truck me-2"></i>Submit Transfer Request</h5>
@@ -382,7 +382,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
                 <form method="POST">
                     <input type="hidden" name="action" value="submit_transfer">
-                    <!-- 【修复】设置to_shop_id为0，表示由Admin决定 -->
+                    <!-- 设置to_shop_id为0，表示由Admin决定 -->
                     <input type="hidden" name="to_shop_id" value="0">
 
                     <div class="row mb-3">

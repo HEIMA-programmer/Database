@@ -1,9 +1,9 @@
 <?php
 /**
- * 【架构重构】订单详情页面
+ * 订单详情页面
  * 表现层 - 仅负责数据展示和用户交互
- * 【新增】支持15分钟支付倒计时显示和手动取消订单
- * 【新增】支持收货确认功能（Shipped状态的delivery订单）
+ * 支持15分钟支付倒计时显示和手动取消订单
+ * 支持收货确认功能（Shipped状态的delivery订单）
  */
 require_once __DIR__ . '/../../config/db_connect.php';
 require_once __DIR__ . '/../../includes/auth_guard.php';
@@ -57,7 +57,7 @@ $order = $pageData['order'];
 $items = $pageData['items'];
 $statusClass = $pageData['status_class'];
 
-// 【新增】按Release+Condition+Price分组商品
+// 按Release+Condition+Price分组商品
 $itemsGrouped = [];
 $subtotalBeforeDiscount = 0; // 计算折扣前小计（商品原价总和）
 
@@ -87,7 +87,7 @@ foreach ($items as $item) {
 $shippingCost = $order['ShippingCost'] ?? 0;
 $goodsAmount = $order['TotalAmount'] - $shippingCost;
 
-// 【修复】从订单总价反推折扣金额
+// 从订单总价反推折扣金额
 // TotalAmount = 商品实付金额 + 运费，已包含折扣
 // totalDiscount = 商品原价总和 - 商品实付金额
 $totalDiscount = $subtotalBeforeDiscount - $goodsAmount;
@@ -227,7 +227,7 @@ require_once __DIR__ . '/../../includes/header.php';
                     <li class="mb-3">
                         <small class="text-muted d-block">Order Type</small>
                         <?php
-                        // 【修复】正确区分订单类型
+                        // 正确区分订单类型
                         // InStore = 店内购买
                         // Online + Pickup = 线上支付线下取货
                         // Online + Shipping = 线上配送

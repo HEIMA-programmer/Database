@@ -1,6 +1,6 @@
 <?php
 /**
- * 【架构重构】用户管理页面
+ * 用户管理页面
  * 表现层 - 仅负责数据展示和用户交互
  * 业务逻辑已下沉到 functions.php 和 db_procedures.php
  */
@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'current_user_id' => $_SESSION['user_id']
     ];
 
-    // 【安全检查】验证必填参数
+    // 验证必填参数
     $validationError = null;
     if ($action === 'add') {
         if (empty($data['name'])) {
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (empty($data['name'])) {
             $validationError = 'Employee name is required.';
         }
-        // 【安全】Admin不能修改自己的role和shop
+        // Admin不能修改自己的role和shop
         if ($data['employee_id'] == $_SESSION['user_id']) {
             unset($data['role']);
             unset($data['shop_id']);
@@ -76,7 +76,7 @@ require_once __DIR__ . '/../../includes/header.php';
 ?>
 
 <!-- ========== 表现层 ========== -->
-<!-- 【修复】移除顶部按钮，New Employee按钮移至员工tab内部 -->
+<!-- 移除顶部按钮，New Employee按钮移至员工tab内部 -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="text-warning"><i class="fa-solid fa-users-gear me-2"></i>User Management</h2>
 </div>
@@ -92,7 +92,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <div class="tab-content">
     <div class="tab-pane fade show active" id="employees">
-        <!-- 【修复】New Employee按钮移至员工tab内部 -->
+        <!-- 移除顶部按钮，New Employee按钮移至员工tab内部 -->
         <div class="d-flex justify-content-end mb-3">
             <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addEmpModal">
                 <i class="fa-solid fa-user-plus me-2"></i>New Employee

@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// 【修复】确保依赖项已加载
+// 确保依赖项已加载
 // BASE_URL 来自 db_connect.php，flash() 来自 functions.php
 // 这些文件应该在调用 auth_guard.php 之前已被导入
 // 但为安全起见，在此处也检查并导入
@@ -17,7 +17,7 @@ if (!function_exists('flash')) {
 }
 
 /**
- * 【并发登录控制】验证当前 session 是否有效
+ * 验证当前 session 是否有效
  * 检查数据库中的 CurrentSessionID 是否与当前 session_id() 匹配
  * 如果不匹配，说明账号在其他地方登录了，踢出当前用户
  *

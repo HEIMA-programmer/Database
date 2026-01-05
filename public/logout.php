@@ -2,12 +2,12 @@
 require_once __DIR__ . '/../config/db_connect.php';
 require_once __DIR__ . '/../includes/db_procedures.php';
 
-// 【修复】防止重复启动session
+// 防止重复启动session
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// 【并发登录控制】登出时清空数据库中的 CurrentSessionID
+// 登出时清空数据库中的 CurrentSessionID
 if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
     $userId = $_SESSION['user_id'];
     $role = $_SESSION['role'];

@@ -1,16 +1,5 @@
--- ========================================
--- Stored Procedures for Business Logic
--- 存储过程 - 封装业务流程并确保事务一致性
--- ========================================
-
 DELIMITER $$
 
--- ================================================
--- 1. 供应商进货流程
--- ================================================
-
--- 创建供应商订单
--- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_create_supplier_order$$
 CREATE PROCEDURE sp_create_supplier_order(
     IN p_supplier_id INT,
@@ -31,8 +20,6 @@ BEGIN
     SET p_order_id = LAST_INSERT_ID();
 END$$
 
--- 添加订单行项目
--- 【修复】添加ConditionGrade和SalePrice参数
 DROP PROCEDURE IF EXISTS sp_add_supplier_order_line$$
 CREATE PROCEDURE sp_add_supplier_order_line(
     IN p_order_id INT,
@@ -52,14 +39,12 @@ BEGIN
     VALUES (p_order_id, p_release_id, p_quantity, p_unit_cost, COALESCE(p_condition_grade, 'New'), p_sale_price);
 END$$
 
--- 接收供应商订单并生成库存
--- 【修复】使用订单行中保存的ConditionGrade和SalePrice
 DROP PROCEDURE IF EXISTS sp_receive_supplier_order$$
 CREATE PROCEDURE sp_receive_supplier_order(
     IN p_order_id INT,
     IN p_batch_no VARCHAR(50),
-    IN p_condition_grade VARCHAR(10), -- 保留参数用于兼容，但优先使用订单行中的值
-    IN p_markup_rate DECIMAL(3,2) -- 加价率,例如 0.50 表示成本价的150%
+    IN p_condition_grade VARCHAR(10),
+    IN p_markup_rate DECIMAL(3,2)
 )
 BEGIN
     DECLARE v_release_id INT;
@@ -84,7 +69,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 检查订单状态
     SELECT Status, DestinationShopID INTO v_status, v_shop_id
     FROM SupplierOrder
     WHERE SupplierOrderID = p_order_id;
@@ -93,13 +77,10 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order is not in Pending status';
     END IF;
 
-    -- 【修复】先更新订单状态为Received，避免触发器循环依赖
-    -- 触发器 trg_before_stock_item_insert 要求订单状态为 Received
     UPDATE SupplierOrder
     SET Status = 'Received', ReceivedDate = NOW()
     WHERE SupplierOrderID = p_order_id;
 
-    -- 遍历订单行，生成StockItem
     OPEN cur;
     read_loop: LOOP
         FETCH cur INTO v_release_id, v_quantity, v_unit_cost, v_line_condition, v_line_sale_price;
@@ -107,19 +88,16 @@ BEGIN
             LEAVE read_loop;
         END IF;
 
-        -- 使用订单行中的SalePrice，如果没有则用加价率计算
         IF v_line_sale_price IS NOT NULL AND v_line_sale_price > 0 THEN
             SET v_unit_price = v_line_sale_price;
         ELSE
             SET v_unit_price = v_unit_cost * (1 + p_markup_rate);
         END IF;
 
-        -- 使用订单行中的ConditionGrade，如果没有则使用参数值
         IF v_line_condition IS NULL OR v_line_condition = '' THEN
             SET v_line_condition = COALESCE(p_condition_grade, 'New');
         END IF;
 
-        -- 为每个数量创建独立的StockItem
         SET v_counter = 0;
         WHILE v_counter < v_quantity DO
             INSERT INTO StockItem (
@@ -132,8 +110,6 @@ BEGIN
             SET v_counter = v_counter + 1;
         END WHILE;
 
-        -- 【新增】采购时同步更新所有同Release、同Condition的现有库存价格
-        -- 确保价格一致性：新采购的售价会更新到所有现有的同类库存
         UPDATE StockItem
         SET UnitPrice = v_unit_price
         WHERE ReleaseID = v_release_id
@@ -143,15 +119,8 @@ BEGIN
     END LOOP;
     CLOSE cur;
 
-    -- 【修复】移除TotalCost手动更新
-    -- 触发器 trg_after_supplier_order_line_insert 已在订单行插入时自动计算TotalCost
-    -- 避免重复计算
 END$$
 
--- ================================================
--- 修复2: sp_process_buyback - 添加回购积分逻辑
--- 回购给客户积分：每回购1元得0.5积分（可调整）
--- ================================================
 DROP PROCEDURE IF EXISTS sp_process_buyback$$
 CREATE PROCEDURE sp_process_buyback(
     IN p_customer_id INT,
@@ -177,8 +146,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 【新增】检查是否有现有库存的价格，优先使用现有价格确保一致性
-    -- 【修复】添加ShopID条件，确保只查询当前店铺的库存价格，与前端API逻辑一致
     SELECT MAX(UnitPrice) INTO v_existing_price
     FROM StockItem
     WHERE ReleaseID = p_release_id
@@ -186,30 +153,24 @@ BEGIN
       AND ShopID = p_shop_id
       AND Status = 'Available';
 
-    -- 如果有现有价格则使用现有价格，否则使用传入的resale价格
     IF v_existing_price IS NOT NULL AND v_existing_price > 0 THEN
         SET v_final_resale_price = v_existing_price;
     ELSE
         SET v_final_resale_price = p_resale_price;
     END IF;
 
-    -- 计算总支付金额
     SET v_total_payment = p_quantity * p_unit_price;
 
-    -- 创建回购订单
     INSERT INTO BuybackOrder (CustomerID, ProcessedByEmployeeID, ShopID, Status, TotalPayment)
     VALUES (p_customer_id, p_employee_id, p_shop_id, 'Completed', v_total_payment);
 
     SET p_buyback_id = LAST_INSERT_ID();
 
-    -- 添加订单行
     INSERT INTO BuybackOrderLine (BuybackOrderID, ReleaseID, Quantity, UnitPrice, ConditionGrade)
     VALUES (p_buyback_id, p_release_id, p_quantity, p_unit_price, p_condition_grade);
 
-    -- 生成批次号
     SET v_batch_no = CONCAT('BUY-', DATE_FORMAT(NOW(), '%Y%m%d'), '-', p_buyback_id);
 
-    -- 生成StockItem（使用一致的价格）
     WHILE v_counter < p_quantity DO
         INSERT INTO StockItem (
             ReleaseID, ShopID, SourceType, SourceOrderID,
@@ -221,16 +182,8 @@ BEGIN
         SET v_counter = v_counter + 1;
     END WHILE;
 
-    -- 【架构重构】积分和等级更新已由触发器 trg_after_buyback_complete 自动处理
-    -- 触发器在 INSERT INTO BuybackOrder 时自动执行，无需手动更新
 END$$
 
--- ================================================
--- 3. 库存调拨流程
--- ================================================
-
--- 完成库存调拨
--- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_complete_transfer$$
 CREATE PROCEDURE sp_complete_transfer(
     IN p_transfer_id INT,
@@ -246,7 +199,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 获取调拨信息
     SELECT StockItemID, ToShopID, Status
     INTO v_stock_item_id, v_to_shop_id, v_status
     FROM InventoryTransfer
@@ -257,28 +209,20 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transfer is not in transit';
     END IF;
 
-    -- 更新调拨状态（触发器 trg_after_transfer_complete 会自动更新库存位置和状态）
     UPDATE InventoryTransfer
     SET Status = 'Completed',
         ReceivedByEmployeeID = p_received_by_employee_id,
         ReceivedDate = NOW()
     WHERE TransferID = p_transfer_id;
 
-    -- 库存位置和状态的更新由触发器 trg_after_transfer_complete 自动处理
 END$$
 
--- ================================================
--- 4. 销售流程
--- ================================================
-
--- 创建客户订单（在线/店内）
--- 【修复】移除内部事务控制，由调用方管理事务
 DROP PROCEDURE IF EXISTS sp_create_customer_order$$
 CREATE PROCEDURE sp_create_customer_order(
     IN p_customer_id INT,
     IN p_shop_id INT,
-    IN p_employee_id INT, -- NULL for online orders
-    IN p_order_type VARCHAR(10), -- 'InStore' or 'Online'
+    IN p_employee_id INT,
+    IN p_order_type VARCHAR(10),
     OUT p_order_id INT
 )
 BEGIN
@@ -299,9 +243,6 @@ BEGIN
     SET p_order_id = LAST_INSERT_ID();
 END$$
 
-
--- 支付订单（仅更新状态为 Paid，不完成订单）
--- 【修复】移除TotalAmount重算，避免覆盖包含运费的金额
 DROP PROCEDURE IF EXISTS sp_pay_order$$
 CREATE PROCEDURE sp_pay_order(
     IN p_order_id INT
@@ -314,7 +255,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 获取订单信息
     SELECT OrderStatus INTO v_order_status
     FROM CustomerOrder
     WHERE OrderID = p_order_id
@@ -324,20 +264,12 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order is not in Pending status';
     END IF;
 
-    -- 更新订单状态为 Paid（TotalAmount已在创建订单时正确设置，包含运费）
     UPDATE CustomerOrder
     SET OrderStatus = 'Paid'
     WHERE OrderID = p_order_id;
 
-    -- 库存保持 Reserved 状态，等待发货或取货后再改为 Sold
 END$$
 
-
-
--- ================================================
--- 修复1: sp_complete_order - 支持门店直接完成订单
--- 【修复】移除TotalAmount重算，避免覆盖包含运费的金额
--- ================================================
 DROP PROCEDURE IF EXISTS sp_complete_order$$
 CREATE PROCEDURE sp_complete_order(
     IN p_order_id INT
@@ -352,13 +284,11 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 获取订单信息
     SELECT CustomerID, OrderStatus, OrderType INTO v_customer_id, v_order_status, v_order_type
     FROM CustomerOrder
     WHERE OrderID = p_order_id
     FOR UPDATE;
 
-    -- 【修复】门店订单(InStore)可以从Pending直接完成，线上订单需要Paid或Shipped
     IF v_order_type = 'InStore' THEN
         IF v_order_status NOT IN ('Pending', 'Paid') THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'InStore order must be Pending or Paid to complete';
@@ -369,25 +299,17 @@ BEGIN
         END IF;
     END IF;
 
-    -- 更新订单状态（TotalAmount已在创建订单时正确设置，包含运费）
     UPDATE CustomerOrder
     SET OrderStatus = 'Completed'
     WHERE OrderID = p_order_id;
 
-    -- 更新库存状态为已售出
-    -- 【修复】移除 DateSold = NOW()，触发器 trg_before_stock_status_update 会在状态变为Sold时自动设置
     UPDATE StockItem s
     JOIN OrderLine ol ON s.StockItemID = ol.StockItemID
     SET s.Status = 'Sold'
     WHERE ol.OrderID = p_order_id;
 
-    -- 注意: 积分更新和会员升级由触发器 trg_after_order_complete 自动处理
-    -- 注意: DateSold 由触发器 trg_before_stock_status_update 自动设置
 END$$
 
--- 取消订单
--- 【修复】移除内部事务控制，由调用方管理事务
--- 【修复】移除库存释放代码，由触发器 trg_after_order_cancel 自动处理
 DROP PROCEDURE IF EXISTS sp_cancel_order$$
 CREATE PROCEDURE sp_cancel_order(
     IN p_order_id INT
@@ -398,22 +320,11 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 【修复】移除手动库存释放代码
-    -- 触发器 trg_after_order_cancel 会在订单状态变为Cancelled时自动释放Reserved库存
-
-    -- 更新订单状态（触发器会自动释放库存）
     UPDATE CustomerOrder
     SET OrderStatus = 'Cancelled'
     WHERE OrderID = p_order_id;
 END$$
 
--- ================================================
--- 6. 库存超时释放机制
--- ================================================
-
--- 释放过期的预留库存（超过30分钟未支付）
--- 【修复】移除内部事务控制，由调用方（PHP或定时事件）管理事务
--- 【修复】移除手动库存释放代码，由触发器 trg_after_order_cancel 自动处理
 DROP PROCEDURE IF EXISTS sp_release_expired_reservations$$
 CREATE PROCEDURE sp_release_expired_reservations()
 BEGIN
@@ -424,22 +335,16 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 统计受影响的订单数
     SELECT COUNT(DISTINCT co.OrderID) INTO v_affected_orders
     FROM CustomerOrder co
     WHERE co.OrderStatus = 'Pending'
       AND co.OrderDate < DATE_SUB(NOW(), INTERVAL 30 MINUTE);
 
-    -- 【修复】移除手动库存释放代码
-    -- 触发器 trg_after_order_cancel 会在订单状态变为Cancelled时自动释放Reserved库存
-
-    -- 自动取消过期订单（触发器会自动释放库存）
     UPDATE CustomerOrder
     SET OrderStatus = 'Cancelled'
     WHERE OrderStatus = 'Pending'
       AND OrderDate < DATE_SUB(NOW(), INTERVAL 30 MINUTE);
 
-    -- 返回统计信息
     SELECT
         v_affected_orders AS ExpiredOrders,
         ROW_COUNT() AS CancelledOrders,
@@ -447,12 +352,6 @@ BEGIN
 END$$
 
 DELIMITER ;
-
--- ================================================
--- 定时事件：自动释放过期预留库存
--- ================================================
--- 注意：需要确保 MySQL 的 event_scheduler 已开启
--- 执行：SET GLOBAL event_scheduler = ON;
 
 DROP EVENT IF EXISTS evt_release_expired_reservations;
 
@@ -462,17 +361,8 @@ STARTS CURRENT_TIMESTAMP
 DO
     CALL sp_release_expired_reservations();
 
--- ================================================
--- 【架构重构】新增存储过程 - 消除 PHP 直接写物理表
--- ================================================
-
 DELIMITER $$
 
--- ------------------------------------------------
--- 8. 客户注册存储过程
--- 替换 register.php 中的直接 INSERT
--- 【修复】移除内部事务控制，由调用方管理事务
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_register_customer$$
 CREATE PROCEDURE sp_register_customer(
     IN p_name VARCHAR(100),
@@ -493,20 +383,18 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 检查邮箱是否已存在
     SELECT COUNT(*) INTO v_email_exists FROM Customer WHERE Email = p_email;
 
     IF v_email_exists > 0 THEN
-        SET p_customer_id = -2; -- 表示邮箱已存在
+        SET p_customer_id = -2;
         SET p_tier_id = -1;
     ELSE
-        -- 获取默认等级（积分最低的等级）
+
         SELECT TierID INTO v_default_tier_id
         FROM MembershipTier
         ORDER BY MinPoints ASC
         LIMIT 1;
 
-        -- 创建新客户
         INSERT INTO Customer (TierID, Name, Email, PasswordHash, Birthday, Points)
         VALUES (v_default_tier_id, p_name, p_email, p_password_hash, p_birthday, 0);
 
@@ -515,16 +403,11 @@ BEGIN
     END IF;
 END$$
 
--- ------------------------------------------------
--- 9. 更新客户资料存储过程
--- 替换 profile.php 中的直接 UPDATE
--- 【修复】移除内部事务控制，由调用方管理事务
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_update_customer_profile$$
 CREATE PROCEDURE sp_update_customer_profile(
     IN p_customer_id INT,
     IN p_name VARCHAR(100),
-    IN p_password_hash VARCHAR(255) -- NULL 表示不更新密码
+    IN p_password_hash VARCHAR(255)
 )
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -543,11 +426,6 @@ BEGIN
     END IF;
 END$$
 
--- ------------------------------------------------
--- 10. 添加员工存储过程
--- 替换 users.php 中的直接 INSERT
--- 【修复】移除内部事务控制，由调用方管理事务
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_add_employee$$
 CREATE PROCEDURE sp_add_employee(
     IN p_name VARCHAR(100),
@@ -570,18 +448,13 @@ BEGIN
     SET p_employee_id = LAST_INSERT_ID();
 END$$
 
--- ------------------------------------------------
--- 11. 更新员工存储过程
--- 替换 users.php 中的直接 UPDATE
--- 【修复】移除内部事务控制，由调用方管理事务
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_update_employee$$
 CREATE PROCEDURE sp_update_employee(
     IN p_employee_id INT,
     IN p_name VARCHAR(100),
     IN p_role ENUM('Admin', 'Manager', 'Staff'),
     IN p_shop_id INT,
-    IN p_password_hash VARCHAR(255) -- NULL 表示不更新密码
+    IN p_password_hash VARCHAR(255)
 )
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -589,7 +462,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 【修复】支持 NULL 参数时保留原值（用于Admin编辑自己时不修改role和shop）
     UPDATE Employee
     SET Name = p_name,
         Role = COALESCE(p_role, Role),
@@ -601,15 +473,10 @@ BEGIN
     WHERE EmployeeID = p_employee_id;
 END$$
 
--- ------------------------------------------------
--- 12. 删除员工存储过程
--- 替换 users.php 中的直接 DELETE
--- 【修复】移除内部事务控制，由调用方管理事务
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_delete_employee$$
 CREATE PROCEDURE sp_delete_employee(
     IN p_employee_id INT,
-    IN p_current_user_id INT -- 防止删除自己
+    IN p_current_user_id INT
 )
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -624,11 +491,6 @@ BEGIN
     DELETE FROM Employee WHERE EmployeeID = p_employee_id;
 END$$
 
--- ------------------------------------------------
--- 13. 添加供应商存储过程
--- 替换 suppliers.php 中的直接 INSERT
--- 【修复】移除内部事务控制，由调用方管理事务
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_add_supplier$$
 CREATE PROCEDURE sp_add_supplier(
     IN p_name VARCHAR(100),
@@ -644,13 +506,12 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 【新增】检查是否存在同名供应商
     SELECT COUNT(*) INTO v_existing_count
     FROM Supplier
     WHERE Name = p_name;
 
     IF v_existing_count > 0 THEN
-        -- 返回-2表示重名
+
         SET p_supplier_id = -2;
     ELSE
         INSERT INTO Supplier (Name, Email)
@@ -660,11 +521,6 @@ BEGIN
     END IF;
 END$$
 
--- ------------------------------------------------
--- 14. 更新供应商存储过程
--- 替换 suppliers.php 中的直接 UPDATE
--- 【修复】移除内部事务控制，由调用方管理事务
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_update_supplier$$
 CREATE PROCEDURE sp_update_supplier(
     IN p_supplier_id INT,
@@ -682,15 +538,10 @@ BEGIN
     WHERE SupplierID = p_supplier_id;
 END$$
 
--- ------------------------------------------------
--- 15. 删除供应商存储过程（带依赖检查）
--- 替换 suppliers.php 中的直接 DELETE
--- 【修复】移除内部事务控制，由调用方管理事务
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_delete_supplier$$
 CREATE PROCEDURE sp_delete_supplier(
     IN p_supplier_id INT,
-    OUT p_result INT -- 1=成功, -1=有依赖不能删除
+    OUT p_result INT
 )
 BEGIN
     DECLARE v_order_count INT DEFAULT 0;
@@ -701,7 +552,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 检查是否有关联的供应商订单
     SELECT COUNT(*) INTO v_order_count
     FROM SupplierOrder
     WHERE SupplierID = p_supplier_id;
@@ -714,11 +564,6 @@ BEGIN
     END IF;
 END$$
 
--- ------------------------------------------------
--- 16. 添加专辑存储过程
--- 替换 products.php 中的直接 INSERT
--- 【修复】移除内部事务控制，由调用方管理事务
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_add_release$$
 CREATE PROCEDURE sp_add_release(
     IN p_title VARCHAR(255),
@@ -738,13 +583,12 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 【新增】检查是否存在同名同艺术家的release
     SELECT COUNT(*) INTO v_existing_count
     FROM ReleaseAlbum
     WHERE Title = p_title AND ArtistName = p_artist;
 
     IF v_existing_count > 0 THEN
-        -- 返回-2表示重名
+
         SET p_release_id = -2;
     ELSE
         INSERT INTO ReleaseAlbum (Title, ArtistName, LabelName, ReleaseYear, Genre, Format, Description)
@@ -754,11 +598,6 @@ BEGIN
     END IF;
 END$$
 
--- ------------------------------------------------
--- 17. 更新专辑存储过程
--- 替换 products.php 中的直接 UPDATE
--- 【修复】移除内部事务控制，由调用方管理事务
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_update_release$$
 CREATE PROCEDURE sp_update_release(
     IN p_release_id INT,
@@ -785,11 +624,6 @@ BEGIN
     WHERE ReleaseID = p_release_id;
 END$$
 
--- ================================================
--- 18. Manager申请相关存储过程
--- ================================================
-
--- 创建调价申请
 DROP PROCEDURE IF EXISTS sp_create_price_adjustment_request$$
 CREATE PROCEDURE sp_create_price_adjustment_request(
     IN p_employee_id INT,
@@ -820,7 +654,6 @@ BEGIN
     SET p_request_id = LAST_INSERT_ID();
 END$$
 
--- 创建调货申请
 DROP PROCEDURE IF EXISTS sp_create_transfer_request$$
 CREATE PROCEDURE sp_create_transfer_request(
     IN p_employee_id INT,
@@ -850,8 +683,6 @@ BEGIN
     SET p_request_id = LAST_INSERT_ID();
 END$$
 
--- Admin审批申请
--- 【修改】批准调货申请时创建调拨记录，需要源店铺员工确认后才完成调拨
 DROP PROCEDURE IF EXISTS sp_respond_to_request$$
 CREATE PROCEDURE sp_respond_to_request(
     IN p_request_id INT,
@@ -880,7 +711,7 @@ BEGIN
           AND ReleaseID = v_release_id
           AND ConditionGrade = v_condition_grade
           AND Status = 'Available'
-        LIMIT 100; -- 安全限制
+        LIMIT 100;
 
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
@@ -889,7 +720,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 获取申请信息
     SELECT RequestType, Status, FromShopID, ToShopID, ReleaseID, ConditionGrade, Quantity, RequestedPrice
     INTO v_request_type, v_current_status, v_from_shop_id, v_to_shop_id, v_release_id, v_condition_grade, v_quantity, v_requested_price
     FROM ManagerRequest
@@ -902,17 +732,15 @@ BEGIN
 
     SET v_status = IF(p_approved, 'Approved', 'Rejected');
 
-    -- 更新申请状态
     UPDATE ManagerRequest
     SET Status = v_status,
         AdminResponseNote = p_response_note,
         RespondedByEmployeeID = p_admin_id
     WHERE RequestID = p_request_id;
 
-    -- 如果批准，执行相应操作
     IF p_approved THEN
         IF v_request_type = 'PriceAdjustment' THEN
-            -- 更新库存价格
+
             UPDATE StockItem
             SET UnitPrice = v_requested_price
             WHERE ShopID = v_from_shop_id
@@ -921,9 +749,6 @@ BEGIN
               AND Status = 'Available'
             LIMIT v_quantity;
         ELSEIF v_request_type = 'TransferRequest' THEN
-            -- 【修改】创建调拨记录，需要源店铺员工确认发货
-            -- FromShopID是目标店铺(Manager的店)，ToShopID是源店铺(Admin选择的)
-            -- 从ToShopID调货到FromShopID
 
             OPEN stock_cursor;
             transfer_loop: LOOP
@@ -936,12 +761,10 @@ BEGIN
                     LEAVE transfer_loop;
                 END IF;
 
-                -- 【修复】先锁定库存，防止被其他订单抢占
                 UPDATE StockItem
                 SET Status = 'Reserved'
                 WHERE StockItemID = v_stock_item_id;
 
-                -- 创建调拨记录（状态为Pending，等待源店铺员工确认）
                 INSERT INTO InventoryTransfer (
                     StockItemID, FromShopID, ToShopID,
                     AuthorizedByEmployeeID, Status
@@ -957,7 +780,6 @@ BEGIN
     END IF;
 END$$
 
--- 更新库存价格（Admin直接修改）
 DROP PROCEDURE IF EXISTS sp_update_stock_price$$
 CREATE PROCEDURE sp_update_stock_price(
     IN p_shop_id INT,
@@ -979,15 +801,6 @@ BEGIN
       AND Status = 'Available';
 END$$
 
--- ================================================
--- 【架构重构Phase2】新增存储过程 - 消除剩余PHP直接写表操作
--- ================================================
-
--- ------------------------------------------------
--- 20. 确认调拨发货存储过程
--- 替换 fulfillment.php 中的调拨发货操作
--- 状态从 Pending 变为 InTransit，库存状态变为 InTransit
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_confirm_transfer_dispatch$$
 CREATE PROCEDURE sp_confirm_transfer_dispatch(
     IN p_transfer_id INT,
@@ -1002,7 +815,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 获取调拨信息
     SELECT StockItemID, Status INTO v_stock_item_id, v_current_status
     FROM InventoryTransfer
     WHERE TransferID = p_transfer_id
@@ -1012,28 +824,21 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transfer is not in Pending status';
     END IF;
 
-    -- 更新调拨状态为 InTransit
     UPDATE InventoryTransfer
     SET Status = 'InTransit'
     WHERE TransferID = p_transfer_id;
 
-    -- 更新库存状态为 InTransit
     UPDATE StockItem
     SET Status = 'InTransit'
     WHERE StockItemID = v_stock_item_id;
 END$$
 
--- ------------------------------------------------
--- 21. 创建在线订单完整流程存储过程
--- 替换 checkout.php 中的订单创建流程
--- 包含订单创建、添加商品、计算折扣、设置运费
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_create_online_order_complete$$
 CREATE PROCEDURE sp_create_online_order_complete(
     IN p_customer_id INT,
     IN p_shop_id INT,
-    IN p_stock_item_ids TEXT, -- 逗号分隔的 StockItemID 列表
-    IN p_fulfillment_type VARCHAR(20), -- 'Shipping' or 'Pickup'
+    IN p_stock_item_ids TEXT,
+    IN p_fulfillment_type VARCHAR(20),
     IN p_shipping_address TEXT,
     IN p_shipping_cost DECIMAL(10,2),
     OUT p_order_id INT,
@@ -1058,7 +863,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 获取客户折扣率
     IF p_customer_id IS NOT NULL THEN
         SELECT mt.DiscountRate INTO v_discount_rate
         FROM Customer c
@@ -1066,7 +870,6 @@ BEGIN
         WHERE c.CustomerID = p_customer_id;
     END IF;
 
-    -- 创建订单
     INSERT INTO CustomerOrder (
         CustomerID, FulfilledByShopID, OrderType, OrderStatus,
         FulfillmentType, ShippingAddress, ShippingCost
@@ -1077,7 +880,6 @@ BEGIN
 
     SET p_order_id = LAST_INSERT_ID();
 
-    -- 解析并处理每个 StockItemID
     SET p_stock_item_ids = CONCAT(p_stock_item_ids, ',');
 
     parse_loop: WHILE v_pos > 0 DO
@@ -1090,18 +892,16 @@ BEGIN
         IF v_id_str != '' THEN
             SET v_stock_item_id = CAST(v_id_str AS UNSIGNED);
 
-            -- 验证并锁定库存
             SELECT Status, UnitPrice INTO v_stock_status, v_unit_price
             FROM StockItem
             WHERE StockItemID = v_stock_item_id
             FOR UPDATE;
 
             IF v_stock_status = 'Available' THEN
-                -- 添加订单行
+
                 INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale)
                 VALUES (p_order_id, v_stock_item_id, v_unit_price);
 
-                -- 预留库存
                 UPDATE StockItem
                 SET Status = 'Reserved'
                 WHERE StockItemID = v_stock_item_id;
@@ -1114,31 +914,20 @@ BEGIN
         SET v_pos = v_next_pos + 1;
     END WHILE;
 
-    -- 计算折扣
     SET v_discount_amount = v_subtotal * v_discount_rate;
 
-    -- 计算总金额（小计 - 折扣 + 运费）
     SET p_total_amount = v_subtotal - v_discount_amount + COALESCE(p_shipping_cost, 0);
 
-    -- 【设计说明】此处手动更新TotalAmount是故意设计：
-    -- 触发器trg_after_order_line_insert会自动计算SUM(PriceAtSale)作为基础金额
-    -- 存储过程在此基础上添加折扣和运费，得到最终金额
-    -- 这不是冗余，而是分层设计：触发器负责基础计算，存储过程负责业务修正
     UPDATE CustomerOrder
     SET TotalAmount = p_total_amount
     WHERE OrderID = p_order_id;
 
-    -- 如果没有处理任何商品，取消订单
     IF v_items_processed = 0 THEN
         DELETE FROM CustomerOrder WHERE OrderID = p_order_id;
-        SET p_order_id = -2; -- 表示没有可用商品
+        SET p_order_id = -2;
     END IF;
 END$$
 
--- ------------------------------------------------
--- 23. 更新订单状态存储过程
--- 通用订单状态更新，替换各页面中的直接UPDATE
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_update_order_status$$
 CREATE PROCEDURE sp_update_order_status(
     IN p_order_id INT,
@@ -1158,7 +947,6 @@ BEGIN
     WHERE OrderID = p_order_id
     FOR UPDATE;
 
-    -- 验证状态转换合法性
     IF v_current_status = 'Cancelled' OR v_current_status = 'Completed' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot update terminal order status';
     END IF;
@@ -1168,21 +956,14 @@ BEGIN
         ProcessedByEmployeeID = COALESCE(ProcessedByEmployeeID, p_employee_id)
     WHERE OrderID = p_order_id;
 
-    -- 【修复】移除手动库存释放代码
-    -- 如果取消订单，触发器 trg_after_order_cancel 会自动释放Reserved库存
-    -- 避免重复执行库存释放逻辑
 END$$
 
--- ------------------------------------------------
--- 24. POS创建门店订单完整流程
--- 替换 pos.php 中的订单创建流程
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_create_pos_order$$
 CREATE PROCEDURE sp_create_pos_order(
-    IN p_customer_id INT, -- 可为NULL（walk-in customer）
+    IN p_customer_id INT,
     IN p_employee_id INT,
     IN p_shop_id INT,
-    IN p_stock_item_ids TEXT, -- 逗号分隔的 StockItemID 列表
+    IN p_stock_item_ids TEXT,
     OUT p_order_id INT,
     OUT p_total_amount DECIMAL(10,2)
 )
@@ -1205,7 +986,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 获取客户折扣率
     IF p_customer_id IS NOT NULL THEN
         SELECT mt.DiscountRate INTO v_discount_rate
         FROM Customer c
@@ -1213,7 +993,6 @@ BEGIN
         WHERE c.CustomerID = p_customer_id;
     END IF;
 
-    -- 创建订单
     INSERT INTO CustomerOrder (
         CustomerID, FulfilledByShopID, ProcessedByEmployeeID,
         OrderType, OrderStatus
@@ -1224,7 +1003,6 @@ BEGIN
 
     SET p_order_id = LAST_INSERT_ID();
 
-    -- 解析并处理每个 StockItemID
     SET p_stock_item_ids = CONCAT(p_stock_item_ids, ',');
 
     parse_loop: WHILE v_pos > 0 DO
@@ -1237,18 +1015,16 @@ BEGIN
         IF v_id_str != '' THEN
             SET v_stock_item_id = CAST(v_id_str AS UNSIGNED);
 
-            -- 验证库存属于指定店铺且可用
             SELECT Status, UnitPrice INTO v_stock_status, v_unit_price
             FROM StockItem
             WHERE StockItemID = v_stock_item_id AND ShopID = p_shop_id
             FOR UPDATE;
 
             IF v_stock_status = 'Available' THEN
-                -- 添加订单行
+
                 INSERT INTO OrderLine (OrderID, StockItemID, PriceAtSale)
                 VALUES (p_order_id, v_stock_item_id, v_unit_price);
 
-                -- 预留库存
                 UPDATE StockItem
                 SET Status = 'Reserved'
                 WHERE StockItemID = v_stock_item_id;
@@ -1261,32 +1037,23 @@ BEGIN
         SET v_pos = v_next_pos + 1;
     END WHILE;
 
-    -- 计算折扣
     SET v_discount_amount = v_subtotal * v_discount_rate;
 
-    -- 计算总金额
     SET p_total_amount = v_subtotal - v_discount_amount;
 
-    -- 更新订单金额（TotalAmount 已包含折扣，无需单独记录折扣金额）
     UPDATE CustomerOrder
     SET TotalAmount = p_total_amount
     WHERE OrderID = p_order_id;
 
-    -- 如果没有处理任何商品，删除订单
     IF v_items_processed = 0 THEN
         DELETE FROM CustomerOrder WHERE OrderID = p_order_id;
         SET p_order_id = -2;
     ELSE
-        -- 【修复】POS订单直接完成，不需要经过Pending状态
-        -- 调用完成订单存储过程，自动更新库存状态为Sold并处理积分
+
         CALL sp_complete_order(p_order_id);
     END IF;
 END$$
 
--- ------------------------------------------------
--- 25. 获取店铺ID存储过程（按类型）
--- 替换 functions.php 中的 getShopIdByType
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_get_shop_id_by_type$$
 CREATE PROCEDURE sp_get_shop_id_by_type(
     IN p_shop_type VARCHAR(20),
@@ -1299,14 +1066,10 @@ BEGIN
     LIMIT 1;
 END$$
 
--- ------------------------------------------------
--- 26. 取消调拨存储过程
--- 替换 fulfillment.php 中的 DELETE FROM InventoryTransfer
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_cancel_transfer$$
 CREATE PROCEDURE sp_cancel_transfer(
     IN p_transfer_id INT,
-    IN p_shop_id INT -- 用于验证权限
+    IN p_shop_id INT
 )
 BEGIN
     DECLARE v_from_shop_id INT;
@@ -1318,7 +1081,6 @@ BEGIN
         RESIGNAL;
     END;
 
-    -- 验证调拨记录存在且属于该店铺
     SELECT FromShopID, Status, StockItemID INTO v_from_shop_id, v_status, v_stock_item_id
     FROM InventoryTransfer
     WHERE TransferID = p_transfer_id
@@ -1336,23 +1098,13 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only pending transfers can be cancelled';
     END IF;
 
-    -- 恢复库存状态为Available
     UPDATE StockItem
     SET Status = 'Available'
     WHERE StockItemID = v_stock_item_id;
 
-    -- 删除调拨记录
     DELETE FROM InventoryTransfer WHERE TransferID = p_transfer_id;
 END$$
 
--- ================================================
--- 【架构重构Phase3】新增存储过程 - 消除剩余PHP直接写表操作
--- ================================================
-
--- ------------------------------------------------
--- 29. 更新调货申请源店铺存储过程
--- 替换 db_procedures.php:updateTransferRequestSource 中的直接 UPDATE
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_update_transfer_request_source$$
 CREATE PROCEDURE sp_update_transfer_request_source(
     IN p_request_id INT,
@@ -1370,10 +1122,6 @@ BEGIN
       AND RequestType = 'TransferRequest';
 END$$
 
--- ------------------------------------------------
--- 29. 仓库库存调配发起存储过程（带确认流程）
--- 创建调拨记录而不是直接移动库存，需要仓库员工确认发货
--- ------------------------------------------------
 DROP PROCEDURE IF EXISTS sp_initiate_warehouse_dispatch$$
 CREATE PROCEDURE sp_initiate_warehouse_dispatch(
     IN p_warehouse_id INT,
@@ -1397,7 +1145,7 @@ BEGIN
           AND ConditionGrade = p_condition_grade
           AND Status = 'Available'
         ORDER BY StockItemID
-        LIMIT 100; -- 安全限制
+        LIMIT 100;
 
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
@@ -1418,7 +1166,6 @@ BEGIN
             LEAVE dispatch_loop;
         END IF;
 
-        -- 创建调拨记录（状态为Pending，需要仓库员工确认发货）
         INSERT INTO InventoryTransfer (
             StockItemID, FromShopID, ToShopID,
             AuthorizedByEmployeeID, Status
@@ -1427,7 +1174,6 @@ BEGIN
             p_employee_id, 'Pending'
         );
 
-        -- 更新库存状态为Reserved，防止被其他操作使用
         UPDATE StockItem
         SET Status = 'Reserved'
         WHERE StockItemID = v_stock_item_id;
@@ -1439,38 +1185,24 @@ BEGIN
     SET p_initiated_count = v_counter;
 END$$
 
--- ================================================
--- 12. 库存并发安全查询
--- ================================================
-
--- 【并发安全】使用行锁获取库存信息
--- 用于防止并发超卖，必须在事务中调用
--- 注意：FOR UPDATE 只能用于基表，不能用于视图
 DROP PROCEDURE IF EXISTS sp_get_stock_item_with_lock$$
 CREATE PROCEDURE sp_get_stock_item_with_lock(
     IN p_stock_id INT
 )
 BEGIN
-    -- 使用 FOR UPDATE 锁定行，防止并发修改
-    -- 调用方必须在事务中调用此过程
+
     SELECT StockItemID, ShopID, Status
     FROM StockItem
     WHERE StockItemID = p_stock_id
     FOR UPDATE;
 END$$
 
--- ================================================
--- 13. Manager Request Notification Tracking
--- ================================================
-
--- Mark manager requests as viewed by the requester
--- Called when manager visits the requests page
 DROP PROCEDURE IF EXISTS sp_mark_requests_viewed$$
 CREATE PROCEDURE sp_mark_requests_viewed(
     IN p_employee_id INT
 )
 BEGIN
-    -- Update all responded requests (Approved/Rejected) that haven't been viewed yet
+
     UPDATE ManagerRequest
     SET ViewedByRequesterAt = NOW()
     WHERE RequestedByEmployeeID = p_employee_id
@@ -1478,12 +1210,6 @@ BEGIN
       AND ViewedByRequesterAt IS NULL;
 END$$
 
--- ================================================
--- 14. Session Management (并发登录控制)
--- ================================================
-
--- 更新员工的 Session ID
--- 用于并发登录控制：登录时设置，登出时清空
 DROP PROCEDURE IF EXISTS sp_update_employee_session$$
 CREATE PROCEDURE sp_update_employee_session(
     IN p_employee_id INT,
@@ -1495,8 +1221,6 @@ BEGIN
     WHERE EmployeeID = p_employee_id;
 END$$
 
--- 更新客户的 Session ID
--- 用于并发登录控制：登录时设置，登出时清空
 DROP PROCEDURE IF EXISTS sp_update_customer_session$$
 CREATE PROCEDURE sp_update_customer_session(
     IN p_customer_id INT,

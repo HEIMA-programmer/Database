@@ -1,7 +1,6 @@
 <?php
 // includes/functions.php
 
-// 【重构】统一在文件顶部导入依赖，移除函数内的29处重复导入
 require_once __DIR__ . '/db_procedures.php';
 
 /**
@@ -65,7 +64,7 @@ function hasRole($role) {
 }
 
 /**
- * 【Session安全修复】安全获取session中的用户属性
+ * 安全获取session中的用户属性
  * 避免直接访问 $_SESSION['user'] 可能导致的空指针异常
  *
  * @param string $key 要获取的属性名（如 'ShopID', 'ShopType', 'Role'）
@@ -89,7 +88,7 @@ function getSessionUserAttr($key, $default = null) {
 }
 
 /**
- * 【CSRF保护】生成CSRF令牌
+ * 生成CSRF令牌
  * 在表单中使用：<input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
  */
 function generateCsrfToken() {
@@ -103,7 +102,7 @@ function generateCsrfToken() {
 }
 
 /**
- * 【CSRF保护】验证CSRF令牌
+ * 验证CSRF令牌
  * @param string|null $token 提交的令牌
  * @return bool 验证是否通过
  */
@@ -118,7 +117,7 @@ function validateCsrfToken($token) {
 }
 
 /**
- * 【CSRF保护】要求有效的CSRF令牌，否则返回错误
+ * 要求有效的CSRF令牌，否则返回错误
  * 用于API端点的保护
  */
 function requireCsrfToken() {
@@ -131,7 +130,7 @@ function requireCsrfToken() {
 }
 
 /**
- * 【重构】根据Unit Cost计算建议售价
+ * 根据Unit Cost计算建议售价
  * 低价产品：低比率上浮（薄利多销）
  * 高价产品：高比率上浮（单品利润大）
  * 原先在 procurement.php 和 price_config.php 中重复定义，现统一到此处
@@ -149,13 +148,13 @@ function getSuggestedSalePrice($unitCost) {
 }
 
 /**
- * 【架构重构Phase3】按店铺获取目录数据
+ * 按店铺获取目录数据
  * 改用 DBProcedures::getCatalogByShop 和 DBProcedures::getReleaseGenres
  * 已更新以匹配 ReleaseAlbum 架构
  */
 function prepareCatalogPageDataByShop($pdo, $shopId, $search = '', $genre = '', $artist = '') {
 
-    // 【架构重构Phase3】使用 DBProcedures 替换直接SQL查询
+    // 使用 DBProcedures 替换直接SQL查询
     $items = DBProcedures::getCatalogByShop($pdo, $shopId, $search, $genre, $artist);
     $genres = DBProcedures::getReleaseGenres($pdo);
     $artists = DBProcedures::getReleaseArtists($pdo);
@@ -179,7 +178,7 @@ function getCartCount() {
 
 /**
  * [架构重构] 动态获取特定类型的店铺ID
- * 【架构重构Phase2】改用DBProcedures替换直接表访问
+ * 改用DBProcedures替换直接表访问
  */
 function getShopIdByType($pdo, $type) {
     static $cache = [];
@@ -206,7 +205,7 @@ function getShopIdByType($pdo, $type) {
 }
 
 /**
- * 【新增】获取客户当前的会员等级信息
+ * 获取客户当前的会员等级信息
  * 在调用 completeOrder 之前调用此函数保存原始等级
  */
 function getCustomerTierInfo($pdo, $customerId) {
@@ -223,7 +222,7 @@ function getCustomerTierInfo($pdo, $customerId) {
 }
 
 /**
- * 【修复】检查会员升级状态
+ * 检查会员升级状态
  * 在 completeOrder 之后调用，传入升级前的 TierID 来对比
  *
  * @param PDO $pdo
@@ -264,16 +263,12 @@ function checkMembershipUpgrade($pdo, $customerId, $amountSpent, $oldTierId = nu
 }
 
 
-// =============================================
-// 【架构重构】业务逻辑层 - 购物车与订单计算
-// =============================================
-
 /**
  * 添加商品到购物车
  * 包含库存验证、重复检查和店铺一致性验证
  *
- * 【修复】验证店铺一致性：购物车只能包含同一店铺的商品
- * 【并发安全修复】使用事务和行锁防止并发超卖
+ * 验证店铺一致性：购物车只能包含同一店铺的商品
+ * 使用事务和行锁防止并发超卖
  *
  * @param PDO $pdo
  * @param int $stockId
@@ -292,7 +287,7 @@ function addToCart($pdo, $stockId) {
     }
 
     try {
-        // 【并发安全修复】开启事务，使用行锁确保原子性
+        // 开启事务，使用行锁确保原子性
         $pdo->beginTransaction();
 
         // 使用 FOR UPDATE 锁定行，防止并发修改
@@ -308,7 +303,7 @@ function addToCart($pdo, $stockId) {
             return ['success' => false, 'message' => 'Item is no longer available.'];
         }
 
-        // 【修复】验证店铺一致性
+        // 验证店铺一致性
         $itemShopId = $itemInfo['ShopID'];
 
         if (!empty($_SESSION['cart'])) {
@@ -345,7 +340,7 @@ function addToCart($pdo, $stockId) {
 
 /**
  * 从购物车移除商品
- * 【修复】当购物车清空时，同步清除selected_shop_id
+ * 当购物车清空时，同步清除selected_shop_id
  *
  * @param int $stockId
  * @return bool 是否成功移除
@@ -358,7 +353,7 @@ function removeFromCart($stockId) {
         unset($_SESSION['cart'][$key]);
         $_SESSION['cart'] = array_values($_SESSION['cart']);
 
-        // 【修复】当购物车清空时，清除店铺选择
+        // 当购物车清空时，清除店铺选择
         if (empty($_SESSION['cart'])) {
             unset($_SESSION['selected_shop_id']);
         }
@@ -369,16 +364,13 @@ function removeFromCart($stockId) {
 
 /**
  * 清空购物车
- * 【修复】同时清除selected_shop_id，确保session一致性
+ * 同时清除selected_shop_id，确保session一致性
  */
 function clearCart() {
     $_SESSION['cart'] = [];
     unset($_SESSION['selected_shop_id']);
 }
 
-// =============================================
-// 【架构重构】业务逻辑层 - POS 系统
-// =============================================
 
 /**
  * 获取 POS 购物车数据
@@ -396,9 +388,7 @@ function clearPOSCart() {
     $_SESSION['pos_cart'] = [];
 }
 
-// =============================================
-// 【架构重构】业务逻辑层 - 认证与授权
-// =============================================
+
 
 /**
  * 执行员工登录
@@ -479,7 +469,7 @@ function authenticateCustomer($pdo, $email, $password) {
             'Role'       => 'Customer'
         ];
 
-        // 【并发登录控制】保存当前 session_id 到数据库，踢掉之前的登录
+        // 保存当前 session_id 到数据库，踢掉之前的登录
         DBProcedures::updateCustomerSessionId($pdo, $customer['CustomerID'], session_id());
 
         return ['success' => true];
@@ -522,7 +512,7 @@ function registerNewCustomer($pdo, $name, $email, $password, $birthday = null) {
         if ($birthday) {
             $_SESSION['birth_month'] = (int)date('m', strtotime($birthday));
 
-            // 【修复】注册时也检查生日祝福，与authenticateCustomer保持一致
+            // 注册时也检查生日祝福，与authenticateCustomer保持一致
             $today = date('m-d');
             $birthdayMd = date('m-d', strtotime($birthday));
             if ($today === $birthdayMd) {
@@ -531,7 +521,7 @@ function registerNewCustomer($pdo, $name, $email, $password, $birthday = null) {
             }
         }
 
-        // 【修复】设置 user 数组，保持与员工登录一致的结构
+        // 设置 user 数组，保持与员工登录一致的结构
         $_SESSION['user'] = [
             'CustomerID' => $result['customer_id'],
             'ShopID'     => null,
@@ -540,7 +530,7 @@ function registerNewCustomer($pdo, $name, $email, $password, $birthday = null) {
             'Role'       => 'Customer'
         ];
 
-        // 【并发登录控制】注册后自动登录，保存 session_id
+        // 保存当前 session_id 到数据库，踢掉之前的登录
         DBProcedures::updateCustomerSessionId($pdo, $result['customer_id'], session_id());
 
         return ['success' => true, 'customer_id' => $result['customer_id']];
@@ -565,9 +555,6 @@ function getLoginRedirectUrl($role) {
     };
 }
 
-// =============================================
-// 【架构重构】数据准备函数 - 页面顶部调用
-// =============================================
 
 /**
  * 准备仪表板页面数据
@@ -587,7 +574,7 @@ function prepareDashboardData($pdo, $shopId = null) {
         $expense = DBProcedures::getShopTotalExpense($pdo, $shopId);
         $popularItems = DBProcedures::getPopularItems($pdo, $shopId, 1);
 
-        // 【架构重构Phase2】使用DBProcedures替换直接SQL查询
+        // 使用DBProcedures替换直接SQL查询
 
         // 获取Walk-in customer收入统计
         $walkInRevenue = DBProcedures::getShopWalkInRevenue($pdo, $shopId);
@@ -598,11 +585,11 @@ function prepareDashboardData($pdo, $shopId = null) {
         // 获取采购统计
         $procurementStats = DBProcedures::getShopProcurementStats($pdo, $shopId);
 
-        // 【重构】Total Expense = 当前库存的实时成本
+        // Total Expense = 当前库存的实时成本
         // 这包括了从供应商采购的成本和回购的成本，且会随着调货自动更新
         $totalInventoryCost = $inventoryCost['TotalInventoryCost'] ?? 0;
 
-        // 【保留】历史Buyback支出（用于统计显示）
+        // 历史Buyback支出（用于统计显示）
         $buybackExpense = $expense['TotalExpense'] ?? 0;
 
         return [
@@ -644,13 +631,10 @@ function prepareDashboardData($pdo, $shopId = null) {
     ];
 }
 
-// =============================================
-// 【架构重构】Admin 模块 - 数据准备函数
-// =============================================
 
 /**
  * 准备用户管理页面数据
- * 【修改】移除Admin角色选项，防止通过UI创建Admin账户
+ * 移除Admin角色选项，防止通过UI创建Admin账户
  */
 function prepareUsersPageData($pdo) {
 
@@ -665,7 +649,7 @@ function prepareUsersPageData($pdo) {
 /**
  * 准备Manager用户管理页面数据
  * 只显示自己和本店铺的Staff，只能新增Staff角色
- * 【修改】添加customers数据，与Admin Users界面保持一致
+ * 添加customers数据，与Admin Users界面保持一致
  */
 function prepareManagerUsersPageData($pdo, $shopId, $employeeId) {
     return [
@@ -768,7 +752,7 @@ function prepareProductsPageData($pdo) {
 
 /**
  * 准备采购管理页面数据
- * 【修改】添加分页支持用于Order History
+ * 添加分页支持用于Order History
  */
 function prepareProcurementPageData($pdo, $historyPage = 1, $historyPerPage = 15) {
 
@@ -788,9 +772,6 @@ function prepareProcurementPageData($pdo, $historyPage = 1, $historyPerPage = 15
     ];
 }
 
-// =============================================
-// 【架构重构】Staff 模块 - 数据准备函数
-// =============================================
 
 /**
  * 准备库存管理页面数据
@@ -842,9 +823,6 @@ function preparePickupPageData($pdo, $shopId) {
     ];
 }
 
-// =============================================
-// 【架构重构】Manager 模块 - 数据准备函数
-// =============================================
 
 /**
  * 准备报表页面数据
@@ -871,9 +849,6 @@ function prepareReportsPageData($pdo, $shopId = null) {
     ];
 }
 
-// =============================================
-// 【架构重构】Customer 模块 - 数据准备函数
-// =============================================
 
 /**
  * 准备商品详情页面数据（原有方法，保留兼容性）
@@ -893,9 +868,7 @@ function prepareProductDetailData($pdo, $stockId) {
     ];
 }
 
-/**
- * 【修改】准备专辑详情页面数据（支持按店铺筛选）
- */
+
 function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
 
     // 1. 获取 Release 基本信息 (此时包含的是全局统计数据)
@@ -910,7 +883,7 @@ function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
 
     if ($shopId > 0) {
         // ====== 针对特定店铺的逻辑 ======
-        // 【架构重构Phase2】使用DBProcedures替换直接SQL查询
+        // 使用DBProcedures替换直接SQL查询
 
         // A. 获取该店铺的分组库存 (必须包含 AvailableQuantity 字段，release.php 依赖此字段)
         $stockItems = DBProcedures::getReleaseShopStockGrouped($pdo, $releaseId, $shopId);
@@ -955,7 +928,6 @@ function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
         $stockItems = DBProcedures::getReleaseStockByCondition($pdo, $releaseId);
     }
 
-    // 3. 【新增】获取专辑曲目列表
     $tracks = DBProcedures::getReleaseTracks($pdo, $releaseId);
 
     return [
@@ -966,24 +938,19 @@ function prepareReleaseDetailData($pdo, $releaseId, $shopId = 0) {
     ];
 }
 
-/**
- * 【修复】添加多个库存到购物车
- * 现在会根据用户选择的店铺来获取库存
- * 【重构】移除10张限制，只受available数量限制
- */
 function addMultipleToCart($pdo, $releaseId, $conditionGrade, $quantity) {
 
     if (!isset($_SESSION['cart'])) {
         $_SESSION['cart'] = [];
     }
 
-    // 【修复】移除10张限制，只需确保数量为正整数
+    // 移除10张限制，只需确保数量为正整数
     $quantity = max(1, (int)$quantity);
 
-    // 【修复】获取用户当前选择的店铺ID
+    // 获取用户当前选择的店铺ID
     $shopId = $_SESSION['selected_shop_id'] ?? null;
 
-    // 【架构重构Phase2】使用DBProcedures替换直接SQL查询
+    // 使用DBProcedures替换直接SQL查询
     $allStockIds = DBProcedures::getAvailableStockIdsByCondition($pdo, $releaseId, $conditionGrade, $shopId);
 
     // 排除已在购物车中的
@@ -1095,9 +1062,7 @@ function prepareOrdersPageData($pdo, $customerId) {
     ];
 }
 
-// =============================================
-// 【架构重构】业务处理函数 - POST 请求处理
-// =============================================
+
 
 /**
  * 处理员工操作（增删改）
@@ -1125,7 +1090,7 @@ function handleEmployeeAction($pdo, $action, $data) {
             if ($data['employee_id'] == $data['current_user_id']) {
                 return ['success' => false, 'message' => 'You cannot delete your own account.'];
             }
-            // 【修复】正确检查删除结果
+            // 正确检查删除结果
             $result = DBProcedures::deleteEmployee($pdo, $data['employee_id'], $data['current_user_id']);
             if ($result) {
                 return ['success' => true, 'message' => 'Employee record deleted.'];
@@ -1146,7 +1111,7 @@ function handleSupplierAction($pdo, $action, $data) {
         case 'add':
             $result = DBProcedures::addSupplier($pdo, $data['name'], $data['email']);
             if ($result === -2) {
-                // 【新增】重名检查
+                // 重名检查
                 return ['success' => false, 'message' => "Supplier '{$data['name']}' already exists. Cannot add duplicate."];
             }
             if ($result && $result > 0) {
@@ -1184,7 +1149,7 @@ function handleReleaseAction($pdo, $action, $data) {
         case 'add':
             $result = DBProcedures::addRelease($pdo, $data['title'], $data['artist'], $data['label'], $data['year'], $data['genre'], $data['desc']);
             if ($result === -2) {
-                // 【新增】重名检查
+                // 重名检查
                 return ['success' => false, 'message' => "Release '{$data['title']}' by '{$data['artist']}' already exists. Cannot add duplicate."];
             }
             if ($result && $result > 0) {
@@ -1206,7 +1171,7 @@ function handleReleaseAction($pdo, $action, $data) {
 
 /**
  * 处理取货确认
- * 【修复】添加事务管理
+ * 添加事务管理
  */
 function handlePickupConfirmation($pdo, $orderId, $shopId) {
 
@@ -1257,11 +1222,11 @@ function handleProfileUpdate($pdo, $customerId, $name, $password = null) {
 
 /**
  * 处理支付完成
- * 【修复】添加事务管理，确保支付操作的原子性，增强错误日志
+ * 添加事务管理，确保支付操作的原子性，增强错误日志
  */
 function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
 
-    // 【修复4】详细日志：支付开始
+    // 详细日志：支付开始
     error_log("Payment initiated: Order #$orderId, Customer #$customerId, Method: $paymentMethod");
 
     if (!in_array($paymentMethod, ['alipay', 'wechat', 'card'])) {
@@ -1286,7 +1251,7 @@ function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
     error_log("Payment validation passed: Order #$orderId has $reservedCount reserved items");
 
     try {
-        // 【修复】开启事务
+        // 开启事务
         $pdo->beginTransaction();
         error_log("Payment transaction started for order #$orderId");
 
@@ -1315,7 +1280,7 @@ function handlePaymentCompletion($pdo, $orderId, $customerId, $paymentMethod) {
 
 /**
  * 处理采购订单创建
- * 【修复】添加ConditionGrade和SalePrice参数
+ * 添加ConditionGrade和SalePrice参数
  */
 function handleProcurementCreatePO($pdo, $data, $warehouseId) {
 
@@ -1332,7 +1297,7 @@ function handleProcurementCreatePO($pdo, $data, $warehouseId) {
             throw new Exception('Failed to create supplier order.');
         }
 
-        // 【修复】传递ConditionGrade和SalePrice参数
+        // 传递ConditionGrade和SalePrice参数
         $conditionGrade = $data['condition'] ?? 'New';
         $salePrice = $data['sale_price'] ?? null;
         $lineSuccess = DBProcedures::addSupplierOrderLine($pdo, $orderId, $data['release_id'], $data['quantity'], $data['unit_cost'], $conditionGrade, $salePrice);

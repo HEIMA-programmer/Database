@@ -1,6 +1,6 @@
 <?php
 /**
- * 【架构重构】产品管理页面 - Admin版
+ * 产品管理页面 - Admin版
  * 支持编辑专辑信息和按成色修改售价
  */
 require_once __DIR__ . '/../../config/db_connect.php';
@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageData = prepareProductsPageData($pdo);
 $releases = $pageData['releases'];
 
-// 【修复】预加载所有release的库存价格数据 - 解决AJAX loading一直显示的问题
+// 预加载所有release的库存价格数据 - 解决AJAX loading一直显示的问题
 $stockPrices = [];
 foreach ($releases as $r) {
     $releaseId = $r['ReleaseID'];
@@ -163,7 +163,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                 title="Edit Release">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
-                        <!-- 【修复】使用data属性传递数据，通过Bootstrap事件触发渲染 -->
+                        <!-- 使用data属性传递数据，通过Bootstrap事件触发渲染 -->
                         <button class="btn btn-sm btn-outline-warning price-btn"
                                 data-bs-toggle="modal" data-bs-target="#priceModal"
                                 data-release-id="<?= $r['ReleaseID'] ?>"
@@ -293,7 +293,7 @@ require_once __DIR__ . '/../../includes/header.php';
                     <input type="hidden" name="update_prices" value="1">
                     <input type="hidden" name="release_id" id="price_release_id">
 
-                    <!-- 【修复】添加d-none初始状态，由JS控制显示 -->
+                    <!-- 添加d-none初始状态，由JS控制显示 -->
                     <div id="priceLoading" class="text-center py-4 d-none">
                         <div class="spinner-border text-warning"></div>
                         <p class="mt-2">Loading stock prices...</p>
@@ -304,7 +304,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             <i class="fa-solid fa-info-circle me-1"></i>
                             Only fill in the new price for conditions you want to change. Leave blank to keep the current price.
                         </div>
-                        <!-- 【修复】改用卡片布局避免rowspan造成的UI错乱 -->
+                        <!-- 改用卡片布局避免rowspan造成的UI错乱 -->
                         <div id="priceCardsContainer"></div>
                     </div>
 

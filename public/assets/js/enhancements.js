@@ -84,7 +84,7 @@ function formatCurrency(amount) {
  */
 function formatDate(dateString) {
     const date = new Date(dateString);
-    return date.toLocaleDateString('zh-CN', {
+    return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit'
@@ -104,7 +104,7 @@ function initFormValidation() {
             if (!form.checkValidity()) {
                 event.preventDefault();
                 event.stopPropagation();
-                showToast('请填写所有必填字段', 'danger');
+                showToast('Please fill in all required fields', 'danger');
             }
             form.classList.add('was-validated');
         }, false);

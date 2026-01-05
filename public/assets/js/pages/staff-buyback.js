@@ -62,16 +62,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.data.source === 'existing') {
                     resalePriceInput.classList.add('border-success');
                     resalePriceInput.classList.remove('border-warning');
-                    resalePriceInput.title = '已自动填充当前库存售价';
+                    resalePriceInput.title = 'Auto-filled from current stock price';
                 } else {
                     resalePriceInput.classList.add('border-warning');
                     resalePriceInput.classList.remove('border-success');
-                    resalePriceInput.title = '建议售价（系统计算）';
+                    resalePriceInput.title = 'Suggested price (system calculated)';
                 }
             } else {
                 resalePriceInput.value = '';
                 resalePriceInput.classList.remove('border-success', 'border-warning');
-                resalePriceInput.title = '请手动设置转售价格';
+                resalePriceInput.title = 'Please set resale price manually';
             }
         } catch (error) {
             console.error('Error fetching price:', error);

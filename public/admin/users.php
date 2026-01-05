@@ -43,6 +43,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (empty($data['name'])) {
             $validationError = 'Employee name is required.';
         }
+        // 【安全】Admin不能修改自己的role和shop
+        if ($data['employee_id'] == $_SESSION['user_id']) {
+            unset($data['role']);
+            unset($data['shop_id']);
+        }
     } elseif ($action === 'delete') {
         if (empty($data['employee_id'])) {
             $validationError = 'Invalid employee ID.';
@@ -131,7 +136,8 @@ require_once __DIR__ . '/../../includes/header.php';
                                         data-id="<?= $e['EmployeeID'] ?>"
                                         data-name="<?= h($e['Name']) ?>"
                                         data-role="<?= h($e['Role']) ?>"
-                                        data-shop="<?= $e['ShopID'] ?>">
+                                        data-shop="<?= $e['ShopID'] ?>"
+                                        data-is-self="<?= $e['EmployeeID'] == $_SESSION['user_id'] ? '1' : '0' ?>">
                                     <i class="fa-solid fa-pen-to-square"></i>
                                 </button>
 
@@ -261,7 +267,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         <input type="password" name="password" class="form-control bg-dark text-white border-secondary" placeholder="Leave blank to keep current">
                     </div>
 
-                    <div class="row mb-3">
+                    <div class="row mb-3" id="edit_role_shop_row">
                         <div class="col">
                             <label>Role</label>
                             <select name="role" id="edit_role" class="form-select bg-dark text-white border-secondary">
@@ -295,6 +301,14 @@ require_once __DIR__ . '/../../includes/header.php';
             document.getElementById('edit_name').value = this.dataset.name;
             document.getElementById('edit_role').value = this.dataset.role;
             document.getElementById('edit_shop').value = this.dataset.shop;
+
+            // Hide role and shop fields when editing self
+            const roleShopRow = document.getElementById('edit_role_shop_row');
+            if (this.dataset.isSelf === '1') {
+                roleShopRow.style.display = 'none';
+            } else {
+                roleShopRow.style.display = '';
+            }
         });
     });
 </script>

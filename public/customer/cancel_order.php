@@ -32,7 +32,7 @@ try {
     $result = DBProcedures::cancelOrder($pdo, $orderId);
 
     if ($result) {
-        $message = $autoCancel ? '订单因支付超时已自动取消' : '订单已成功取消';
+        $message = $autoCancel ? 'Order automatically cancelled due to payment timeout' : 'Order cancelled successfully';
         echo json_encode(['success' => true, 'message' => $message]);
     } else {
         echo json_encode(['success' => false, 'message' => 'Failed to cancel order']);

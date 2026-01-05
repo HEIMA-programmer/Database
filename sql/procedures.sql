@@ -178,10 +178,12 @@ BEGIN
     END;
 
     -- 【新增】检查是否有现有库存的价格，优先使用现有价格确保一致性
+    -- 【修复】添加ShopID条件，确保只查询当前店铺的库存价格，与前端API逻辑一致
     SELECT MAX(UnitPrice) INTO v_existing_price
     FROM StockItem
     WHERE ReleaseID = p_release_id
       AND ConditionGrade = p_condition_grade
+      AND ShopID = p_shop_id
       AND Status = 'Available';
 
     -- 如果有现有价格则使用现有价格，否则使用传入的resale价格
@@ -587,15 +589,16 @@ BEGIN
         RESIGNAL;
     END;
 
-    IF p_password_hash IS NOT NULL AND p_password_hash != '' THEN
-        UPDATE Employee
-        SET Name = p_name, Role = p_role, ShopID = p_shop_id, PasswordHash = p_password_hash
-        WHERE EmployeeID = p_employee_id;
-    ELSE
-        UPDATE Employee
-        SET Name = p_name, Role = p_role, ShopID = p_shop_id
-        WHERE EmployeeID = p_employee_id;
-    END IF;
+    -- 【修复】支持 NULL 参数时保留原值（用于Admin编辑自己时不修改role和shop）
+    UPDATE Employee
+    SET Name = p_name,
+        Role = COALESCE(p_role, Role),
+        ShopID = COALESCE(p_shop_id, ShopID),
+        PasswordHash = CASE
+            WHEN p_password_hash IS NOT NULL AND p_password_hash != '' THEN p_password_hash
+            ELSE PasswordHash
+        END
+    WHERE EmployeeID = p_employee_id;
 END$$
 
 -- ------------------------------------------------

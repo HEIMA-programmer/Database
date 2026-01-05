@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error fetching price:', error);
             resalePriceInput.value = '';
             resalePriceInput.classList.remove('border-success', 'border-warning');
-            resalePriceInput.title = '请手动设置转售价格';
+            resalePriceInput.title = 'Please set resale price manually';
         } finally {
             resalePriceInput.placeholder = 'List price';
             resalePriceInput.disabled = false;

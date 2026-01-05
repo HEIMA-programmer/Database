@@ -589,15 +589,16 @@ BEGIN
         RESIGNAL;
     END;
 
-    IF p_password_hash IS NOT NULL AND p_password_hash != '' THEN
-        UPDATE Employee
-        SET Name = p_name, Role = p_role, ShopID = p_shop_id, PasswordHash = p_password_hash
-        WHERE EmployeeID = p_employee_id;
-    ELSE
-        UPDATE Employee
-        SET Name = p_name, Role = p_role, ShopID = p_shop_id
-        WHERE EmployeeID = p_employee_id;
-    END IF;
+    -- 【修复】支持 NULL 参数时保留原值（用于Admin编辑自己时不修改role和shop）
+    UPDATE Employee
+    SET Name = p_name,
+        Role = COALESCE(p_role, Role),
+        ShopID = COALESCE(p_shop_id, ShopID),
+        PasswordHash = CASE
+            WHEN p_password_hash IS NOT NULL AND p_password_hash != '' THEN p_password_hash
+            ELSE PasswordHash
+        END
+    WHERE EmployeeID = p_employee_id;
 END$$
 
 -- ------------------------------------------------
